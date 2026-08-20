@@ -1,0 +1,47 @@
+{
+  "product_id": "haze-avalanche-compliant-pool",
+  "network": "fuji",
+  "chainId": 43113,
+  "usdc": "0x5425890298aed601595a70AB815c96711a31Bc65",
+  "not_for_production": true,
+  "broadcast": false,
+  "live_rpc": "operator-owned",
+  "compatibility": {
+    "productId": "haze-avalanche-compliant-pool",
+    "chainFamily": "avalanche-c-chain",
+    "chainId": 43113,
+    "schemaVersion": 1,
+    "apiVersion": 1,
+    "contractDomainVersion": "1",
+    "protocolVersionTag": "0x2afe8a5679df289719eae23ad89b300434b9dfbb8194dad0b50dee97f91a3868",
+    "circuitArtifactHash": "0xac2082ecb2129c571d2ddeb170f261a0da074491773102fa4f1544e97eb19281",
+    "manifestVersion": 1
+  },
+  "ceremony_profile": "development",
+  "spend_prove": "KEYS_MISSING",
+  "immutable": true,
+  "contracts": [
+    "HazePool",
+    "HazeSpendVerifier",
+    "SwapAndShieldRouter",
+    "EmergencyExit",
+    "HazeAccess",
+    "ApplicationRegistry",
+    "PolicyRegistry",
+    "VersionRegistry"
+  ],
+  "services": [
+    "haze-gatekeeper",
+    "haze-indexer",
+    "haze-prover",
+    "haze-disclosure",
+    "haze-audit-auth"
+  ],
+  "frontends": [
+    "privacy-pool-dex",
+    "compliance-portal"
+  ],
+  "observability": "dashboards-alerts",
+  "gas_source": "dev/artifacts/haze-gas-v1.json",
+  "fuji_required_before_mainnet": true
+}

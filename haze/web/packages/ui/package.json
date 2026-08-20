@@ -1,0 +1,10 @@
+{
+  "name": "@haze-avalanche/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/site.ts",
+    "./theme.css": "./src/theme.css"
+  }
+}

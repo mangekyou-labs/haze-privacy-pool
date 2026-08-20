@@ -1,0 +1,14 @@
+{
+  "not_for_production": true,
+  "kind": "library-operational-readiness",
+  "mainnet_authorized": false,
+  "spend_prove": "KEYS_MISSING",
+  "sc09_incident_review_approved": false,
+  "verdict": "pass-library-readiness",
+  "coverage": ["SC-09"],
+  "remediations": ["M-01", "M-03"],
+  "remaining": [],
+  "chainId": 43114,
+  "checks": 11,
+  "fixtureHash": "0x7680e48d1e65a7f67bde7f4bcc3d0ae47ac8dddff3d33e80358748b067d4e4d6"
+}

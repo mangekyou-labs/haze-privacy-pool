@@ -1,0 +1,8 @@
+{
+  "profile": "development",
+  "not_for_production": true,
+  "fixtureHash": "0x86ac81fd5053564ce3d366f3aaa44bf94e7cb6f31797e289f3e40023ed13952a",
+  "verdict": "pass-fuji-configured",
+  "procedures": 10,
+  "fuji_rehearsal": "pass-fuji-configured"
+}

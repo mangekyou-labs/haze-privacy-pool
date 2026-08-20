@@ -1,0 +1,26 @@
+[package]
+name = "haze-gatekeeper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Reference application gatekeeper for Haze"
+
+[lib]
+name = "haze_gatekeeper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "haze-gatekeeper"
+path = "src/main.rs"
+
+[dependencies]
+haze-protocol = { path = "../../crates/protocol" }
+hex = { workspace = true, features = ["alloc", "std"] }
+hpke = { version = "0.14", default-features = false, features = ["alloc", "x25519", "chacha"] }
+k256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdsa"] }
+rand_chacha = { version = "0.10", default-features = false }
+thiserror = "2"
+
+[lints]
+workspace = true

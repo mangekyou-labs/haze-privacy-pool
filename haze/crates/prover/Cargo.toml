@@ -1,0 +1,27 @@
+[package]
+name = "haze-prover"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Native proving boundary for Haze on Avalanche"
+
+[dependencies]
+ark-bn254 = { version = "0.6.0", default-features = false, features = ["curve"] }
+ark-ff = { workspace = true }
+ark-groth16 = { version = "0.6.0", default-features = false }
+ark-relations = { version = "0.6.0", default-features = false }
+ark-serialize = { version = "0.6.0", default-features = false, features = ["derive"] }
+ark-snark = { version = "0.6.0", default-features = false }
+ark-std = { version = "0.6.0", default-features = false, features = ["std"] }
+haze-protocol = { path = "../protocol" }
+hex = { workspace = true, features = ["alloc", "std"] }
+hpke = { version = "0.14", default-features = false, features = ["alloc", "x25519"] }
+k256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdsa"] }
+serde = { version = "1", default-features = false, features = ["derive", "std"] }
+serde_json = { version = "1", default-features = false, features = ["std"] }
+thiserror = "2"
+zeroize = { version = "1", default-features = false, features = ["alloc", "zeroize_derive"] }
+
+[lints]
+workspace = true

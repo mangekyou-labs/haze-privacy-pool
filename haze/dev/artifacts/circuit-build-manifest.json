@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit_id": "haze-spend-v1",
+  "profile": "development",
+  "not_for_production": true,
+  "circom_version": "2.2.3",
+  "n_constraints": 588459,
+  "source_hash": "0xddab1e2d4aca797058f3e3aca49c99a1bd5a396f3c3bf8dd1bc3c47a8e1fd9b1",
+  "r1cs_hash": "0x98cc762ccc18a9a3b0aba3b6be3dba217c928629cf8f330a09779ffa5e23f02d",
+  "fixture_hash": "0x7b55ab0190cbe83541e9763c1bf314776cf378af3b3018a060c836c53c7979df",
+  "build_hash": "0x533f1d9d172c8395b4849bd7b90901b5314b7fc4735b878385e22b5a19d3cd41"
+}

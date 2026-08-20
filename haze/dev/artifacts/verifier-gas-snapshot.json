@@ -1,0 +1,6 @@
+{
+  "verify_deposit_gas": 15214,
+  "not_for_production": true,
+  "function": "HazeSpendVerifier.verify",
+  "note": "Development public-input wrapper only. Production Groth16 pairing gas is T7.4."
+}

@@ -1,0 +1,24 @@
+[package]
+name = "haze-disclosure"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Scoped audit disclosure service for Haze"
+
+[lib]
+name = "haze_disclosure"
+path = "src/lib.rs"
+
+[[bin]]
+name = "haze-disclosure"
+path = "src/main.rs"
+
+[dependencies]
+haze-audit-auth = { path = "../audit-auth" }
+haze-protocol = { path = "../../crates/protocol" }
+hex = { workspace = true, features = ["alloc", "std"] }
+thiserror = "2"
+
+[lints]
+workspace = true

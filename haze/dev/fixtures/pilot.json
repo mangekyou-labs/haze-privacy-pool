@@ -1,0 +1,12 @@
+{
+  "not_for_production": true,
+  "assets": "non-real",
+  "applicationId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "kind": "fintech-payment-payroll",
+  "hostedHttp": "library-first",
+  "sc09_fuji_pilot_approved": false,
+  "verdict": "pass-library-pilot",
+  "coverage": ["SC-03", "SC-04", "SC-05"],
+  "remediations": ["M-04"],
+  "fixtureHash": "0x36ce386c4c3f9c555eac6b2914f7528b7f9ff1b27f287981d6e536873b3b5af3"
+}

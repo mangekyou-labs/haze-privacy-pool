@@ -1,0 +1,12 @@
+{
+  "not_for_production": true,
+  "kind": "independent-library-audit",
+  "sc09_independent_audit_approved": false,
+  "verdict": "pass-library-audit",
+  "coverage": ["SC-08", "SC-09"],
+  "remediations": ["M-05", "M-01", "M-03"],
+  "remaining": [],
+  "circuitId": "haze-spend-v1",
+  "nConstraints": 588459,
+  "fixtureHash": "0xfb0347cd05523c5eb7dec1411d0405d7097254abbb6e8bb6d65d7d6f6e7d5b06"
+}

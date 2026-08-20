@@ -1,0 +1,53 @@
+{
+  "productId": "haze-avalanche-compliant-pool",
+  "action": 5,
+  "cooldownSeconds": 604800,
+  "requestType": "HazeEmergencyExitRequest(uint256 chainId,address pool,bytes32 poolVersion,bytes32 applicationId,uint256 nullifier,address recipient,bytes32 requestSalt)",
+  "publicInputCount": 20,
+  "errors": [
+    "AUTH_WINDOW",
+    "ENCODING_INVALID",
+    "PAUSED",
+    "UNAUTHORIZED",
+    "REENTRANCY",
+    "TIMELOCK",
+    "POLICY_INVALID",
+    "NULLIFIER_USED",
+    "ROOT_UNKNOWN",
+    "VERSION_UNSUPPORTED",
+    "STATUS_INVALID",
+    "KEYS_MISSING"
+  ],
+  "fixture": {
+    "chainId": 43113,
+    "pool": "0x1111111111111111111111111111111111111111",
+    "poolVersion": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "applicationId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "nullifier": "0x00695bdec935d3e0429c3a04acc43b60d6d736e31f5d0eb49b71ebda82a421ad",
+    "recipient": "0x2222222222222222222222222222222222222222",
+    "requestSalt": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "requestId": "0xfc7450e6893c57123a3119a83330cfdd6243ed448260c3bca6a9ae484f5d4a63"
+  },
+  "publicInputs": [
+    "protocolVersionTag",
+    "chainId",
+    "poolAddress",
+    "poolVersionHi",
+    "poolVersionLo",
+    "applicationIdHi",
+    "applicationIdLo",
+    "noteTreeRoot",
+    "hazePolicyVersion",
+    "hazeBlocklistRoot",
+    "inputNullifier",
+    "action",
+    "publicAmount",
+    "publicRecipient",
+    "requester",
+    "requestIdHi",
+    "requestIdLo",
+    "auditDataCommitment",
+    "auditCiphertextHashHi",
+    "auditCiphertextHashLo"
+  ]
+}

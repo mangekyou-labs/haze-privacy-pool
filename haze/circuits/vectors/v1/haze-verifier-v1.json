@@ -1,0 +1,18 @@
+{
+  "version": "haze-verifier-v1",
+  "profile": "development",
+  "notForProduction": true,
+  "publicInputCount": 29,
+  "nConstraints": 588459,
+  "artifactHash": "0xac2082ecb2129c571d2ddeb170f261a0da074491773102fa4f1544e97eb19281",
+  "circuitBuildHash": "0x533f1d9d172c8395b4849bd7b90901b5314b7fc4735b878385e22b5a19d3cd41",
+  "protocolVersionTag": "0x2afe8a5679df289719eae23ad89b300434b9dfbb8194dad0b50dee97f91a3868",
+  "snarkScalarField": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001",
+  "spendProve": "KEYS_MISSING",
+  "pairing": "development-equality",
+  "immutability": {
+    "proxy": false,
+    "admin": false,
+    "upgradeTo": false
+  }
+}

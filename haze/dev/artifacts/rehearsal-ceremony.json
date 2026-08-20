@@ -1,0 +1,24 @@
+{
+  "circuit_id": "haze-development-equality-v1",
+  "profile": "development",
+  "not_for_production": true,
+  "genesis": "0x3db3518153c707e6dc0ecc6429e3e36f7971c2514252b0cd1641eae7f0d75166",
+  "contributions": [
+    {
+      "contributor": "alice",
+      "entropy_commitment": "0x0101010101010101010101010101010101010101010101010101010101010101",
+      "transcript_hash": "0xeecdce044e094e58ae40cbdd77aa470dd97db1c1d99f6ccc276a12849caa4466"
+    },
+    {
+      "contributor": "bob",
+      "entropy_commitment": "0x0202020202020202020202020202020202020202020202020202020202020202",
+      "transcript_hash": "0x16824b61154c52717ba74edc9335e92f053317835c39bdcaa5290a484e5ca039"
+    }
+  ],
+  "final_transcript": "0x16824b61154c52717ba74edc9335e92f053317835c39bdcaa5290a484e5ca039",
+  "two_build": {
+    "r1cs_hash_a": "0x3706e00770ca2738a06629a1809179fcd52ef0a304737a1a7288634350eb5845",
+    "r1cs_hash_b": "0x3706e00770ca2738a06629a1809179fcd52ef0a304737a1a7288634350eb5845",
+    "matched": true
+  }
+}

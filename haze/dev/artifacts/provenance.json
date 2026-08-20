@@ -1,0 +1,28 @@
+{
+  "product_id": "haze-avalanche-compliant-pool",
+  "chain_family": "avalanche-c-chain",
+  "profile": "development",
+  "not_for_production": true,
+  "circuit_id": "haze-spend-v1",
+  "n_constraints": 588459,
+  "circom_version": "2.2.3",
+  "spend_prove": "KEYS_MISSING",
+  "sc09": {
+    "fuji_pilot": {
+      "approved": false,
+      "artifact_hash": null
+    },
+    "independent_audit": {
+      "approved": false,
+      "artifact_hash": null
+    },
+    "production_ceremony": {
+      "approved": false,
+      "artifact_hash": null
+    },
+    "incident_review": {
+      "approved": false,
+      "artifact_hash": null
+    }
+  }
+}

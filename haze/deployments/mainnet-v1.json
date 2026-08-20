@@ -1,0 +1,25 @@
+{
+  "product_id": "haze-avalanche-compliant-pool",
+  "network": "mainnet",
+  "chainId": 43114,
+  "usdc": "operator-owned",
+  "not_for_production": true,
+  "authorized": false,
+  "broadcast": false,
+  "live_rpc": "operator-owned",
+  "kms": "operator-owned",
+  "identity": "operator-owned",
+  "owners": {
+    "multisig": "operator-owned",
+    "timelock": "operator-owned"
+  },
+  "ceremony_profile": "development",
+  "spend_prove": "KEYS_MISSING",
+  "fuji_required_before_mainnet": true,
+  "sc09": {
+    "fuji_pilot": false,
+    "independent_audit": false,
+    "production_ceremony": false,
+    "incident_review": false
+  }
+}

@@ -1,0 +1,32 @@
+# Secrets — never commit private keys or Groth16 proving keys
+.env
+.env.*
+!.env.example
+*.ptau
+*.zkey
+haze/dev/artifacts/ceremony-private/
+
+# Dependencies and build outputs
+node_modules/
+**/dist/
+haze/target/
+haze/.tools/
+haze/circuits/build/
+haze/contracts/lib/
+haze/contracts/out/
+haze/contracts/cache/
+haze/contracts/broadcast/
+
+# Local MetaMask persist and playwright-cli artifacts
+haze/.playwright/
+haze/output/
+haze/output/playwright/
+.playwright/
+.playwright-cli/
+.playwright-mcp/
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/

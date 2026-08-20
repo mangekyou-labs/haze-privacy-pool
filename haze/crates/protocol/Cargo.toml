@@ -1,0 +1,25 @@
+[package]
+name = "haze-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Canonical protocol boundary for Haze on Avalanche"
+
+[dependencies]
+ark-ff = { version = "0.6.0", default-features = false }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc", "std"] }
+hkdf = "0.13"
+hpke = { version = "0.14", default-features = false, features = ["alloc", "x25519", "chacha"] }
+rand_chacha = { version = "0.10", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "std"] }
+serde_json = { version = "1", default-features = false, features = ["std"] }
+sha2 = { version = "0.11", default-features = false }
+thiserror = "2"
+tiny-keccak = { version = "2", features = ["keccak"] }
+zkhash = { path = "../../../poseidon2" }
+
+[lints]
+workspace = true
+

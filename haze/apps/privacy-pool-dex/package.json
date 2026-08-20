@@ -1,0 +1,10 @@
+{
+  "name": "@haze-avalanche/privacy-pool-dex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --experimental-strip-types --check src/index.ts"
+  }
+}
+

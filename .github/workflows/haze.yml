@@ -1,0 +1,100 @@
+name: Haze
+
+on:
+  push:
+    paths:
+      - "haze/**"
+      - ".github/workflows/haze.yml"
+      - "poseidon2/**"
+  pull_request:
+    paths:
+      - "haze/**"
+      - ".github/workflows/haze.yml"
+      - "poseidon2/**"
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: secret-scan
+        run: node haze/dev/secret-scan.mjs
+
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: secret-scan
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: 1.97.1
+      - name: install circom 2.2.3
+        run: cargo install circom --git https://github.com/iden3/circom --tag v2.2.3 --locked --root haze/.tools
+      - name: npm test --prefix haze
+        run: npm test --prefix haze
+      - name: verify integration stack fixtures
+        run: node haze/dev/stack.mjs verify
+      - name: acceptance e2e suite
+        run: node --experimental-strip-types haze/dev/e2e.mjs
+      - name: verify coverage and performance gates
+        run: node --experimental-strip-types haze/dev/gates.mjs verify
+      - name: verify security review
+        run: node --experimental-strip-types haze/dev/security-review.mjs verify
+      - name: verify operational runbooks
+        run: node --experimental-strip-types haze/dev/runbooks.mjs verify
+      - name: verify Fuji release package
+        run: node --experimental-strip-types haze/dev/fuji-release.mjs verify
+      - name: verify Fuji pilot acceptance
+        run: node --experimental-strip-types haze/dev/pilot.mjs verify
+      - name: verify independent audit
+        run: node --experimental-strip-types haze/dev/audit.mjs verify
+      - name: verify production ceremony package
+        run: node --experimental-strip-types haze/dev/ceremony-release.mjs verify
+      - name: verify operational readiness
+        run: node --experimental-strip-types haze/dev/readiness.mjs verify
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: secret-scan
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: 1.97.1
+          components: clippy
+      - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
+        with:
+          workspaces: haze
+      - name: cargo test --manifest-path haze/Cargo.toml
+        run: cargo test --manifest-path haze/Cargo.toml --workspace
+      - name: clippy
+        run: cargo clippy --manifest-path haze/Cargo.toml --workspace --all-targets --all-features -- -D warnings
+
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: secret-scan
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: install forge-std
+        run: forge install foundry-rs/forge-std --no-git
+        working-directory: haze/contracts
+      - name: forge test
+        run: forge test --root haze/contracts

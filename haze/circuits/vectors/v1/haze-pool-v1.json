@@ -1,0 +1,15 @@
+{
+  "productId": "haze-avalanche-compliant-pool",
+  "domainName": "Haze Avalanche Compliant Pool",
+  "domainVersion": "1",
+  "actions": {
+    "deposit": 1,
+    "transfer": 2,
+    "withdraw": 3,
+    "swapAndShield": 4,
+    "emergencyExit": 5
+  },
+  "nonceScope": ["applicationId", "gatekeeperSigner", "nonce"],
+  "developmentTree": "keccak-parent-mod-r",
+  "defaultRootHistorySize": 100
+}

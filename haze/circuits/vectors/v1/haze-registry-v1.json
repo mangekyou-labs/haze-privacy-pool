@@ -1,0 +1,40 @@
+{
+  "productId": "haze-avalanche-compliant-pool",
+  "minDelaySeconds": 172800,
+  "applicationStatus": {
+    "unspecified": 0,
+    "pending": 1,
+    "active": 2,
+    "suspended": 3,
+    "retired": 4
+  },
+  "policyStatus": {
+    "unspecified": 0,
+    "scheduled": 1,
+    "active": 2,
+    "retired": 3
+  },
+  "noGrace": [
+    {
+      "activeVersion": 1,
+      "activeRoot": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "version": 1,
+      "root": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "live": true
+    },
+    {
+      "activeVersion": 1,
+      "activeRoot": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "version": 1,
+      "root": "0xabababababababababababababababababababababababababababababababab",
+      "live": false
+    },
+    {
+      "activeVersion": 2,
+      "activeRoot": "0xabababababababababababababababababababababababababababababababab",
+      "version": 1,
+      "root": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "live": false
+    }
+  ]
+}

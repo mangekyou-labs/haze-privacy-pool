@@ -1,0 +1,28 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = ["lib"]
+bytecode_hash = "none"
+cbor_metadata = false
+solc = "0.8.28"
+via_ir = true
+optimizer = true
+allow_paths = ["../dev/artifacts", "../dev/artifacts/ceremony-private"]
+remappings = [
+    "haze-dev/=../dev/artifacts/",
+    "haze-operator/=../dev/artifacts/ceremony-private/",
+]
+fs_permissions = [
+    { access = "read", path = "../circuits/vectors" },
+    { access = "read", path = "../dev/artifacts" },
+    { access = "read", path = "../dev/artifacts/ceremony-private" },
+]
+
+[invariant]
+runs = 48
+depth = 12
+fail_on_revert = false
+

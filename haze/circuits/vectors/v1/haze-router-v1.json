@@ -1,0 +1,21 @@
+{
+  "productId": "haze-avalanche-compliant-pool",
+  "action": 4,
+  "routeHashEncoding": "abi.encode(adapter, data)",
+  "errors": [
+    "TOKEN_NOT_ALLOWED",
+    "SLIPPAGE",
+    "AUTH_WINDOW",
+    "ENCODING_INVALID",
+    "PAUSED",
+    "UNAUTHORIZED",
+    "REENTRANCY",
+    "TIMELOCK"
+  ],
+  "fixture": {
+    "adapter": "0x0000000000000000000000000000000000000001",
+    "data": "0xaabb",
+    "routeHash": "0x9576e86422a342327f8825ee310e5fd1c9f7b6e57c8e8cff95e057ba8850db7a"
+  },
+  "noVendorNames": true
+}

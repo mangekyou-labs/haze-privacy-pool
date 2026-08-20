@@ -1,0 +1,10 @@
+{
+  "name": "@haze-avalanche/compliance-portal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --experimental-strip-types --check src/index.ts && node --experimental-strip-types --check src/admin.ts && node --experimental-strip-types --check src/audit.ts && node --experimental-strip-types --check src/governance.ts"
+  }
+}
+

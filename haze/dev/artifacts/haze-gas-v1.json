@@ -1,0 +1,25 @@
+{
+  "not_for_production": true,
+  "network": "local-foundry",
+  "fuji_required_before_mainnet": true,
+  "notes": "Provisional local Foundry via_ir gasleft() snapshots. Re-measure on Fuji before mainnet. Budgets are measured + 15% headroom. Foundry allows ±64 gas of metering noise against measured.",
+  "actions": {
+    "verify": { "measured": 16480, "budget": 18952 },
+    "deposit": { "measured": 504243, "budget": 579879 },
+    "transfer": { "measured": 205448, "budget": 236265 },
+    "withdraw": { "measured": 145527, "budget": 167356 },
+    "swapAndShield": { "measured": 382632, "budget": 440027 },
+    "requestEmergencyExit": { "measured": 25031, "budget": 28786 },
+    "executeEmergencyExit": { "measured": 107729, "budget": 123889 },
+    "scheduleRegister": { "measured": 306207, "budget": 352138 },
+    "activateRegister": { "measured": 3677, "budget": 4229 },
+    "schedulePolicy": { "measured": 120189, "budget": 138218 },
+    "activatePolicy": { "measured": 12444, "budget": 14311 },
+    "scheduleRelease": { "measured": 97916, "budget": 112604 },
+    "activateRelease": { "measured": 25890, "budget": 29774 },
+    "pause": { "measured": 26817, "budget": 30840 },
+    "unpause": { "measured": 2823, "budget": 3247 },
+    "scheduleToken": { "measured": 30658, "budget": 35257 },
+    "activateToken": { "measured": 26242, "budget": 30179 }
+  }
+}

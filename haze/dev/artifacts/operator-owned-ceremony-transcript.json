@@ -1,0 +1,35 @@
+{
+  "circuit_id": "haze-spend-v1",
+  "profile": "operator-owned",
+  "not_for_production": true,
+  "production_ceremony_approved": false,
+  "contributions": [
+    {
+      "contributor": "operator-1",
+      "zkey_hash": "0x1fbbcee35ce467bd215a1d1c1f042a183933a6820ace1c1a71beb7f209321e90"
+    },
+    {
+      "contributor": "operator-2",
+      "zkey_hash": "0x9531884734cd8a1231bcf3cbd2f98a1ccd8c9cefe241b6c2da058a5d2e4ab79d"
+    },
+    {
+      "contributor": "beacon-zero-10",
+      "zkey_hash": "0x374bb2394da985ab824ce61a95b3b3409b71355139f0a6b16fb8e0bff8e508d5"
+    }
+  ],
+  "ptau_sha256": "159d3f938d941e06767d99f30b9fe59a245400a4aae138cf8e411732d7a2f6cd",
+  "setup_zkey_sha256": "e4d9f0c9f6fc8f64297216202605cd51237e40d018611d4ea97d65413d58de97",
+  "verification_key_sha256": "09534f9af477daf1e8d45c20c796b3d5f8ddf25c4584ff789df0f29158d391c4",
+  "generated_verifier_sha256": "cce1cb53c7e93a814b3af6a3f8eec55f4bac2018ffa2548d4d318fa1aa94e066",
+  "snarkjs_circuit_hash": "32910b51948d136bca4a325204ad5ad9c0dc860bd1e3be9279cc4a943d2843834f7ca506cc7628ae5616cea79cf175de554835b1e64e37363bcee0207faa34e8",
+  "snarkjs_contribution_hashes": {
+    "operator-1": "96fbe0dbf7167c1d3905797bb632acd68b5da13afe7af9a9d17cc6934ce4df65e914dd6d59f3c62ff272d5103818f99494df24e80df7e6dd5f62e798a6d4672e",
+    "operator-2": "67714a018c559de78e0ebea67a025f1913ca565a07aa20100e16cd4248035894467ddaa79076d7510af05e2251950c68d4fdb2adc780b2db6ed5f7cb6b291065",
+    "beacon": "6829708d1f662f401de303e433c61b9b236cb6b30c3ef536e1dbda64da312b3b6258f1cd80853efbcf31328784b06c7524cc22cd0630342a7e46727b89bdeb8e"
+  },
+  "zkey_verify": "ZKey Ok",
+  "hardware": {
+    "ram_bytes": 17179869184,
+    "note": "one-laptop operator run; not production_ceremony.approved"
+  }
+}

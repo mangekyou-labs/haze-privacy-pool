@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Haze Compliance Portal — Investigation</title>
+  <style>
+    :root {
+      --haze-bg: #16130f;
+      --haze-surface: #221e18;
+      --haze-text: #f3ece2;
+      --haze-muted: #d4c4ae;
+      --haze-primary: #1f6b62;
+    }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", sans-serif;
+      background: var(--haze-bg);
+      color: var(--haze-text);
+    }
+    .skip { position: absolute; left: -999px; }
+    .skip:focus { left: 8px; top: 8px; }
+  </style>
+</head>
+<body data-layout="workspace">
+  <a class="skip" href="#haze-main">Skip to content</a>
+  <nav aria-label="Haze Compliance Portal"><a href="/audit">/audit</a></nav>
+  <main id="haze-main">
+    <h1 id="haze-action-label">Investigation</h1>
+    <p role="status" aria-live="polite">
+      0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa · expired
+      · granted
+    </p>
+    <section>
+      <h2>Assigned cases</h2>
+      <ul></ul>
+    </section>
+    <button type="button" role="button" tabindex="0" aria-labelledby="haze-action-label">
+      Export scoped records
+    </button>
+  </main>
+</body>
+</html>

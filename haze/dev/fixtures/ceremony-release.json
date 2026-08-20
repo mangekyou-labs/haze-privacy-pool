@@ -1,0 +1,14 @@
+{
+  "not_for_production": true,
+  "kind": "library-production-ceremony",
+  "sc09_production_ceremony_approved": false,
+  "spend_prove": "KEYS_MISSING",
+  "verdict": "pass-library-ceremony",
+  "coverage": ["SC-09"],
+  "remediations": ["M-01"],
+  "remaining": ["M-01", "M-03"],
+  "contributionProcess": "documented-rehearsed",
+  "circuitId": "haze-spend-v1",
+  "nConstraints": 588459,
+  "fixtureHash": "0x025aa4aab56781d78f76672311fa7541c44756bb5d2b91cc13515737ac334f01"
+}

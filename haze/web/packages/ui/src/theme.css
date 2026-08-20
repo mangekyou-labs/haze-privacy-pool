@@ -1,0 +1,308 @@
+:root {
+  --haze-bg: #16130f;
+  --haze-surface: #221e18;
+  --haze-text: #f3ece2;
+  --haze-muted: #d4c4ae;
+  --haze-accent: #1f6b62;
+  --haze-public: #c47a3a;
+  --haze-private: #8ea3c7;
+  --haze-line: color-mix(in srgb, var(--haze-muted) 22%, transparent);
+  --haze-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --haze-pad: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--haze-bg);
+  color: var(--haze-text);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--haze-accent);
+  outline-offset: 2px;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.haze-skip {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  background: var(--haze-accent);
+  color: var(--haze-text);
+  padding: 8px 12px;
+}
+.haze-skip:focus { top: 8px; }
+
+.haze-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.haze-brand {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-size: 18px;
+  padding: 8px 4px;
+}
+
+.haze-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--haze-line);
+}
+
+.haze-stage {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 16px 32px;
+}
+
+.haze-card {
+  width: min(440px, 100%);
+  background: var(--haze-surface);
+  border: 1px solid var(--haze-line);
+  border-radius: 16px;
+  padding: 20px 20px 16px;
+}
+
+.haze-dex-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 20px;
+  padding: 4px;
+  background: var(--haze-bg);
+  border-radius: 10px;
+}
+
+.haze-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--haze-muted);
+  font-weight: 600;
+  font-size: 13px;
+  transition: background-color 160ms var(--haze-ease), color 160ms var(--haze-ease);
+}
+.haze-tab[aria-current="page"] {
+  background: var(--haze-surface);
+  color: var(--haze-text);
+}
+
+.haze-amount-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px 12px 8px;
+  background: var(--haze-bg);
+  border: 1px solid var(--haze-line);
+  border-radius: 12px;
+}
+
+.haze-amount-field { margin: 0; }
+.haze-amount {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--haze-text);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  padding: 4px 0 0;
+}
+
+.haze-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--haze-accent) 28%, var(--haze-surface));
+  color: var(--haze-text);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.haze-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--haze-line);
+}
+
+.haze-more-link {
+  color: var(--haze-muted);
+  font-size: 12px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.haze-phase { color: var(--haze-muted); font-size: 12px; margin: 16px 0 0; }
+
+.haze-status,
+.haze-session {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.haze-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--haze-line);
+  border-radius: 4px;
+  color: var(--haze-muted);
+  font-size: 12px;
+}
+
+.haze-review {
+  border: 1px solid var(--haze-line);
+  border-left: 3px solid var(--haze-public);
+  padding: 12px;
+  margin: 0 0 12px;
+}
+
+.haze-review ul {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+}
+
+.haze-workspace-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.haze-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.haze-empty,
+.haze-muted {
+  color: var(--haze-muted);
+}
+
+.haze-button-secondary {
+  background: transparent;
+  color: var(--haze-text);
+  border: 1px solid var(--haze-line);
+}
+
+.haze-card[data-card="compliance"] {
+  width: min(720px, 100%);
+}
+
+.haze-form .haze-button[type="submit"] {
+  width: 100%;
+  border-radius: 10px;
+}
+
+.haze-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.haze-mono,
+.haze-figure {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.haze-banner {
+  border: 1px solid var(--haze-public);
+  color: var(--haze-text);
+  background: color-mix(in srgb, var(--haze-public) 16%, var(--haze-surface));
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.haze-fact[data-visibility="public"] { border-left: 3px solid var(--haze-public); }
+.haze-fact[data-visibility="private"] { border-left: 3px solid var(--haze-private); }
+.haze-fact {
+  padding: 8px 10px;
+  margin: 0 0 8px;
+  background: color-mix(in srgb, var(--haze-bg) 55%, var(--haze-surface));
+}
+
+.haze-button {
+  appearance: none;
+  border: 0;
+  background: var(--haze-accent);
+  color: var(--haze-text);
+  padding: 10px 12px;
+  min-height: 40px;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 160ms var(--haze-ease);
+}
+.haze-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.haze-field {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+.haze-field input,
+.haze-field select {
+  background: var(--haze-bg);
+  color: var(--haze-text);
+  border: 1px solid var(--haze-line);
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+}
+
+.haze-amount-field input.haze-amount {
+  background: transparent;
+  border: 0;
+  padding: 4px 0 0;
+  border-radius: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+@media (max-width: 719px) {
+  .haze-top {
+    grid-template-columns: 1fr;
+  }
+  .haze-session { width: 100%; }
+  .haze-stage { padding: 24px 12px 28px; }
+  .haze-amount,
+  .haze-amount-field input.haze-amount { font-size: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

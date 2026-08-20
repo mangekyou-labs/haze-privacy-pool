@@ -1,0 +1,42 @@
+{
+  "version": "haze-prover-v1",
+  "profile": "development",
+  "notForProduction": true,
+  "crossRuntime": {
+    "same": [
+      "typedDigest",
+      "spendingSecret",
+      "x25519PublicKey",
+      "localVaultKey",
+      "membershipBlinding",
+      "spendPublicInputs",
+      "artifactHash"
+    ],
+    "notTheSame": [
+      "developmentGroth16Bytes"
+    ]
+  },
+  "request": {
+    "chainId": 43113,
+    "pool": "0x1111111111111111111111111111111111111111",
+    "wallet": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf",
+    "applicationId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "poolVersion": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "signingKey": "0x0000000000000000000000000000000000000000000000000000000000000001"
+  },
+  "typedDigest": "0x254d4187a5cf81af2802be88afe25f0bd428bfb7432c30dc264b4c37729f0a7e",
+  "spendingSecret": "0x2e409fd878979790053acd023e4af9b2051c6b81848ce962c1eae91e9ffc472d",
+  "spendingCounter": 1,
+  "x25519PublicKey": "0xccc4fe74de0fd21d78f4775b54d59fa0b9a4572b4893e1d28c2608241e061f41",
+  "localVaultKey": "0x155c48c7a9a8cb4542220690b84074623f64ad9f1aa592ef6e87b86a1e7866a7",
+  "membershipBlinding": "0x27cdeebe89904989251dc9e8c46c8bb817e63249b5a75bdd97bb683f7eb418dc",
+  "notePublicKey": "0x15b0c3cab5c74d145e293dd0cf262b8b82a78169d7a9f2968e77502434e3ffa9",
+  "encryptionKeyHash": "0x10d0046ea6bbd7f976c16e83e4e981ddf51c2b90f27954c655364e7d8090d4d4",
+  "spendKeys": "T1.4",
+  "artifactHash": "0xac2082ecb2129c571d2ddeb170f261a0da074491773102fa4f1544e97eb19281",
+  "artifactSet": {
+    "circuit": "circuits/src/spend.circom",
+    "fixture": "circuits/vectors/v1/haze-spend-v1.json",
+    "manifest": "dev/artifacts/development-circuit-manifest.json"
+  }
+}

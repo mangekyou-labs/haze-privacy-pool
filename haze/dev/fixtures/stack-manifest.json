@@ -1,0 +1,42 @@
+{
+  "profile": "development",
+  "not_for_production": true,
+  "fixtureHash": "0xeb11b314bbbc2956cb9765a98094e0fe43a86933af08e431b9b9242cf10943ae",
+  "evm": "anvil-mock",
+  "applications": [
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "contracts": [
+    "HazePool",
+    "HazeVerifier",
+    "HazeScreenerRegistry",
+    "HazeAdapterRegistry",
+    "HazeNullifierSet"
+  ],
+  "services": [
+    "haze-gatekeeper",
+    "haze-indexer",
+    "haze-prover",
+    "haze-disclosure"
+  ],
+  "migrations": [
+    "0001_init.sql",
+    "0002_ops.sql"
+  ],
+  "mocks": [
+    "MockUsdc",
+    "malicious-adapter",
+    "replay-bot"
+  ],
+  "frontends": [
+    "privacy-pool-dex",
+    "compliance-portal"
+  ],
+  "actors": [
+    "alice",
+    "bob",
+    "auditor",
+    "adversary"
+  ]
+}

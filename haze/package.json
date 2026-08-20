@@ -1,0 +1,50 @@
+{
+  "name": "haze-avalanche-compliant-pool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "sdk/typescript",
+    "web/apps/*",
+    "web/packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs && node circuits/vectors/check.mjs",
+    "test:architecture": "node --test tests/product-boundary.test.mjs",
+    "stack": "node dev/stack.mjs",
+    "host": "node --experimental-strip-types dev/host.mjs",
+    "commercial": "node --experimental-strip-types dev/commercial-host.mjs",
+    "commercial:operator": "HAZE_OPERATOR_PROVE=1 node --experimental-strip-types --max-old-space-size=8192 dev/commercial-host.mjs",
+    "dappwright": "node --experimental-strip-types dev/dappwright-bootstrap.mjs",
+    "dappwright:live": "node --experimental-strip-types dev/dappwright-live-walk.mjs",
+    "dappwright:live-spend": "node --experimental-strip-types dev/dappwright-live-spend-walk.mjs",
+    "dappwright:live-operator": "node --experimental-strip-types --max-old-space-size=8192 dev/dappwright-live-operator-walk.mjs",
+    "dappwright:local": "node --experimental-strip-types dev/dappwright-local-walk.mjs",
+    "qa:wallet:setup": "node --experimental-strip-types dev/setup-metamask.mjs",
+    "qa:wallet:validate": "node --experimental-strip-types dev/setup-metamask.mjs --validate-only",
+    "qa:wallet:cleanup": "node --experimental-strip-types dev/cleanup-metamask.mjs",
+    "qa:cli": "playwright-cli",
+    "e2e": "node --experimental-strip-types dev/e2e.mjs",
+    "gates": "node --experimental-strip-types dev/gates.mjs",
+    "security-review": "node --experimental-strip-types dev/security-review.mjs",
+    "runbooks": "node --experimental-strip-types dev/runbooks.mjs",
+    "fuji-release": "node --experimental-strip-types dev/fuji-release.mjs",
+    "fuji-live-deploy": "node --experimental-strip-types dev/fuji-live-deploy.mjs",
+    "pilot": "node --experimental-strip-types dev/pilot.mjs",
+    "independent-audit": "node --experimental-strip-types dev/audit.mjs",
+    "operator-prove": "node --experimental-strip-types --max-old-space-size=8192 dev/operator-prove.mjs",
+    "ceremony-release": "node --experimental-strip-types dev/ceremony-release.mjs",
+    "readiness": "node --experimental-strip-types dev/readiness.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tenkeylabs/dappwright": "^2.13.12",
+    "playwright-core": "^1.62.1",
+    "snarkjs": "^0.7.6"
+  }
+}

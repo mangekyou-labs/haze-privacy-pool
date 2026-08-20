@@ -1,0 +1,532 @@
+{
+  "chain_family": "avalanche-c-chain",
+  "domains": [
+    {
+      "field": "0x2afe8a5679df289719eae23ad89b300434b9dfbb8194dad0b50dee97f91a3868",
+      "keccak": "0x5b62d8c95b10c8c0d23b27f15a1c88615cedc803fb4e4b61f8efe42be91a3869",
+      "label": "haze/avalanche/v1/protocol"
+    },
+    {
+      "field": "0x2e6bf37683e95a0580a83999cc8f97d94c6971991aedc6c278b6205f22b4e674",
+      "keccak": "0x2e6bf37683e95a0580a83999cc8f97d94c6971991aedc6c278b6205f22b4e674",
+      "label": "haze/avalanche/v1/pool"
+    },
+    {
+      "field": "0x020bf885d998812b763118d7ab4e699f02945624138e08b9db4ee8579e975b46",
+      "keccak": "0xc39d32515e5f01d257722fb1b153cb13a363f745fa73cafeead6bea75e975b4a",
+      "label": "haze/avalanche/v1/note-key"
+    },
+    {
+      "field": "0x0eecd4e943e6a980feaf6b2a7b28051bf334f7da7fff0e26fbcee8f616f88afe",
+      "keccak": "0x3f51235c251849aab6ffb0e0fca95d791b68e022f9b87eb83fb0de8a06f88aff",
+      "label": "haze/avalanche/v1/encryption-key"
+    },
+    {
+      "field": "0x17a12ec9e6b08630bfca04da26e8acfab8cde9769b87b968bb62adb56066f9a9",
+      "keccak": "0xa8ce1a228a4566ade8bad5fdab6cb6123169a25008b40b1c87088e713066f9ac",
+      "label": "haze/avalanche/v1/note"
+    },
+    {
+      "field": "0x1c62494a7288d13827418d1fbdcba652ad52b366e6ac484d2917c944507dea3c",
+      "keccak": "0xddf38315f74f51df0882a3f9c3d107c74e225488cd920a92389f9f94107dea40",
+      "label": "haze/avalanche/v1/nullifier"
+    },
+    {
+      "field": "0x29c582b40dae5f68d8dde5f949e8a67df11b1d402cb8ed47125814a77dd97f14",
+      "keccak": "0x5a29d126eedfff92912e2bafcb69fedb194f0588a6725dd8563a0a3b6dd97f15",
+      "label": "haze/avalanche/v1/note-tree-node"
+    },
+    {
+      "field": "0x0e81fbe5bbc6cbfabdddbbd655aa31a23f92755e64aa1b383b89f45ed1789751",
+      "keccak": "0x0e81fbe5bbc6cbfabdddbbd655aa31a23f92755e64aa1b383b89f45ed1789751",
+      "label": "haze/avalanche/v1/app-tree-node"
+    },
+    {
+      "field": "0x1a07ffad523050eb9557dc596e54e9e9c7f837f32fdfe45f4aba1c3e3f4448f3",
+      "keccak": "0x4a6c4e203361f1154da8220fefd64246f02c203ba99954f08e9c11d22f4448f4",
+      "label": "haze/avalanche/v1/block-tree-node"
+    },
+    {
+      "field": "0x160cd10e3eaff43b1426bc69b3fa677c1b158d81ffdbbb88714bda14f99e4dda",
+      "keccak": "0xa739bc66e244d4b83d178d8d387e709393b1465b6d080d3c3cf1bad0c99e4ddd",
+      "label": "haze/avalanche/v1/app-member"
+    },
+    {
+      "field": "0x11eefc4d312d0dc573148fea08df1caf4d8d7415aa9684f51d730472a927a503",
+      "keccak": "0xd3803618b5f38e6c5455a6c40ee47e23ee5d1537917c473a2cfadac26927a507",
+      "label": "haze/avalanche/v1/block-note"
+    },
+    {
+      "field": "0x0921cfca0da02e017415735a049888912c67cc0d5d3b72cb9e64a306eff36fb9",
+      "keccak": "0x9a4ebb22b1350e7e9d06447d891c91a8a50384e6ca67c47f6a0a83c2bff36fbc",
+      "label": "haze/avalanche/v1/block-evm-address"
+    },
+    {
+      "field": "0x1174e1df33753938ddf0b1fbfd3173c8f10392c62a3602074713ebb21c8d2bf5",
+      "keccak": "0xa2a1cd37d70a19b606e1831f81b57ce0699f4b9f976253bb12b9cc6dec8d2bf8",
+      "label": "haze/avalanche/v1/audit-data"
+    }
+  ],
+  "negative": [
+    {
+      "input": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001",
+      "name": "field_equal_to_modulus",
+      "reason": "FIELD_OUT_OF_RANGE"
+    },
+    {
+      "input": "0x01",
+      "name": "field_too_short",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "input": 0,
+      "name": "unknown_action",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "actual": 43114,
+      "expected": 43113,
+      "name": "chain_mismatch_cchain_vs_fuji",
+      "reason": "CHAIN_MISMATCH"
+    },
+    {
+      "action": 2,
+      "name": "nonzero_swap_fields_on_transfer",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "input": "haze1:SFpBVgEAAAAAAACoaaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7suVL5kwrSrLNTI4nV1EjloZbtN33DOvuCwZEyEMBo7H4Uf4eiMYzx11YRZs5zdELDqgdQu9z02zEbqBest5FlH6VLllw=",
+      "name": "padded_haze_address",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "name": "zero_audit_salt",
+      "reason": "FIELD_OUT_OF_RANGE"
+    },
+    {
+      "domain_name": "Haze Shielded Account",
+      "name": "key_domain_used_as_pool_domain",
+      "reason": "DOMAIN_MISMATCH"
+    },
+    {
+      "name": "wrong_application_id",
+      "reason": "APPLICATION_MISMATCH"
+    },
+    {
+      "name": "wrong_pool_version",
+      "reason": "POOL_VERSION_MISMATCH"
+    },
+    {
+      "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "name": "low_order_x25519",
+      "reason": "FIELD_OUT_OF_RANGE"
+    },
+    {
+      "input": "haze/avalanche/v1/note-keys",
+      "name": "unknown_poseidon_domain",
+      "reason": "DOMAIN_MISMATCH"
+    },
+    {
+      "input": 281474976710656,
+      "name": "uint48_deadline_out_of_range",
+      "reason": "FIELD_OUT_OF_RANGE"
+    },
+    {
+      "name": "oversized_envelope_encap",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "name": "nonzero_deposit_tree_or_nullifiers",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "name": "disabled_slot_nonzero",
+      "reason": "ENCODING_INVALID"
+    },
+    {
+      "name": "hpke_open_wrong_aad",
+      "reason": "CIPHERTEXT_INVALID"
+    }
+  ],
+  "parameter_files": [
+    {
+      "keccak": "0x7680fd4d8f536c341dabfe99f5da2fc4591d1c2733a318fc9dbd96651d9c99fe",
+      "path": "poseidon2/src/poseidon2/poseidon2_instance_bn256.rs"
+    },
+    {
+      "keccak": "0xb4b68e3fc6a6d5dd2296b20bbe6d35334101ba7e211ac3e90a87ffed22a09e95",
+      "path": "poseidon2/poseidon2_rust_params.sage"
+    }
+  ],
+  "positive": [
+    {
+      "hi": "0x00000000000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "lo": "0x00000000000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "name": "bytes32_limbs_roundtrip",
+      "recombined": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "address": "0x1111111111111111111111111111111111111111",
+      "field": "0x0000000000000000000000001111111111111111111111111111111111111111",
+      "name": "evm_address_field"
+    },
+    {
+      "field": "0x2afe8a5679df289719eae23ad89b300434b9dfbb8194dad0b50dee97f91a3868",
+      "name": "protocol_version_tag"
+    },
+    {
+      "chain_id": 43113,
+      "field": "0x1b40d05a9a7fe7f5dd7cbfd37ead748119d8a67e1d7c648fdb518fee5818fbd6",
+      "name": "pool_domain_fuji"
+    },
+    {
+      "field": "0x2e54be64c2b4ab2cd4c8e2757512396865bb4ddf70cebee0b0644c84301a3b1f",
+      "name": "note_public_key"
+    },
+    {
+      "field": "0x0f07bdae1968d04db8dfc472bcb9fcfc934b96597fa8509051dead99c76f99da",
+      "name": "encryption_key_hash"
+    },
+    {
+      "field": "0x12f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f",
+      "name": "note_commitment"
+    },
+    {
+      "field": "0x00695bdec935d3e0429c3a04acc43b60d6d736e31f5d0eb49b71ebda82a421ad",
+      "name": "nullifier"
+    },
+    {
+      "field": "0x232c99b36cf639fce072561bbc8c85e6117dac9f74810ba9b0584114835219bd",
+      "name": "application_member"
+    },
+    {
+      "field": "0x2e63a93984685f7a17285d895382a8cdebc6670135daa20a39173a181819df49",
+      "name": "global_blocked_note"
+    },
+    {
+      "field": "0x0214dd05d5f2419fc8d72ed51c60128351ed72253014a98d9d0064decd2e41eb",
+      "name": "global_blocked_address"
+    },
+    {
+      "field": "0x0b70befaf3b699951d686409413a36612ee96094c7bf2708687522123486f908",
+      "name": "empty_note_root"
+    },
+    {
+      "bytes": "0x485a415601000000000000a869aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2e54be64c2b4ab2cd4c8e2757512396865bb4ddf70cebee0b0644c84301a3b1f851fe1e88c633c75d58459b39cdd10b0ea81d42ef73d36cc46ea05eb2de45947e952e597",
+      "name": "haze_address",
+      "text": "haze1:SFpBVgEAAAAAAACoaaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7suVL5kwrSrLNTI4nV1EjloZbtN33DOvuCwZEyEMBo7H4Uf4eiMYzx11YRZs5zdELDqgdQu9z02zEbqBest5FlH6VLllw"
+    },
+    {
+      "hash": "0x00fb54e0be5e64cd653b46ec031a6bedc637ca88d7e4c270dd39612d2ece53a8",
+      "info": "haze/avalanche/v1/recipient-note",
+      "name": "recipient_envelope_hash"
+    },
+    {
+      "hash": "0x15b87e878144f1bd886345f33040038d664eccca62766b2c7d3f84f8d915769a",
+      "info": "haze/avalanche/v1/audit-record",
+      "name": "audit_envelope_hash"
+    },
+    {
+      "field": "0x21089fe7458962e7cdf023b636983fba634ad009846e4ba9cbbe079c28043960",
+      "name": "audit_data_commitment"
+    },
+    {
+      "authorization": "0x107692c1e0329c35ce50d278a6167ed4c310f7de67c5ebc476c4dd8220bbca88",
+      "domain": "0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f",
+      "intent": "0xc155f1ddac13896dbe82c36939f5d2acccfdeefd74d43c19786cb47907adc3d3",
+      "key_derivation": "0x346d8cf7a243e36092b90df9d42f29759f54cfae9e14fdebc6fb40b58ea07840",
+      "name": "eip712_type_hashes"
+    },
+    {
+      "chain_id": 43113,
+      "hash": "0x5983b6a3d39501c6000ea74f9f0e8c3d2ce5bcde2cd236fef1eb7e6af3c405be",
+      "name": "eip712_domain_separator_fuji",
+      "name_string": "Haze Avalanche Compliant Pool",
+      "verifying_contract": "0x1111111111111111111111111111111111111111",
+      "version": "1"
+    },
+    {
+      "digest": "0x4d84f4feed447af6ed3df551d9f03490e9727b1bbc532a286d2b2b8e0d760e68",
+      "fields": {
+        "action": 1,
+        "amountIn": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "applicationId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "applicationMembershipRoot": "0x1b8b09a103fe5721db6644eca05026c73950174fdb66a112a0c4a11fb0601f4e",
+        "applicationPolicyVersion": 1,
+        "auditCiphertextHash": "0x15b87e878144f1bd886345f33040038d664eccca62766b2c7d3f84f8d915769a",
+        "auditDataCommitment": "0x21089fe7458962e7cdf023b636983fba634ad009846e4ba9cbbe079c28043960",
+        "deadline": 0,
+        "hazeBlocklistRoot": "0x2f92dd0f1764c3ffdf4ffa4a603cd8b85274e58535526429fdb26dc155a727b2",
+        "hazePolicyVersion": 1,
+        "inputNullifier0": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "inputNullifier1": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "minUsdcOut": 0,
+        "noteTreeRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "outputCommitment0": "0x12f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f",
+        "outputCommitment1": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "pool": "0x1111111111111111111111111111111111111111",
+        "poolVersion": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "publicAmount": 1000000,
+        "publicRecipient": "0x0000000000000000000000000000000000000000",
+        "recipientCiphertextHash0": "0x00fb54e0be5e64cd653b46ec031a6bedc637ca88d7e4c270dd39612d2ece53a8",
+        "recipientCiphertextHash1": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "routeHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "tokenIn": "0x0000000000000000000000000000000000000000",
+        "user": "0x2222222222222222222222222222222222222222"
+      },
+      "name": "haze_intent_deposit",
+      "struct_hash": "0xf54d235a74b4df6ec313ea2f0808bd2ffa60e2867bd235e12f1370ee7bdd071c"
+    },
+    {
+      "digest": "0x264ef7508839db6406ea38ec83e452f7e6726f2dfb59fe04b81b6b9da1b0636b",
+      "fields": {
+        "action": 1,
+        "applicationId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "applicationPolicyVersion": 1,
+        "auditCiphertextHash": "0x15b87e878144f1bd886345f33040038d664eccca62766b2c7d3f84f8d915769a",
+        "auditDataCommitment": "0x21089fe7458962e7cdf023b636983fba634ad009846e4ba9cbbe079c28043960",
+        "hazePolicyVersion": 1,
+        "intentHash": "0xf54d235a74b4df6ec313ea2f0808bd2ffa60e2867bd235e12f1370ee7bdd071c",
+        "nonce": "0x0101010101010101010101010101010101010101010101010101010101010101",
+        "pool": "0x1111111111111111111111111111111111111111",
+        "poolVersion": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "user": "0x2222222222222222222222222222222222222222",
+        "validAfter": 1,
+        "validUntil": 2000000000
+      },
+      "name": "application_authorization",
+      "struct_hash": "0x7ab3238748d8320ee63dea305108b2c7b6d592b15161b7d082bf65f34cf6ebb5"
+    },
+    {
+      "domain_name": "Haze Shielded Account",
+      "domain_version": "1",
+      "hash": "0xebe611130592544975bb7f503feba3ee293cbc494365613c623c6d28d8b8237b",
+      "name": "key_derivation_struct_hash"
+    },
+    {
+      "action": 5,
+      "hash": "0xfc7450e6893c57123a3119a83330cfdd6243ed448260c3bca6a9ae484f5d4a63",
+      "name": "emergency_exit_request_id"
+    },
+    {
+      "blocks": [
+        [
+          "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000000000000000000000000000001"
+        ]
+      ],
+      "domain": "haze/avalanche/v1/note-key",
+      "inputs": [
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      ],
+      "name": "poseidon_pad_odd"
+    },
+    {
+      "blocks": [
+        [
+          "0x00000000000000000000000000000000851fe1e88c633c75d58459b39cdd10b0",
+          "0x00000000000000000000000000000000ea81d42ef73d36cc46ea05eb2de45947"
+        ],
+        [
+          "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ]
+      ],
+      "domain": "haze/avalanche/v1/encryption-key",
+      "inputs": [
+        "0x00000000000000000000000000000000851fe1e88c633c75d58459b39cdd10b0",
+        "0x00000000000000000000000000000000ea81d42ef73d36cc46ea05eb2de45947"
+      ],
+      "name": "poseidon_pad_even"
+    },
+    {
+      "blocklist_lower": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "blocklist_upper": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
+      "depth": 32,
+      "name": "merkle_zero_and_sentinels",
+      "note_empty_root": "0x0b70befaf3b699951d686409413a36612ee96094c7bf2708687522123486f908",
+      "note_zero_leaf": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "domain": "haze/avalanche/v1/note-tree-node",
+      "index": 7,
+      "leaf": "0x12f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f",
+      "name": "merkle_note_path",
+      "root": "0x108a590eaa62256572787f19fded658153a887e3b5aa6a238762b8f910c980ad",
+      "siblings": [
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x0a3c59b709aad3e30eefd6b205e397a7be570b5ee0683a075a275d4ae7a55dcf",
+        "0x1a843cff98f1fbf818888d8ab9ae3a911f3b9d09f89d554aa908772ccfc99357",
+        "0x23a9708c24d8db4dec8646d23024c4d1a4caaa1f9c859c033b33b58b38b323bd",
+        "0x2d4b9f7d39d9076246f0bc0f925bd0fbf68769cb416009ceb69c98bd0f621f02",
+        "0x1dd0c168d2a377f6a102ce508881d58914c34c3110c572883f3322ff503b0175",
+        "0x0daa47b94fb2b93dea69e4d25d6548c041cfe8b15d4e5c5a989864571e74fe33",
+        "0x19bc142a4daab94aa50ab8c8474b25439801aa769cbc547812e302f935b04f39",
+        "0x1c8fc3fc5dc0b7bf97effcfdf4f831e51b2929ad49fafafb67859753b108737d",
+        "0x1843d0290e9e9afa1f44fd04d6ea33dade2e90892904e65dbc06912318eeb9cd",
+        "0x1c7df4043e0e34d116bc6a091f914def982adf270c9a5683689e1d6a27beab18",
+        "0x08d5e6933981d43d8510c3a5f83a4ed6a6c5db92b7d82047c39a576ed41d2d59",
+        "0x0ee8f7b3148fc46cc4b4fbd1eb209fd754aebe1fe550dbf991f063a198b6a46b",
+        "0x2364247cc2e5fe56c14f715e729e09bef1142ca27019eb7606af91e33fc9b0f4",
+        "0x166e91dbcc936fb927e7f8bddebab78f8310deb00d175314b8d532cb5edc40a8",
+        "0x0b33d2e19d422d0672e3022a4119672f358ad5f1c983edc79c204451c53027ea",
+        "0x281473ff3dd0e60068375bd23dfbf890dfefae010779e5f235e416dad04ab0da",
+        "0x07d1cd209611a552fd783bb6cbb45f39b70b58457787aa467f53016c1a5ba41d",
+        "0x1c6be1c009a9054383a187785652f645f98e46e661f53abc2247fb848c0718ec",
+        "0x09299df82f2f90e03b38a38c1179fd2cf733057152fa876ed4e1dab140d60d11",
+        "0x01f96f01d80e0f672995bf6509534aee4712b8f6ad51b09c1b1b7dfda86006f8",
+        "0x0379605bf0e955ee69f838d593342a38eca220f30ac0e0e8d7384731fe2ef53a",
+        "0x1a57dbb162153d4da8ecef4b1f7532bf94b8f23b7292aabe77760cb76ab32f88",
+        "0x14d36b96191e1e6895d60942c53523da6f38ebb750b649530431c56d73576d87",
+        "0x0a6b9b25bc436ee26d1e62f546995e57b6469a72515f3752197f7650fcfc0118",
+        "0x1c65fc46cce933b5cc7524d6cf889771a1ebdfa2c788374c7ddd258c7010a91f",
+        "0x11a6cd767c1c6c392d03e07bdd7cc591bccefe1a87842e138d035c2aed2c456e",
+        "0x20dd93d8a633e000cb6046d467f9bf4822de2d3ecc0dc31862bfc3ecaadcfb27",
+        "0x2f421ca86a350004bdc813e9a417b73505048539c7b28de8e36b8c4e8bb56b9b",
+        "0x1f92db245b2e898f7e5a4ce7f9c6c902c80a3012f881f6e2a5530098d453ab97",
+        "0x1ac5f15e5d0c273b06901e1bcb9ee5b9f7278012366fd1e13d2e10208ce5a491",
+        "0x27c86b89524301edc1cd76009a4f7a6156e0a40761bcc227d69fa1d3706a1e3e"
+      ]
+    },
+    {
+      "domain": "haze/avalanche/v1/block-tree-node",
+      "lower": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "lower_index": 0,
+      "name": "blocklist_adjacent_sentinels",
+      "root": "0x2f9120bf4979f6f079577e2eaeb96fd996129dbd24a0855fbd0fe7e30669716d",
+      "upper": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
+      "upper_index": 1
+    },
+    {
+      "name": "enabled_slot",
+      "value": 1000000
+    },
+    {
+      "fields": [
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "name": "disabled_slot",
+      "value": 0
+    },
+    {
+      "bytes": "0xa201b8180119a86902541111111111111111111111111111111111111111035820bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb045820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa05010654222222222222222222222222222222222222222207545425890298aed601595a70ab815c96711a31bc65081a000f4240095400000000000000000000000000000000000000000a010b010c582001010101010101010101010101010101010101010101010101010101010101010d8200000e8200000f82582000000000000000000000000000000000000000000000000000000000000000005820000000000000000000000000000000000000000000000000000000000000000010825820000000000000000000000000000000000000000000000000000000000000000058200000000000000000000000000000000000000000000000000000000000000000118258200000000000000000000000000000000000000000000000000000000000000000582000000000000000000000000000000000000000000000000000000000000000001282010013821a000f424000148258202e54be64c2b4ab2cd4c8e2757512396865bb4ddf70cebee0b0644c84301a3b1f58200000000000000000000000000000000000000000000000000000000000000000158258200f07bdae1968d04db8dfc472bcb9fcfc934b96597fa8509051dead99c76f99da582000000000000000000000000000000000000000000000000000000000000000001682582012f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f582000000000000000000000000000000000000000000000000000000000000000001782582000fb54e0be5e64cd653b46ec031a6bedc637ca88d7e4c270dd39612d2ece53a85820000000000000000000000000000000000000000000000000000000000000000018185820000000000000000000000000000000000000000000000000000000000000000302a10146636173652d31",
+      "name": "audit_cbor_record"
+    },
+    {
+      "aad": "0x000000000000a8691111111111111111111111111111111111111111bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0012f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f01",
+      "ciphertext": "0x73afd3e0a87006080241f6cc61ecda11e8258421fafa2c986c37c1ddb0af7124e29f1c6790ea76cf5b3393d9f02c8462d0d99cece34852a855ba8b3dbab4260fe0221a1a2fbf1d413045d6f97c1cf29e0be697463c3ac7f2055b0ca6a2b49266dcaf7d0d277af3be8db167813232069ab4e8d4df0ad399aefe613e682988ea517398e8273acbe92e77743b62f3b089919ccee20d2548e6641909112d3021808d3bd8b1acc8fc0d9401a2adacaa70795629521c53bf67232ecbcc7844dedf376f51be40062ee2a3f3e474b43be83ee7704b9bef3fc2127c87",
+      "encapsulated_key": "0x156f3db7c1a81bbf5e560ab3220408fe1e022a93e19b781609f7bafd10f77906",
+      "info": "haze/avalanche/v1/recipient-note",
+      "name": "recipient_hpke_seal_open",
+      "plaintext": "0x00000000000f424000000000000000000000000000000000000000000000000000000000000000022e54be64c2b4ab2cd4c8e2757512396865bb4ddf70cebee0b0644c84301a3b1f0f07bdae1968d04db8dfc472bcb9fcfc934b96597fa8509051dead99c76f99daaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb12f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f",
+      "recipient_ikm": "0x5151515151515151515151515151515151515151515151515151515151515151",
+      "recipient_public_key": "0xfd7f78a4d47c342ba79443e5aad22978e5b9974e9686d29bda7cdc934cf9be16",
+      "sender_seed": "0x6161616161616161616161616161616161616161616161616161616161616161"
+    },
+    {
+      "aad": "0x000000000000a8691111111111111111111111111111111111111111bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000121089fe7458962e7cdf023b636983fba634ad009846e4ba9cbbe079c28043960010101010101010101010101010101010101010101010101010101010101010101",
+      "ciphertext": "0x6bfbb176023e4f2ecbd5906b313a0a5dded75138d5d6477859bdd90fc5aee049932a8aa70a4c15a566ee8cdd890c1215a8d57257809cce58fa5f45ca4fe47be8f0c94c54b809fb4b186ef068aeb70c3f772882f112f7538a6a3f3cf8728b36d4c59a7fa1eb5f692de5bfe19ee7255094bdaad8c57308dcf4287c7fbeeb5b9eb9b3d68ed1f053414ec82717dd9cd6e67e3834c062f24321c1aef0cc7964cfba313c14f1ed4152441deb9e524afb8fa2e7dbb13e178095a9790305575b6687d7bc62236f8d28e61784611f0eec54958ed82b80af499f025d3b096dc391b28c79e87934031698b06b5c59d5ffdcc6c510eff9da74517280484abbe522c7d62e833985e4dcec39263ed8a05d4cd95b155a736fc5504d57f5abdfb7fdf8f063e1cee5a8b8c7fa1ac4e90b1e6f5d050e8dc29f8ac8f39e8c1cb4b52aaedd17a41641ea760234714f096991e1fc9ba5987f8d5d806825fc74341e8e79fa54d0005cc34bfb737c8e83c707c550b9f0c71fd5188a231151b692797eea0fe389d383d7c539e5db6dc15d5a9f9de6f62ac7ce3b4a18ba322cb25b838694f58716690987891f8c019747fd6775e401d5889ab52e7f65e752f1c40816917f4195d87d26ebbe1fc0bb71a5269163077492dcbf2a36f9970c57d2ee86535d73cc8367c8a81e6409efbb4254b1cb63d7a65e9a399dd562e276a637b1fef568f6b1f5ec87b5106eacb280c80e9f93cd25824cc450af70979e0ddb8cb7b8d2c2686c6daf21525aa0f7f938ba4c90a83a775750f8cd73e107f9cd329f704c9155ef2f242102c749c6f860db155dfca0666b7f3a7c2105281668ab6f0a1b00b01d17a47a0ad0aeeb773a0fa0f2bf7ef505c516ba19a1e14af4f663a946d73c5ae5a3e9c20e03c8936fbe792c6c2e6b8dedf23939e6674346fd8db4ba4b6f90285607d3d047be9ef694f4585c7acb0093c507513329ea79d410e31fb102c8ee8d0348aad9b8af0d2e2bae68b218b78b141687a10e256fe77f98ed49812c75822fc779685bf7f76d323c5f6d4115c9689e411dc98b6f3e98bd44ff23c5ae41aae92e36ef1b40c18838c81a630048c7720ae359e1f154a136c145980d",
+      "encapsulated_key": "0x862064d76002a77cf789bf424066eae5f176540cddb45caf025413492abd2a3e",
+      "info": "haze/avalanche/v1/audit-record",
+      "name": "audit_hpke_seal_open",
+      "plaintext": "0xa201b8180119a86902541111111111111111111111111111111111111111035820bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb045820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa05010654222222222222222222222222222222222222222207545425890298aed601595a70ab815c96711a31bc65081a000f4240095400000000000000000000000000000000000000000a010b010c582001010101010101010101010101010101010101010101010101010101010101010d8200000e8200000f82582000000000000000000000000000000000000000000000000000000000000000005820000000000000000000000000000000000000000000000000000000000000000010825820000000000000000000000000000000000000000000000000000000000000000058200000000000000000000000000000000000000000000000000000000000000000118258200000000000000000000000000000000000000000000000000000000000000000582000000000000000000000000000000000000000000000000000000000000000001282010013821a000f424000148258202e54be64c2b4ab2cd4c8e2757512396865bb4ddf70cebee0b0644c84301a3b1f58200000000000000000000000000000000000000000000000000000000000000000158258200f07bdae1968d04db8dfc472bcb9fcfc934b96597fa8509051dead99c76f99da582000000000000000000000000000000000000000000000000000000000000000001682582012f9ba3a528b60b24a66982d68570b38eb9a93e96d0224fd1a4cc0051fbbe76f582000000000000000000000000000000000000000000000000000000000000000001782582000fb54e0be5e64cd653b46ec031a6bedc637ca88d7e4c270dd39612d2ece53a85820000000000000000000000000000000000000000000000000000000000000000018185820000000000000000000000000000000000000000000000000000000000000000302a10146636173652d31",
+      "recipient_ikm": "0x5252525252525252525252525252525252525252525252525252525252525252",
+      "recipient_public_key": "0x2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04",
+      "sender_seed": "0x6262626262626262626262626262626262626262626262626262626262626262"
+    },
+    {
+      "ikm": "0x7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+      "labels": [
+        "haze/avalanche/v1/hkdf/spending-secret",
+        "haze/avalanche/v1/hkdf/x25519",
+        "haze/avalanche/v1/hkdf/local-vault",
+        "haze/avalanche/v1/hkdf/membership-blinding"
+      ],
+      "local_vault": "0xa312b24c8983620b1ff762fd2abad8d545e4430486e4e7cfdbb77a2d1a849d63",
+      "membership_blinding": "0x1a92d37da916189f80ef02deb72ca7cd914c111ae836fa3ce306977ed5eb8ec5",
+      "name": "hkdf_labels",
+      "spending_counter": 12,
+      "spending_label": "haze/avalanche/v1/hkdf/spending-secret",
+      "spending_secret": "0x0a84e694c5a09685f816bfeaca631304bca42c347e517bcff797d63bcde62810",
+      "x25519": "0xa562e39f69b6e5e6515f67b7a4581dd06a74218b589401290e1dd6ac073748b2"
+    },
+    {
+      "fields": [
+        "protocol_version_tag",
+        "chain_id",
+        "pool_address",
+        "pool_version_hi",
+        "pool_version_lo",
+        "application_id_hi",
+        "application_id_lo",
+        "note_tree_root",
+        "application_policy_version",
+        "haze_policy_version",
+        "application_membership_root",
+        "haze_blocklist_root",
+        "input_nullifier_0",
+        "input_nullifier_1",
+        "output_commitment_0",
+        "output_commitment_1",
+        "action",
+        "public_amount",
+        "public_recipient",
+        "authorized_user",
+        "intent_hash_hi",
+        "intent_hash_lo",
+        "recipient_ciphertext_hash_0_hi",
+        "recipient_ciphertext_hash_0_lo",
+        "recipient_ciphertext_hash_1_hi",
+        "recipient_ciphertext_hash_1_lo",
+        "audit_data_commitment",
+        "audit_ciphertext_hash_hi",
+        "audit_ciphertext_hash_lo"
+      ],
+      "name": "normal_public_input_order"
+    },
+    {
+      "fields": [
+        "protocol_version_tag",
+        "chain_id",
+        "pool_address",
+        "pool_version_hi",
+        "pool_version_lo",
+        "application_id_hi",
+        "application_id_lo",
+        "note_tree_root",
+        "haze_policy_version",
+        "haze_blocklist_root",
+        "input_nullifier",
+        "action",
+        "public_amount",
+        "public_recipient",
+        "requester",
+        "request_id_hi",
+        "request_id_lo",
+        "audit_data_commitment",
+        "audit_ciphertext_hash_hi",
+        "audit_ciphertext_hash_lo"
+      ],
+      "name": "emergency_public_input_order"
+    }
+  ],
+  "primitives": {
+    "bn254_r": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001",
+    "c_chain_id": 43114,
+    "fuji_chain_id": 43113,
+    "hash_boundary": "poseidon2+keccak256",
+    "poseidon2": {
+      "capacity": 1,
+      "full_rounds": 8,
+      "partial_rounds": 56,
+      "rate": 2,
+      "sbox": 5,
+      "width": 3
+    },
+    "usdc_cchain": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+    "usdc_fuji": "0x5425890298aed601595a70ab815c96711a31bc65"
+  },
+  "product_id": "haze-avalanche-compliant-pool",
+  "schema_version": 1
+}

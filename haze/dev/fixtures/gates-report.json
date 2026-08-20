@@ -1,0 +1,17 @@
+{
+  "profile": "development",
+  "not_for_production": true,
+  "fixtureHash": "0xf454911a26d5159021b7c88a92a5d842011ae15c19403ba6500ce33cf8580f55",
+  "sc06": "pass-with-approved-deferral",
+  "sc07": "pass",
+  "sc08": "pass",
+  "spend_groth16": {
+    "status": "operator-owned",
+    "reason": "KEYS_MISSING"
+  },
+  "targets": {
+    "browser_p95_ms": 15000,
+    "api_p95_ms": 500,
+    "event_query_p95_ms": 10000
+  }
+}

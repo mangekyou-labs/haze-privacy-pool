@@ -1,0 +1,24 @@
+{
+  "name": "@haze-avalanche/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/prover-worker.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "examples"
+  ],
+  "scripts": {
+    "build": "node --experimental-strip-types --check src/index.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7"
+  }
+}
+

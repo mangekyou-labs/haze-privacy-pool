@@ -1,0 +1,9 @@
+{
+  "profile": "development",
+  "not_for_production": true,
+  "network": "fuji",
+  "chainId": 43113,
+  "broadcast": false,
+  "verdict": "pass-fuji-configured",
+  "fixtureHash": "0x138324aa4dc36c61c0056411e832913601f41a0afa4a260e5bc79fb696a9763d"
+}

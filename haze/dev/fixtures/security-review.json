@@ -1,0 +1,10 @@
+{
+  "profile": "development",
+  "not_for_production": true,
+  "fixtureHash": "0x55f5bebca26a5167148822d8aa9f11f100886c201edb8634a3c2bc5082394562",
+  "verdict": "pass",
+  "open_critical": 0,
+  "open_high": 0,
+  "mediums": [],
+  "surfaces": 10
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Haze Privacy Pool DEX — Direct shield</title>
+  <style>
+    :root {
+      --haze-bg: #16130f;
+      --haze-surface: #221e18;
+      --haze-text: #f3ece2;
+      --haze-muted: #d4c4ae;
+      --haze-primary: #1f6b62;
+    }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", sans-serif;
+      background: var(--haze-bg);
+      color: var(--haze-text);
+    }
+    .skip { position: absolute; left: -999px; }
+    .skip:focus { left: 8px; top: 8px; }
+    button { font-family: inherit; }
+  </style>
+</head>
+<body data-layout="workspace">
+  <a class="skip" href="#haze-main">Skip to content</a>
+  <nav aria-label="Haze Privacy Pool DEX"><a href="/swap">swap</a><a href="/shield">shield</a><a href="/send">send</a><a href="/withdraw">withdraw</a><a href="/history">history</a><a href="/emergency-exit">emergency-exit</a><a href="/migrate">migrate</a></nav>
+  <main id="haze-main">
+    <h1 id="haze-action-label">Direct shield</h1>
+    <p role="status" aria-live="polite" id="haze-status-label">
+      connected · idle
+    </p>
+    <ul role="alert" aria-live="assertive" id="haze-alert-label"><li data-visibility="public"><strong>Public deposit amount</strong> The shielded deposit amount is visible on chain.</li><li data-visibility="public"><strong>Public wallet address</strong> The connected wallet address is visible on chain.</li><li data-visibility="public"><strong>Public gas payment</strong> Wallet gas is a public C-Chain payment.</li></ul>
+    <button type="button" role="button" tabindex="0" aria-labelledby="haze-action-label" >
+      Sign and submit
+    </button>
+  </main>
+</body>
+</html>
