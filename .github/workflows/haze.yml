@@ -33,18 +33,26 @@ jobs:
 
   node:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     needs: secret-scan
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: haze/package-lock.json
       - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: 1.97.1
       - name: install circom 2.2.3
         run: cargo install circom --git https://github.com/iden3/circom --tag v2.2.3 --locked --root haze/.tools
+      - name: npm ci --prefix haze
+        run: npm ci --prefix haze
+      - name: compile spend r1cs
+        run: |
+          mkdir -p haze/circuits/build/spend
+          haze/.tools/bin/circom haze/circuits/test/spend.circom --r1cs --wasm --sym -o haze/circuits/build/spend
       - name: npm test --prefix haze
         run: npm test --prefix haze
       - name: verify integration stack fixtures
@@ -70,7 +78,7 @@ jobs:
 
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: secret-scan
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
@@ -81,6 +89,12 @@ jobs:
       - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
         with:
           workspaces: haze
+      - name: install circom 2.2.3
+        run: cargo install circom --git https://github.com/iden3/circom --tag v2.2.3 --locked --root haze/.tools
+      - name: compile spend r1cs
+        run: |
+          mkdir -p haze/circuits/build/spend
+          haze/.tools/bin/circom haze/circuits/test/spend.circom --r1cs -o haze/circuits/build/spend
       - name: cargo test --manifest-path haze/Cargo.toml
         run: cargo test --manifest-path haze/Cargo.toml --workspace
       - name: clippy

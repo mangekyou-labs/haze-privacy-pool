@@ -26,7 +26,14 @@ test("Haze locks toolchains and stages CI", () => {
     missing.push("missing .github/workflows/haze.yml");
   } else {
     const yaml = readFileSync(workflow, "utf8");
-    for (const token of ["haze/", "secret-scan", "npm test --prefix haze", "cargo test --manifest-path haze/Cargo.toml"]) {
+    for (const token of [
+      "haze/",
+      "secret-scan",
+      "npm ci --prefix haze",
+      "npm test --prefix haze",
+      "cargo test --manifest-path haze/Cargo.toml",
+      "circuits/test/spend.circom",
+    ]) {
       if (!yaml.includes(token)) {
         missing.push(`workflow missing ${token}`);
       }
