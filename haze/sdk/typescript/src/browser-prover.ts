@@ -167,7 +167,7 @@ export async function selectCircuitArtifact(
   return manifest;
 }
 
-function asProverError(code: string | undefined): ProverError {
+function asProverError(code: string | undefined, message?: string): ProverError {
   const known: ProverErrorCode[] = [
     "CANCELLED",
     "KEYS_MISSING",
@@ -177,9 +177,9 @@ function asProverError(code: string | undefined): ProverError {
     "PROOF_INVALID",
   ];
   if (code !== undefined && known.includes(code as ProverErrorCode)) {
-    return new ProverError(code as ProverErrorCode);
+    return new ProverError(code as ProverErrorCode, message);
   }
-  return new ProverError("PROOF_INVALID");
+  return new ProverError("PROOF_INVALID", message);
 }
 
 let nextRequestId = 0;
@@ -211,7 +211,7 @@ function requestWorker(
       }
       if (data.type === "error") {
         cleanup();
-        reject(asProverError(data.code));
+        reject(asProverError(data.code, "message" in data && typeof data.message === "string" ? data.message : undefined));
         return;
       }
       if (data.type === "success") {

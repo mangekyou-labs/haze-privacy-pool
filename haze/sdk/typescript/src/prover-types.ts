@@ -8,8 +8,8 @@ export type ProverErrorCode =
 
 export class ProverError extends Error {
   readonly code: ProverErrorCode;
-  constructor(code: ProverErrorCode) {
-    super(code);
+  constructor(code: ProverErrorCode, message?: string) {
+    super(message ?? code);
     this.code = code;
     this.name = "ProverError";
   }

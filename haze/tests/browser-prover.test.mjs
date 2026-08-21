@@ -66,7 +66,7 @@ function collectLocalImports(entry, seen = new Set()) {
   }
   const source = readFileSync(resolved, "utf8");
   for (const match of source.matchAll(/from\s+["'](\.[^"']+)["']/g)) {
-    const next = match[1].endsWith(".ts") || match[1].endsWith(".json") ? match[1] : `${match[1]}.ts`;
+    const next = match[1].endsWith(".ts") || match[1].endsWith(".json") || match[1].endsWith(".js") ? match[1] : `${match[1]}.ts`;
     collectLocalImports(resolve(dirname(resolved), next), seen);
   }
   return seen;
