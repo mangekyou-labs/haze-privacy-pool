@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { requestFujiDisclosure } from "../sdk/typescript/src/render-disclosure.ts";
+import { DEFAULT_HAZE_DISCLOSURE_ORIGIN, requestFujiDisclosure } from "../sdk/typescript/src/render-disclosure.ts";
+
+test("DEFAULT_HAZE_DISCLOSURE_ORIGIN is the official Render disclosure origin", () => {
+  assert.equal(DEFAULT_HAZE_DISCLOSURE_ORIGIN, "https://haze-fuji-disclosure.onrender.com");
+});
 
 test("Render cold starts use bounded retries and never a local fallback", async () => {
   const urls = []; let attempts = 0;

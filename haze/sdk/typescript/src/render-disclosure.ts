@@ -1,5 +1,7 @@
 import { keccakHex } from "./abi.ts";
 
+export const DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure.onrender.com";
+
 const RETRYABLE = new Set([502, 503, 504]);
 
 const FUJI_DISCLOSURE_FIELDS = ["user", "amount", "counterparty", "tx_hash", "policy_version"] as const;

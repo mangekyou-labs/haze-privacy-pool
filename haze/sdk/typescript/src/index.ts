@@ -171,7 +171,7 @@ export {
   recoverFujiOperation,
 } from "./fuji-reconciliation.ts";
 export type { FujiLog, FujiReceipt, FujiRpc } from "./fuji-reconciliation.ts";
-export { planFujiWithdrawalDisclosure, requestFujiDisclosure } from "./render-disclosure.ts";
+export { DEFAULT_HAZE_DISCLOSURE_ORIGIN, planFujiWithdrawalDisclosure, requestFujiDisclosure } from "./render-disclosure.ts";
 export { executeFujiBrowserTransaction, updateFujiMembershipRoot } from "./browser-fuji-flow.ts";
 export { buildSealedBrowserWitness } from "./browser-witness-flow.ts";
 export { encodeBrowserFujiSpend, encodeBrowserGroth16Proof, encodeErc20Approve, encodeMembershipRootUpdate, planBrowserFujiSpend } from "./browser-fuji-contracts.ts";

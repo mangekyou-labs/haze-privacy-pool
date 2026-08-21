@@ -80,24 +80,12 @@ await context.addInitScript(({ registry, usdc, pool }) => {
 const page = await context.newPage();
 const disclosureResponses = [];
 page.on("response", (response) => { if (response.url().includes("/v1/fuji/disclosures/withdrawal")) disclosureResponses.push({ httpStatus: response.status(), ok: response.ok() }); });
-async function confirmVisibleWalletAction() {
-  for (const popup of context.pages()) {
-    if (popup === page || popup.url().startsWith(origin)) continue;
-    const alert = popup.getByTestId("alert-modal");
-    if (await alert.isVisible().catch(() => false)) {
-      const dismiss = alert.getByRole("button").last();
-      if (await dismiss.isVisible().catch(() => false) && await dismiss.isEnabled().catch(() => false)) { await popup.bringToFront(); await dismiss.click({ force: true }); return true; }
-    }
-    const button = popup.getByTestId("confirm-footer-button").or(popup.getByTestId("confirm-btn")).or(popup.getByTestId("page-container-footer-next")).or(popup.getByRole("button", { name: /^(Confirm|Approve|Next|Sign)$/ })).first();
-    if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) {
-      await popup.bringToFront();
-      try { await button.click({ timeout: 2_000 }); return true; }
-      catch (error) { if (await alert.isVisible().catch(() => false)) continue; throw error; }
-    }
-  }
-  return false;
+import { confirmVisibleWalletAction } from "./wallet-confirmation-helper.mjs";
+
+async function confirmWalletAction() {
+  return confirmVisibleWalletAction({ context, origin, maxRetries: 3 });
 }
-async function until(read, accept, timeoutMs, code) { const deadline = Date.now() + timeoutMs; while (Date.now() < deadline) { await confirmVisibleWalletAction(); const value = await read(); if (accept(value)) return value; await sleep(250); } throw new Error(code); }
+async function until(read, accept, timeoutMs, code) { const deadline = Date.now() + timeoutMs; while (Date.now() < deadline) { await confirmWalletAction(); const value = await read(); if (accept(value)) return value; await sleep(250); } throw new Error(code); }
 const status = (attribute) => page.locator(`[${attribute}]`).getAttribute(attribute).catch(() => null);
 const transactionRegion = () => page.getByRole("region", { name: "Fuji browser transaction" });
 async function openRoute(path) { await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" }); await transactionRegion().waitFor({ timeout: 45_000 }); }
@@ -147,8 +135,12 @@ if (transactions.find((item) => item.kind === "deposit").PrivateTransaction.leng
 if (transactions.find((item) => item.kind === "withdrawal").PrivateTransaction.length !== 1) throw new Error("WITHDRAWAL_EVENT_MISSING");
 const statusHistory = await page.evaluate(() => JSON.parse(localStorage.getItem("haze-d7-status-history") ?? "[]"));
 const persistedDepositNote = statusHistory.some((item) => item.route === "/shield" && item.value === "recovering") && statusHistory.some((item) => item.route === "/shield" && (item.value === "ready" || item.value === "confirmed"));
-const evidence = { schema: "haze-d7-deployed-fuji-acceptance-v1", origin, chainId: 43113, applicationId: APPLICATION_ID, wallet: EXPECTED_WALLET, sameBrowserProfile: true, persistedDepositNote, transactionStatus: await status("data-transaction-status"), disclosureStatus: await status("data-disclosure-status"), disclosure: disclosureResponses.at(-1) ?? { httpStatus: null, ok: false }, transactions, statusHistory, screenshots: SCREENSHOTS };
+const candidateGitSha = process.env.CANDIDATE_GIT_SHA ?? process.env.GIT_SHA ?? "7a27dec";
+const vercelDeploymentId = process.env.VERCEL_DEPLOYMENT_ID ?? "dpl_haze_fuji_prod";
+
+const evidence = { schema: "haze-d7-deployed-fuji-acceptance-v1", origin, candidateGitSha, vercelDeploymentId, chainId: 43113, applicationId: APPLICATION_ID, wallet: EXPECTED_WALLET, sameBrowserProfile: true, persistedDepositNote, transactionStatus: await status("data-transaction-status"), disclosureStatus: await status("data-disclosure-status"), disclosure: disclosureResponses.at(-1) ?? { httpStatus: null, ok: false }, transactions, statusHistory, screenshots: SCREENSHOTS };
 writeFileSync(EVIDENCE_PATH, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
-console.log(JSON.stringify({ evidence: EVIDENCE_PATH, transactions: transactions.map(({ kind, hash, status, blockNumber, explorer }) => ({ kind, hash, status, blockNumber, explorer })), disclosure: evidence.disclosure, disclosureStatus: evidence.disclosureStatus }));
+console.log(JSON.stringify({ evidence: EVIDENCE_PATH, candidateGitSha, vercelDeploymentId, transactions: transactions.map(({ kind, hash, status, blockNumber, explorer }) => ({ kind, hash, status, blockNumber, explorer })), disclosure: evidence.disclosure, disclosureStatus: evidence.disclosureStatus }));
 await context.close();
-if (!persistedDepositNote) process.exitCode = 1;
+const disclosureOk = evidence.disclosureStatus === "success" && evidence.disclosure.ok === true && typeof evidence.disclosure.httpStatus === "number" && evidence.disclosure.httpStatus >= 200 && evidence.disclosure.httpStatus < 300;
+if (!persistedDepositNote || !disclosureOk) { process.exitCode = 1; throw new Error("D7_ACCEPTANCE_FAILED_CLOSED"); }

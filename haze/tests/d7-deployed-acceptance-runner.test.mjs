@@ -40,18 +40,16 @@ test("D7 runner returns MetaMask to account home before switching to Fuji", () =
   assert.match(runner, /add-wallet-page-back-button/);
 });
 
-test("D7 runner dismisses MetaMask alert overlays before confirmation controls", () => {
-  const alert = runner.indexOf('getByTestId("alert-modal")');
-  const confirm = runner.indexOf('getByTestId("confirm-footer-button")');
-  assert.ok(alert >= 0 && confirm > alert);
-  assert.match(runner, /alert\.getByRole\("button"\)\.last\(\)/);
-  assert.match(runner, /button\.click\(\{ timeout: 2_000 \}\)/);
-  assert.match(runner, /if \(await alert\.isVisible\(\)\.catch\(\(\) => false\)\) continue/);
+test("D7 runner imports and uses internal wallet-confirmation helper", () => {
+  assert.match(runner, /import\s*\{\s*confirmVisibleWalletAction\s*\}\s*from\s*"\.\/wallet-confirmation-helper\.mjs"/);
+  assert.match(runner, /confirmVisibleWalletAction\(\{ context, origin, maxRetries: 3 \}\)/);
 });
 
-test("D7 evidence separates transactions from disclosure and redacts observations", () => {
+test("D7 evidence includes candidateGitSha, vercelDeploymentId, and enforces fail-closed disclosure", () => {
   assert.match(runner, /data-transaction-status/);
   assert.match(runner, /data-disclosure-status/);
+  assert.match(runner, /candidateGitSha/);
+  assert.match(runner, /vercelDeploymentId/);
   assert.match(runner, /membershipUpdate/);
   assert.match(runner, /usdcApproval/);
   assert.match(runner, /deposit/);
@@ -65,5 +63,6 @@ test("D7 evidence separates transactions from disclosure and redacts observation
   assert.match(runner, /deposit-recovery\.png/);
   assert.match(runner, /withdrawal\.png/);
   assert.match(runner, /disclosure\.png/);
+  assert.match(runner, /D7_ACCEPTANCE_FAILED_CLOSED/);
   assert.doesNotMatch(runner, /calldata|signature[^A-Za-z]/i);
 });

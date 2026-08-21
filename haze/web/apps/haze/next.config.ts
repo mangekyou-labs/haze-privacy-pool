@@ -10,8 +10,8 @@ const nextConfig: NextConfig = {
     return config;
   },
   async headers() {
-    const disclosureOrigin = process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN;
-    const disclosureConnect = disclosureOrigin?.startsWith("https://") ? ` ${disclosureOrigin}` : "";
+    const disclosureOrigin = process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN || "https://haze-fuji-disclosure.onrender.com";
+    const disclosureConnect = disclosureOrigin.startsWith("https://") ? ` ${disclosureOrigin}` : "";
     return [
       {
         source: "/:path*",

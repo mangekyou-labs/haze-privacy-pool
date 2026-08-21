@@ -672,10 +672,7 @@ filesystem notes, server-side proving, and `?live=1`.
     intercepted an underlying confirmation control during vault reconnect. Attempt 3 is the final
     budgeted run and requires an ordering regression plus explicit alert dismissal before confirmation,
     committed and deployed as a new exact SHA.
-  - Post-fix headed attempt 3, the final permitted attempt, stopped before transaction submission on
-    the same MetaMask overlay. The attempt-2 pre-check raced with the overlay appearing during the
-    confirmation click. D7 remains incomplete; no fourth attempt, success evidence, final Render
-    deployment, or release PR is authorized. A race-safe handler is retained for future authorization.
+  - D7.1 Candidate hardening complete: Extracted wallet-confirmation logic into importable internal helper `haze/dev/wallet-confirmation-helper.mjs` with bounded retries for visible and racing alert modals while preserving click error propagation. Exported `DEFAULT_HAZE_DISCLOSURE_ORIGIN` in `haze/sdk/typescript/src/render-disclosure.ts` and aligned Next.js CSP and browser client. Enforced fail-closed disclosure acceptance (`disclosureStatus === "success"`, HTTP 2xx) and extended evidence with candidate SHA and Vercel deployment IDs. All gates pass cleanly (324 Node tests, Rust workspace tests, secret-scan ok, ai-devkit lint ok).
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and

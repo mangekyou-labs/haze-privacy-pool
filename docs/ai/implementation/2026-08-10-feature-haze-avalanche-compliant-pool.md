@@ -1427,17 +1427,21 @@ The feature is ready to push as a **development / library** checkpoint. It is **
   states remain independent, including after recovery.
 - Webpack pins `web-worker` to its browser implementation; the production worker graph no longer pulls
   the Node fallback. No localhost, `?live=1`, server-side proving, or filesystem recovery path was added.
-- No commit, push, deployment, or ceremony action was performed. D7 remains open until fresh deployed
-  Chromium deposit/restart/withdraw/disclosure evidence exists.
+- D7.1 Candidate Hardening complete:
+  - Extracted wallet-confirmation logic into importable internal helper `haze/dev/wallet-confirmation-helper.mjs`. Added bounded retries for both already-visible MetaMask alerts and alerts that race confirmation clicks, while propagating unrelated click errors. Covered by `haze/tests/wallet-confirmation-helper.test.mjs`.
+  - Introduced shared default disclosure origin `DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure.onrender.com"` in `haze/sdk/typescript/src/render-disclosure.ts`. Aligned `next.config.ts` Content-Security-Policy and `fuji-browser-client.tsx` to use this fallback.
+  - Made disclosure acceptance fail closed: requires `disclosureStatus === "success"`, response `ok: true`, and HTTP 2xx before returning success evidence.
+  - Extended evidence format with `candidateGitSha` and `vercelDeploymentId`.
+  - Fund-safe runner state: tracks deposit and withdrawal receipts, preserves session profile on post-deposit failure, and requires spendable note recovery/withdrawal before attempt two.
 
 ### Fresh local evidence
 
-- `npm test` from `haze/`: 312 passed, 0 failed; `circom vector harness ok`.
-- `cargo test --workspace`: exit 0; two fixture-writing tests ignored, no failures.
+- `npm test` from `haze/`: 324 passed, 0 failed; `circom vector harness ok`.
+- `rustup run 1.97.1 cargo test --workspace`: exit 0; two fixture-writing tests ignored, 0 failures.
 - `cargo build --release -p haze-disclosure`: exit 0.
 - `cargo clippy -p haze-disclosure --all-targets -- -D warnings`: exit 0.
-- SDK build and Next production build: exit 0; Next compiled without the prior Node worker warning.
+- SDK build and Next production build: exit 0.
 - `node dev/secret-scan.mjs`: `secret-scan ok`.
-- AI DevKit base and feature lint: all checks passed.
+- AI DevKit base and feature lint (`npx ai-devkit@latest lint --feature haze-avalanche-compliant-pool`): all checks passed.
 - `npm audit --json`: six high / zero critical. Reachability and upgrade follow-up are recorded in
   the testing document; no dependency mutation or force-fix was performed.
