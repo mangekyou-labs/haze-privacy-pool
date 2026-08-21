@@ -40,6 +40,13 @@ test("D7 runner returns MetaMask to account home before switching to Fuji", () =
   assert.match(runner, /add-wallet-page-back-button/);
 });
 
+test("D7 runner dismisses MetaMask alert overlays before confirmation controls", () => {
+  const alert = runner.indexOf('getByTestId("alert-modal")');
+  const confirm = runner.indexOf('getByTestId("confirm-footer-button")');
+  assert.ok(alert >= 0 && confirm > alert);
+  assert.match(runner, /alert\.getByRole\("button"\)\.last\(\)/);
+});
+
 test("D7 evidence separates transactions from disclosure and redacts observations", () => {
   assert.match(runner, /data-transaction-status/);
   assert.match(runner, /data-disclosure-status/);

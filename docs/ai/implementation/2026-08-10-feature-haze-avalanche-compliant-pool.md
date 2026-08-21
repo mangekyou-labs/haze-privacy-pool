@@ -1397,6 +1397,9 @@ The feature is ready to push as a **development / library** checkpoint. It is **
   observation window and terminated `D7_DEPOSIT_TIMEOUT` without an observed transaction. The
   corrective runner doubles the bounded proving window to 40 minutes and emits only route, status,
   error code, and observed transaction kinds on terminal deposit failure.
+- Post-fix attempt 2 stopped before transaction submission because MetaMask rendered an
+  `alert-modal` above the confirmation footer and Playwright correctly refused the obscured click.
+  The final-attempt correction detects and dismisses that modal before selecting confirmation controls.
 - A page-bound observer retains only transaction hash, destination, and four-byte selector. The final
   evidence enriches those observations from Fuji receipts with status, block, decoded matching
   `PrivateTransaction` fields, and Snowtrace links, then writes redacted JSON plus deposit-recovery,

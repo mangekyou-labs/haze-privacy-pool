@@ -81,7 +81,16 @@ const page = await context.newPage();
 const disclosureResponses = [];
 page.on("response", (response) => { if (response.url().includes("/v1/fuji/disclosures/withdrawal")) disclosureResponses.push({ httpStatus: response.status(), ok: response.ok() }); });
 async function confirmVisibleWalletAction() {
-  for (const popup of context.pages()) { if (popup === page || popup.url().startsWith(origin)) continue; const button = popup.getByTestId("confirm-footer-button").or(popup.getByTestId("confirm-btn")).or(popup.getByTestId("page-container-footer-next")).or(popup.getByRole("button", { name: /^(Confirm|Approve|Next|Sign)$/ })).first(); if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) { await popup.bringToFront(); await button.click(); return true; } }
+  for (const popup of context.pages()) {
+    if (popup === page || popup.url().startsWith(origin)) continue;
+    const alert = popup.getByTestId("alert-modal");
+    if (await alert.isVisible().catch(() => false)) {
+      const dismiss = alert.getByRole("button").last();
+      if (await dismiss.isVisible().catch(() => false) && await dismiss.isEnabled().catch(() => false)) { await popup.bringToFront(); await dismiss.click({ force: true }); return true; }
+    }
+    const button = popup.getByTestId("confirm-footer-button").or(popup.getByTestId("confirm-btn")).or(popup.getByTestId("page-container-footer-next")).or(popup.getByRole("button", { name: /^(Confirm|Approve|Next|Sign)$/ })).first();
+    if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) { await popup.bringToFront(); await button.click(); return true; }
+  }
   return false;
 }
 async function until(read, accept, timeoutMs, code) { const deadline = Date.now() + timeoutMs; while (Date.now() < deadline) { await confirmVisibleWalletAction(); const value = await read(); if (accept(value)) return value; await sleep(250); } throw new Error(code); }

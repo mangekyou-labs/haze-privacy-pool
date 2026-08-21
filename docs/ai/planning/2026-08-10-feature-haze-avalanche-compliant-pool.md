@@ -668,6 +668,10 @@ filesystem notes, server-side proving, and `?live=1`.
     before the 20-minute observation deadline (`D7_DEPOSIT_TIMEOUT`). No evidence artifact or D7
     success claim was produced. Attempt 2 requires a regression-tested 40-minute proving budget and
     redacted terminal diagnostics, committed and deployed as a new exact SHA before retry.
+  - Post-fix headed attempt 2 stopped before any transaction when MetaMask's `alert-modal` overlay
+    intercepted an underlying confirmation control during vault reconnect. Attempt 3 is the final
+    budgeted run and requires an ordering regression plus explicit alert dismissal before confirmation,
+    committed and deployed as a new exact SHA.
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and

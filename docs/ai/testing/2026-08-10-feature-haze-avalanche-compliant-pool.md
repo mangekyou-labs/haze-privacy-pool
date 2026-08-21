@@ -1084,6 +1084,9 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
   full 20-minute observation budget; no deposit transaction or evidence file was observed. The
   runner regression now pins a 40-minute proving budget and redacted terminal diagnostics before
   attempt 2. No D7 acceptance claim is recorded from this attempt.
+- Post-fix attempt 2 failed before transaction submission when MetaMask's `alert-modal` intercepted
+  its confirmation footer. The runner regression requires alert detection/dismissal to precede the
+  confirmation locator. Attempt 3 remains the final allowed run; no acceptance claim is recorded.
 - Browser witness tests bind one action reference across witness, audit facts, authorization nonce,
   and real recipient/audit envelope hashes.
 - Membership tests require a successful root-update receipt and the refetched incremented policy
