@@ -93,8 +93,13 @@ test("hatch deposit plans a note the live pool has not already committed", async
   const unused = planUnusedLiveCircuitDeposit();
   assert.notEqual(unused.note.commitment.toLowerCase(), live.transactions.depositCommitment.toLowerCase());
   assert.notEqual(unused.note.commitment.toLowerCase(), live.transactions.deposit1Commitment.toLowerCase());
-  assert.equal(Number(unused.note.leafIndex), 2);
+  assert.equal(Number(unused.note.leafIndex), Number(live.transactions.nextIndex));
   assert.equal(unused.action, 1);
+  const replayed = planUnusedLiveCircuitDeposit({
+    leafIndex: unused.note.leafIndex,
+    blinding: unused.note.blinding,
+  });
+  assert.equal(replayed.note.commitment, unused.note.commitment);
   assert.throws(() => planUnusedLiveCircuitDeposit({ secret: 1, blinding: 2 }), (error) => {
     assert.equal(error.code, "COMMITMENT_DUPLICATE");
     return true;

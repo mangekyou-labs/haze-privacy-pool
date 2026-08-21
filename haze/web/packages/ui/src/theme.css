@@ -231,6 +231,34 @@ a { color: inherit; text-decoration: none; }
   font-weight: 600;
 }
 
+.haze-balances {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.haze-balance {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--haze-bg);
+  border: 1px solid var(--haze-line);
+  border-radius: 8px;
+}
+
+.haze-balance .haze-figure {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.haze-balance[data-balance="public"] .haze-figure { color: var(--haze-public); }
+.haze-balance[data-balance="private"] .haze-figure { color: var(--haze-private); }
+
 .haze-mono,
 .haze-figure {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -301,6 +329,7 @@ a { color: inherit; text-decoration: none; }
   .haze-stage { padding: 24px 12px 28px; }
   .haze-amount,
   .haze-amount-field input.haze-amount { font-size: 28px; }
+  .haze-balances { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

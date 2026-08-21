@@ -23,6 +23,9 @@ export type RenderOptions = {
   notes?: number;
   lastError?: string;
   quote?: string;
+  publicUsdc?: string;
+  privateUsdc?: string;
+  poolUsdc?: string;
   admin?: {
     manifestHash?: string;
     kmsHealth?: string;
@@ -34,6 +37,7 @@ export type RenderOptions = {
     boundWallet?: string;
     cases?: { caseId: string; title: string }[];
     access?: { action: string; allowed: boolean }[];
+    rows?: { field: string; value: string }[];
   };
   governance?: {
     previewTarget?: string;
@@ -170,6 +174,12 @@ function auditWorkspace(options: RenderOptions) {
   const access = (audit.access ?? [])
     .map((item) => `<li>${escapeHtml(item.action)} ${item.allowed ? "allowed" : "denied"}</li>`)
     .join("");
+  const rows = (audit.rows ?? [])
+    .map(
+      (item) =>
+        `<li data-audit-row data-field="${escapeHtml(item.field)}"><span class="haze-muted">${escapeHtml(item.field)}</span> <span class="haze-figure">${escapeHtml(item.value)}</span></li>`,
+    )
+    .join("");
   return `<div class="haze-workspace-grid" data-workspace="audit">
     <section>
       <h2>SIWE session</h2>
@@ -184,9 +194,24 @@ function auditWorkspace(options: RenderOptions) {
       <button class="haze-button haze-button-secondary" type="button" data-action="export" data-field="plaintext">Export overreach</button>
     </section>
     <section>
+      <h2>Decrypted fields</h2>
+      <ul data-audit-rows>${rows || "<li>No granted decrypt yet</li>"}</ul>
+    </section>
+    <section>
       <h2>Access log</h2>
       <ul>${access || "<li>No queries yet</li>"}</ul>
     </section>
+  </div>`;
+}
+
+function dexBalances(options: RenderOptions) {
+  const pub = options.publicUsdc ?? "—";
+  const priv = options.privateUsdc ?? "0.00";
+  const pool = options.poolUsdc ?? "—";
+  return `<div class="haze-balances">
+    <div class="haze-balance" data-balance="public"><span class="haze-muted">Public</span><span class="haze-figure">${escapeHtml(pub)} USDC</span></div>
+    <div class="haze-balance" data-balance="private"><span class="haze-muted">Private</span><span class="haze-figure">${escapeHtml(priv)} USDC</span></div>
+    <div class="haze-balance" data-pool-usdc><span class="haze-muted">Pool</span><span class="haze-figure">${escapeHtml(pool)} USDC</span></div>
   </div>`;
 }
 
@@ -347,7 +372,7 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
       <a class="haze-brand" href="${chrome === "dex" ? "/shield" : "/admin"}">Haze</a>
       <div class="haze-status" role="status">${statusChips}</div>
       <div class="haze-session">
-        <span class="haze-chip" data-network>Local · 31337</span>
+        <span class="haze-chip" data-network>${options.live ? "Fuji · 43113" : "Local · 31337"}</span>
         ${workspaceChip}
         ${walletChip}
       </div>
@@ -356,6 +381,7 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
       <section class="haze-card" data-card="${chrome === "dex" ? "pool" : "compliance"}">
         <nav class="haze-dex-tabs" aria-label="${chrome === "dex" ? "Pool" : "Compliance"}">${tabNav}</nav>
         <h1 class="haze-title">${escapeHtml(title)}</h1>
+        ${chrome === "dex" ? dexBalances(options) : ""}
         ${banners}
         ${decision.ok && path !== "/history" && path !== "/admin" && path !== "/audit" && path !== "/governance" ? warningsMarkup : ""}
         ${body}

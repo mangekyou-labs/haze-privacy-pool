@@ -56,6 +56,47 @@ test("pool-user chrome is a centered DEX card, not a compliance workstation", as
   assert.equal(published.spend_prove, "KEYS_MISSING");
 });
 
+test("DEX chrome shows public and private USDC, pool backing, and Fuji chip when live", async () => {
+  const { renderHazePage } = await import("../web/packages/ui/src/html.ts");
+  const theme = readFileSync(join(HAZE_ROOT, "web/packages/ui/src/theme.css"), "utf8");
+  const site = createHazeSite({ role: "pool-user", applicationId: APP_A });
+  const local = renderHazePage(site, "/shield", {
+    address: FIXTURE_ACCOUNTS[0].address,
+    walletStatus: "connected",
+    publicUsdc: "12.50",
+    privateUsdc: "0.00",
+    poolUsdc: "0.00",
+  });
+  assert.match(local, /data-chrome="dex"/);
+  assert.match(local, /data-balance="public"/);
+  assert.match(local, /data-balance="private"/);
+  assert.match(local, /data-pool-usdc/);
+  assert.match(local, /12\.50/);
+  assert.match(local, /data-network[^>]*>Local · 31337/);
+  assert.doesNotMatch(local, /haze-inspector/);
+  assert.match(theme, /\.haze-balances/);
+  assert.match(theme, /font-variant-numeric:\s*tabular-nums/);
+  assert.doesNotMatch(theme, /Inter|#000|#18181b|violet/);
+
+  const live = renderHazePage(site, "/shield", {
+    live: true,
+    operatorProve: true,
+    zkeyExists: true,
+    address: FIXTURE_ACCOUNTS[0].address,
+    walletStatus: "connected",
+    publicUsdc: "11.50",
+    privateUsdc: "1.00",
+    poolUsdc: "3.00",
+  });
+  assert.match(live, /data-network[^>]*>Fuji · 43113/);
+  assert.match(live, /data-balance="private"[^>]*>[\s\S]*1\.00/);
+  assert.match(live, /data-pool-usdc[^>]*>[\s\S]*3\.00/);
+  assert.match(live, /data-code="KEYS_MISSING"|KEYS_MISSING/);
+  const published = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.json"), "utf8"));
+  assert.equal(published.broadcast, false);
+  assert.equal(published.spend_prove, "KEYS_MISSING");
+});
+
 test("wallet address maps to grants; pool-user cannot open /admin", () => {
   const pool = createHazeSite(sessionFromAddress(FIXTURE_ACCOUNTS[0].address, { applicationId: APP_A }));
   assert.equal(pool.session.role, "pool-user");
@@ -672,11 +713,12 @@ test("hatch live-deposit plan does not reuse an on-chain commitment", async () =
       plan.intent.outputCommitment0.toLowerCase(),
       overlay.transactions.deposit1Commitment.toLowerCase(),
     );
-    assert.equal(Number(plan.circuitPlan.note.leafIndex), 2);
+    assert.equal(Number(plan.circuitPlan.note.leafIndex), 3);
     const script = await fetch(new URL("/shield-live.js", host.url));
     const source = await script.text();
     assert.match(source, /eth_getTransactionReceipt/);
     assert.match(source, /live-deposit\/persist/);
+    assert.match(source, /blinding: plan\.circuitPlan\?\.note\?\.blinding/);
     const published = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.json"), "utf8"));
     assert.equal(published.broadcast, false);
     assert.equal(published.spend_prove, "KEYS_MISSING");
@@ -738,6 +780,302 @@ test("hatch host persist writes a spendable note; default host stays KEYS_MISSIN
     assert.match(source, /operatorHatch/);
     assert.doesNotMatch(source, /\.zkey/);
     writeFileSync(notePath, `${JSON.stringify(stored, null, 2)}\n`);
+  } finally {
+    await host.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("successful live snapshot hydrates pool USDC and a persisted note hydrates private USDC", async () => {
+  const {
+    decodeErc20Balance,
+    encodeErc20BalanceOf,
+    formatUsdc,
+    fetchLiveErc20Balance,
+    fetchLivePoolCommitmentExists,
+    fetchLivePoolNextIndex,
+  } = await import(
+    "../web/packages/ui/src/live-deposit.ts"
+  );
+  const overlay = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.live.json"), "utf8"));
+  assert.equal(formatUsdc(1_000_000n), "1.00");
+  assert.equal(formatUsdc(0n), "0.00");
+  assert.match(encodeErc20BalanceOf(overlay.addresses.HazePool), /^0x70a08231/);
+  assert.equal(decodeErc20Balance(`0x${(3_000_000n).toString(16).padStart(64, "0")}`), 3_000_000n);
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    json: async () => ({ result: `0x${(3_000_000n).toString(16).padStart(64, "0")}` }),
+  });
+  try {
+    const balance = await fetchLiveErc20Balance(overlay, overlay.addresses.HazePool);
+    assert.equal(balance.raw, 3_000_000n);
+    assert.equal(balance.formatted, "3.00");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { planLiveCircuitTransact } = await import("../dev/operator-circuit-live.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "haze-host-bal-"));
+  const notePath = join(dir, "fuji-poseidon-note.json");
+  const host = await createCommercialHost({
+    port: 0,
+    operatorProve: true,
+    zkeyPath: join(HAZE_ROOT, "package.json"),
+    notePath,
+    publicUsdc: "15.00",
+    privateUsdc: "0.00",
+    poolUsdc: "0.00",
+  });
+  try {
+    const before = await fetch(new URL("/shield?live=1", host.url));
+    const beforeHtml = await before.text();
+    assert.match(beforeHtml, /data-pool-usdc/);
+    assert.match(beforeHtml, /data-balance="private"/);
+    assert.match(beforeHtml, /0\.00 USDC/);
+    assert.match(beforeHtml, /data-network[^>]*>Fuji · 43113/);
+
+    const deposit = planLiveCircuitTransact({ action: "deposit" });
+    const persist = await fetch(new URL("/api/live-deposit/persist", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan: deposit }),
+    });
+    assert.equal((await persist.json()).allowed, true);
+
+    const after = await fetch(new URL("/shield?live=1", host.url));
+    const afterHtml = await after.text();
+    assert.match(afterHtml, /data-balance="private"[^>]*>[\s\S]*1\.00 USDC/);
+    assert.match(afterHtml, /Notes 1/);
+
+    const client = await fetch(new URL("/client.js", host.url));
+    assert.match(await client.text(), /globalThis\.hazeRefreshBalances = hydrateBalances/);
+  } finally {
+    await host.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("live pool planner helpers read on-chain nextIndex and commitmentExists", async () => {
+  const { fetchLivePoolCommitmentExists, fetchLivePoolNextIndex } = await import(
+    "../web/packages/ui/src/live-deposit.ts"
+  );
+  const overlay = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.live.json"), "utf8"));
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    if (body.params[0].data === "0xfc7e9c6f") {
+      return { json: async () => ({ result: "0x" + "00".repeat(31) + "03" }) };
+    }
+    return { json: async () => ({ result: "0x" + "00".repeat(31) + "01" }) };
+  };
+  try {
+    assert.equal(await fetchLivePoolNextIndex(overlay), 3);
+    assert.equal(await fetchLivePoolCommitmentExists(overlay, `0x${"01".repeat(32)}`), true);
+    assert.equal(requests.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("operator hatch live sync skips a committed blinding at the on-chain nextIndex", async () => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "haze-live-sync-"));
+  const notePath = join(dir, "fuji-poseidon-note.json");
+  const actualFetch = globalThis.fetch;
+  let commitmentChecks = 0;
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.params[0].data === "0xfc7e9c6f") {
+      return { json: async () => ({ result: `0x${"00".repeat(31)}03` }) };
+    }
+    commitmentChecks += 1;
+    return { json: async () => ({ result: commitmentChecks === 1 ? `0x${"00".repeat(31)}01` : `0x${"00".repeat(32)}` }) };
+  };
+  const host = await createCommercialHost({
+    port: 0,
+    operatorProve: true,
+    liveChainSync: true,
+    zkeyPath: join(HAZE_ROOT, "package.json"),
+    notePath,
+  });
+  try {
+    const response = await actualFetch(new URL("/api/live-deposit/plan", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ user: FIXTURE_ACCOUNTS[0].address, amount: 1_000_000 }),
+    });
+    const plan = await response.json();
+    assert.equal(plan.allowed, true, JSON.stringify(plan));
+    assert.equal(Number(plan.circuitPlan.note.leafIndex), 3);
+    assert.equal(Number(plan.circuitPlan.note.blinding), 3);
+    assert.equal(commitmentChecks, 2);
+  } finally {
+    globalThis.fetch = actualFetch;
+    await host.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("auditor /audit shows granted decrypted fields from the live envelope", async () => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { planLiveCircuitTransact } = await import("../dev/operator-circuit-live.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "haze-host-audit-"));
+  const notePath = join(dir, "fuji-poseidon-note.json");
+  const host = await createCommercialHost({
+    port: 0,
+    operatorProve: true,
+    zkeyPath: join(HAZE_ROOT, "package.json"),
+    notePath,
+  });
+  try {
+    const deposit = planLiveCircuitTransact({ action: "deposit" });
+    const persist = await fetch(new URL("/api/live-deposit/persist", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan: deposit }),
+    });
+    assert.equal((await persist.json()).allowed, true);
+
+    const auditor = FIXTURE_ACCOUNTS[2].address;
+    const page = await fetch(new URL(`/audit?address=${auditor}`, host.url));
+    const html = await page.text();
+    assert.match(html, /data-chrome="compliance"/);
+    assert.match(html, /Assigned cases/);
+
+    const granted = await fetch(new URL("/api/portal/export", host.url), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `haze-address=${auditor}`,
+      },
+      body: JSON.stringify({
+        fields: ["amount", "commitment", "user", "applicationPolicyVersion", "hazePolicyVersion"],
+      }),
+    });
+    const grantedBody = await granted.json();
+    assert.equal(granted.ok, true);
+    assert.equal(grantedBody.ok, true);
+    assert.equal(grantedBody.rows[0].amount, "1.00");
+    assert.equal(grantedBody.rows[0].commitment, deposit.note.commitment);
+    assert.equal(grantedBody.rows[0].user.toLowerCase(), String(deposit.user).toLowerCase());
+    assert.equal(String(grantedBody.rows[0].applicationPolicyVersion), "1");
+    assert.equal(String(grantedBody.rows[0].hazePolicyVersion), "1");
+    assert.equal(grantedBody.rows[0].plaintext, undefined);
+
+    const hydrated = await fetch(new URL(`/audit?address=${auditor}`, host.url));
+    const hydratedHtml = await hydrated.text();
+    assert.match(hydratedHtml, /data-audit-row/);
+    assert.match(hydratedHtml, /1\.00/);
+    assert.ok(hydratedHtml.includes(deposit.note.commitment.slice(0, 10)));
+
+    const overreach = await fetch(new URL("/api/portal/export", host.url), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `haze-address=${auditor}`,
+      },
+      body: JSON.stringify({ fields: ["plaintext"] }),
+    });
+    assert.equal(overreach.status, 403);
+    const overreachBody = await overreach.json();
+    assert.equal(overreachBody.code, "UNAUTHORIZED");
+
+    assert.doesNotMatch(hydratedHtml, />secret</);
+    const access = hydratedHtml.match(/Access log[\s\S]*?<\/ul>/)?.[0] ?? hydratedHtml;
+    assert.doesNotMatch(access, /1\.00/);
+  } finally {
+    await host.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("live withdraw persists only after a successful receipt, reduces private USDC, and binds audit fields", async () => {
+  const { mkdtempSync, readFileSync: read, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { planLiveCircuitTransact } = await import("../dev/operator-circuit-live.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "haze-host-withdraw-"));
+  const notePath = join(dir, "fuji-poseidon-note.json");
+  const host = await createCommercialHost({
+    port: 0,
+    operatorProve: true,
+    zkeyPath: join(HAZE_ROOT, "package.json"),
+    notePath,
+  });
+  try {
+    const deposit = planLiveCircuitTransact({ action: "deposit" });
+    const persisted = await fetch(new URL("/api/live-deposit/persist", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan: deposit }),
+    });
+    assert.equal((await persisted.json()).allowed, true);
+
+    const recipient = "0x1111111111111111111111111111111111111111";
+    const withdrawPlanResponse = await fetch(new URL("/api/live-withdraw/plan", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        user: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+        amount: 1_000_000,
+        recipient,
+      }),
+    });
+    const withdrawPlan = await withdrawPlanResponse.json();
+    assert.equal(withdrawPlan.allowed, true);
+
+    const rejected = await fetch(new URL("/api/live-withdraw/persist", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan: withdrawPlan, receipt: { status: "0x0" } }),
+    });
+    assert.equal((await rejected.json()).allowed, false);
+    assert.equal(JSON.parse(read(notePath, "utf8")).spent, undefined);
+
+    const settled = await fetch(new URL("/api/live-withdraw/persist", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan: withdrawPlan, receipt: { status: "0x1" } }),
+    });
+    const settledBody = await settled.json();
+    assert.equal(settledBody.allowed, true);
+    assert.equal(settledBody.privateUsdc, "0.00");
+    assert.equal(JSON.parse(read(notePath, "utf8")).spent, true);
+
+    const shield = await fetch(new URL("/shield?live=1", host.url));
+    assert.match(await shield.text(), /data-balance="private"[^>]*>[\s\S]*0\.00 USDC/);
+
+    const auditor = FIXTURE_ACCOUNTS[2].address;
+    const granted = await fetch(new URL("/api/portal/export", host.url), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `haze-address=${auditor}`,
+      },
+      body: JSON.stringify({
+        fields: ["amount", "commitment", "user", "publicRecipient", "applicationPolicyVersion", "hazePolicyVersion"],
+      }),
+    });
+    const body = await granted.json();
+    assert.equal(granted.ok, true);
+    assert.equal(body.rows[0].amount, "1.00");
+    assert.equal(body.rows[0].commitment, deposit.note.commitment);
+    assert.equal(body.rows[0].user.toLowerCase(), withdrawPlan.intent.user.toLowerCase());
+    assert.equal(body.rows[0].publicRecipient.toLowerCase(), recipient);
+    assert.equal(String(body.rows[0].applicationPolicyVersion), "1");
+    assert.equal(String(body.rows[0].hazePolicyVersion), "1");
+    assert.equal(body.rows[0].plaintext, undefined);
+
+    const withdrawSource = await fetch(new URL("/withdraw-live.js", host.url));
+    const withdrawSourceText = await withdrawSource.text();
+    assert.match(withdrawSourceText, /eth_getTransactionReceipt/);
+    assert.match(withdrawSourceText, /live-withdraw\/persist/);
   } finally {
     await host.close();
     rmSync(dir, { recursive: true, force: true });

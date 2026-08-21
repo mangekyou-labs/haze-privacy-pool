@@ -18,7 +18,8 @@
     "build": "node --experimental-strip-types --check src/index.ts"
   },
   "dependencies": {
-    "@noble/curves": "^1.9.7"
+    "@noble/ciphers": "^1.3.0",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0"
   }
 }
-

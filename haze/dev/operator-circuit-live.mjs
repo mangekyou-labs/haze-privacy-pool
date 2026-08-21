@@ -78,7 +78,11 @@ export function planUnusedLiveCircuitDeposit(input = {}) {
   const overlay = loadOverlay(input.overlayPath ?? LIVE_OVERLAY_PATH);
   const occupiedLeaves = input.occupiedLeaves ?? occupiedLiveLeaves(overlay);
   const occupied = new Set(occupiedLeaves.map((leaf) => leaf.commitment.toLowerCase()));
-  const leafIndex = Number(input.leafIndex ?? occupiedLeaves.length);
+  const sidecarNextIndex = Number(overlay.transactions?.nextIndex);
+  const nextIndex = Number.isSafeInteger(sidecarNextIndex) && sidecarNextIndex >= 0
+    ? sidecarNextIndex
+    : occupiedLeaves.length;
+  const leafIndex = Number(input.leafIndex ?? nextIndex);
   if (input.secret !== undefined || input.blinding !== undefined) {
     const plan = planLiveCircuitTransact({ ...input, action: "deposit", leafIndex });
     if (occupied.has(plan.note.commitment.toLowerCase())) {
@@ -88,7 +92,8 @@ export function planUnusedLiveCircuitDeposit(input = {}) {
   }
   const secret =
     input.secret ?? (process.env.HAZE_NOTE_SECRET !== undefined ? Number(process.env.HAZE_NOTE_SECRET) : 1);
-  for (let blinding = 2; blinding < 10_000; blinding += 1) {
+  const startBlinding = Number(input.startBlinding ?? 2);
+  for (let blinding = startBlinding; blinding < 10_000; blinding += 1) {
     const plan = planLiveCircuitTransact({
       ...input,
       action: "deposit",
@@ -271,6 +276,45 @@ export function persistLiveCircuitNote(input = {}) {
   };
   writeFileSync(outputPath, `${JSON.stringify(stored, null, 2)}\n`);
   return stored;
+}
+
+export function persistLiveCircuitWithdraw(input = {}) {
+  refuseFlips(input);
+  if (input.productionCeremonyApproved === true) {
+    throw coded("KEYS_MISSING", "production ceremony stays KEYS_MISSING");
+  }
+  if (input.receipt?.status !== "0x1") {
+    throw coded("RECEIPT_REVERTED", "withdraw receipt is not mined successfully");
+  }
+  const outputPath = input.notePath ?? NOTE_SECRET_PATH;
+  if (!existsSync(outputPath)) {
+    throw coded("KEYS_MISSING", "circuit note is missing");
+  }
+  const stored = JSON.parse(readFileSync(outputPath, "utf8"));
+  if (!stored?.note) {
+    throw coded("WITNESS_INVALID", "circuit note is missing");
+  }
+  if (stored.spent === true) {
+    throw coded("NOTE_SPENT", "circuit note has already been withdrawn");
+  }
+  const plan = input.plan;
+  const amount = Number(plan?.intent?.publicAmount ?? plan?.circom?.publicAmount ?? input.amount);
+  if (!Number.isSafeInteger(amount) || amount <= 0 || BigInt(amount) !== BigInt(stored.note.value)) {
+    throw coded("WITNESS_INVALID", "withdraw amount does not consume the persisted note");
+  }
+  const withdrawal = {
+    amount,
+    publicRecipient: plan?.intent?.publicRecipient ?? input.publicRecipient ?? "",
+    user: plan?.intent?.user ?? input.user ?? "",
+    receiptStatus: input.receipt.status,
+  };
+  const next = {
+    ...stored,
+    spent: true,
+    withdrawal,
+  };
+  writeFileSync(outputPath, `${JSON.stringify(next, null, 2)}\n`);
+  return next;
 }
 
 export async function proveLiveCircuit(input = {}) {

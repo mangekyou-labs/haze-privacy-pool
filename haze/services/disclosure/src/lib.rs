@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 
 mod error;
+pub mod fuji;
+pub mod http;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

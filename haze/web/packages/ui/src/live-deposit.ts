@@ -147,6 +147,85 @@ export async function fetchLiveSnapshot(sidecar: LiveOverlay): Promise<LiveSnaps
   return snapshotFromChainReturns(appReturn, versionReturn, rootReturn);
 }
 
+export function encodeErc20BalanceOf(holder: string): string {
+  return `${functionSelector("balanceOf(address)")}${toHex(addressWord(holder)).slice(2)}`;
+}
+
+export function decodeErc20Balance(result: string): bigint {
+  if (!result || result === "0x") {
+    return 0n;
+  }
+  return BigInt(result);
+}
+
+export function formatUsdc(amount: bigint | number | string, decimals = 6): string {
+  const n = typeof amount === "bigint" ? amount : BigInt(amount);
+  const scale = 10n ** BigInt(decimals);
+  const whole = n / scale;
+  const frac = n % scale;
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  const shown = fracStr.length === 0 ? "00" : fracStr.padEnd(2, "0");
+  return `${whole}.${shown}`;
+}
+
+export async function fetchLiveErc20Balance(sidecar: LiveOverlay, holder: string) {
+  const rpc = sidecar.live_rpc;
+  if (!rpc || !sidecar.usdc) {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  const response = await fetch(rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_call",
+      params: [{ to: sidecar.usdc, data: encodeErc20BalanceOf(holder) }, "latest"],
+    }),
+  });
+  const json = (await response.json()) as { result?: string };
+  const raw = decodeErc20Balance(json.result ?? "0x0");
+  return { raw, formatted: formatUsdc(raw) };
+}
+
+async function fetchLivePoolCall(sidecar: LiveOverlay, data: string) {
+  const rpc = sidecar.live_rpc;
+  const pool = sidecar.addresses.HazePool;
+  if (!rpc || !pool) {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  const response = await fetch(rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_call",
+      params: [{ to: pool, data }, "latest"],
+    }),
+  });
+  const json = (await response.json()) as { result?: string };
+  if (!json.result || json.result === "0x") {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  return json.result;
+}
+
+export async function fetchLivePoolNextIndex(sidecar: LiveOverlay): Promise<number> {
+  const result = await fetchLivePoolCall(sidecar, functionSelector("nextIndex()"));
+  const nextIndex = BigInt(result);
+  if (nextIndex > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  return Number(nextIndex);
+}
+
+export async function fetchLivePoolCommitmentExists(sidecar: LiveOverlay, commitment: string): Promise<boolean> {
+  const data = `${functionSelector("commitmentExists(uint256)")}${toHex(uintWord(BigInt(commitment))).slice(2)}`;
+  const result = await fetchLivePoolCall(sidecar, data);
+  return BigInt(result) !== 0n;
+}
+
 function splitLimbs(value: string) {
   const n = BigInt(asBytes32(value));
   return { hi: n >> 128n, lo: n & LIMB_MASK };
@@ -516,4 +595,3 @@ export function encodeTransactCall(input: {
 export function encodeLiveDeposit(input: { plan: LiveShieldPlan; signature: string }) {
   return encodeTransactCall({ ...input, selector: POOL_SELECTORS.deposit });
 }
-

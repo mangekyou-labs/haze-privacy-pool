@@ -68,14 +68,43 @@
       if (phase) {
         phase.textContent = "Submitting the withdraw…";
       }
+      const transaction = { from: user, to: transact.to, data: transact.data };
+      await provider.request({ method: "eth_call", params: [transaction, "latest"] });
       const hash = await provider.request({
         method: "eth_sendTransaction",
-        params: [{ from: user, to: transact.to, data: transact.data }],
+        params: [transaction],
       });
+      let receipt = null;
+      const minedDeadline = Date.now() + 180_000;
+      while (Date.now() < minedDeadline) {
+        receipt = await provider.request({
+          method: "eth_getTransactionReceipt",
+          params: [hash],
+        });
+        if (receipt) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (!receipt || receipt.status !== "0x1") {
+        status.textContent = "RECEIPT_REVERTED";
+        return;
+      }
+      const persisted = await fetch("/api/live-withdraw/persist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ plan, receipt }),
+      });
+      const settled = await persisted.json();
+      if (!settled.allowed) {
+        status.textContent = settled.reason || "WITNESS_INVALID";
+        return;
+      }
       if (phase) {
         phase.textContent = "Withdraw submitted.";
       }
       status.textContent = hash;
+      await globalThis.hazeRefreshBalances?.();
     } catch (error) {
       status.textContent = error?.message || "LIVE_WITHDRAW_FAILED";
     }

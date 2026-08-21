@@ -6,6 +6,51 @@ description: Technical implementation notes, patterns, and code guidelines
 
 # Implementation Guide
 
+## Progress — 2026-08-21 deployed Fuji continuation
+
+- D2 complete: the worker entry now uses a web-platform-only session rather than the
+  filesystem-capable Node prover session. Verified manifest WASM/zkey bytes are transferred to
+  `snarkjs.groth16.fullProve`; request-scoped progress, success, cancellation, and typed errors are
+  returned to the host. Cancellation suppresses a late proof result, and clearing zeroes retained
+  artifact buffers. `generateBrowserSecrets` obtains independent note-secret, blinding, and HPKE
+  ephemeral seed bytes from `crypto.getRandomValues`. Browser-native Noble HPKE reproduces the
+  Rust recipient/audit vectors, canonical envelope framing, and AAD rejection behavior.
+- D2 changed files so far: `haze/sdk/typescript/src/browser-worker-session.ts`,
+  `prover-worker.ts`, `browser-prover.ts`, `index.ts`, and `haze/tests/browser-prover.test.mjs`.
+  `browser-crypto.ts`, `browser-operation-vault.ts`, `fuji-reconciliation.ts`, and
+  `render-disclosure.ts` complete D2-D4 plus the bounded disclosure client retry boundary.
+- D3 complete: wallet signatures feed a chain/application/pool/wallet-bound WebCrypto HKDF key;
+  AES-GCM encrypts IndexedDB operation records and metadata before broadcast through the required
+  proving, ready-to-submit, submitted, and terminal states. Restart recovery is covered.
+- D4 complete: approval success precedes deposits, every transaction receives a final `eth_call`,
+  and receipt status plus a matching `PrivateTransaction` event jointly determine confirmation.
+  Missing/reverted withdrawals leave notes spendable; disclosure status remains independent.
+- D5 complete locally: the stateless Axum adapter exposes health/readiness/withdrawal routes,
+  exact-origin CORS, Fuji receipt/block/event recovery, EIP-712 signer recovery, canonical
+  envelope/CBOR/commitment verification, field redaction, stable errors, and production fail-close.
+- Started D1 with a browser-native `loadFujiProvingArtifacts` SDK interface. Callers may supply
+  immutable URLs (through `fetch`) or already-downloaded `Uint8Array` values; both paths enforce
+  manifest byte size and SHA-256 before exposing the WASM or zkey.
+- The accepted manifest profile is exactly `fuji-development` with `notForProduction: true`.
+  Profile, size, HTTP, and digest failures close as `ARTIFACT_INVALID`.
+- Changed files: `haze/sdk/typescript/src/browser-prover.ts`, its public exports in `src/index.ts`,
+  and `haze/tests/browser-prover.test.mjs`.
+- D1 is complete. The operator-owned Fuji artifact was recovered through the worktree's private
+  ceremony-artifact link and verified with `snarkjs zkey verify` against the frozen 588459-constraint
+  spend R1CS and Powers of Tau (`ZKey Ok!`). It remains a Fuji-development artifact and does not
+  change production ceremony or SC-09 status.
+- Vercel Blob store `haze-fuji-proving` is connected to the `haze` project for Production, Preview,
+  and Development. The immutable public artifacts are:
+  - WASM: 2,611,219 bytes, SHA-256
+    `0fc940afbd43a8c16b34e2fd7947c4016963cdf120c7ae34d1188666069b5b57`.
+  - zkey: 280,397,584 bytes, SHA-256
+    `374bb2394da985ab824ce61a95b3b3409b71355139f0a6b16fb8e0bff8e508d5`.
+- The committed frontend manifest is
+  `haze/web/apps/haze/public/proving/fuji-development/haze-spend-v1/manifest.json`. Fresh Blob
+  downloads reproduced both byte sizes and hashes. A fresh proof produced 29 public signals and a
+  256-byte Groth16 payload; the Fuji production-path `eth_call` returned `true` from pairing verifier
+  `0x9b82283af98124b82dE0b96587C98946a95D45E3`.
+
 ## Progress — 2026-08-20 clickable operator MVP
 
 Operator hatch can now Shield → persist a Poseidon note → Withdraw on Fuji without flipping

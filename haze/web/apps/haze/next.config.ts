@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@haze-avalanche/ui"],
   poweredByHeader: false,
   async headers() {
+    const disclosureOrigin = process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN;
+    const disclosureConnect = disclosureOrigin?.startsWith("https://") ? ` ${disclosureOrigin}` : "";
     return [
       {
         source: "/:path*",
@@ -11,7 +13,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.avax-test.network; font-src 'self'",
+              `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.avax-test.network${disclosureConnect}; font-src 'self'`,
           },
         ],
       },

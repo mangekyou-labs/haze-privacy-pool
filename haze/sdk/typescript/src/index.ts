@@ -135,13 +135,46 @@ export type { EmergencyExitRequest } from "./emergency.ts";
 export {
   createArtifactCache,
   createBrowserProver,
+  generateBrowserSecrets,
+  loadFujiProvingArtifacts,
   selectCircuitArtifact,
 } from "./browser-prover.ts";
+export {
+  browserAuditAad,
+  decodeBrowserEnvelope,
+  encodeBrowserEnvelope,
+  openBrowserHpke,
+  sealBrowserHpke,
+} from "./browser-crypto.ts";
+export type { BrowserEnvelope } from "./browser-crypto.ts";
+export {
+  createBrowserOperationVault,
+  createIndexedDbOperationStore,
+  createMemoryIndexedDb,
+  deriveBrowserVaultKey,
+} from "./browser-operation-vault.ts";
+export type {
+  BrowserOperation,
+  BrowserOperationState,
+  BrowserOperationStore,
+  BrowserVaultBinding,
+} from "./browser-operation-vault.ts";
+export {
+  PRIVATE_TRANSACTION_TOPIC,
+  broadcastFujiTransaction,
+  decodePrivateTransaction,
+  reconcileFujiOperation,
+  recoverFujiOperation,
+} from "./fuji-reconciliation.ts";
+export type { FujiLog, FujiReceipt, FujiRpc } from "./fuji-reconciliation.ts";
+export { requestFujiDisclosure } from "./render-disclosure.ts";
 export type {
   ArtifactCache,
   BrowserProverConfig,
   BrowserWorker,
   CircuitArtifactManifest,
+  FujiProvingArtifact,
+  FujiProvingArtifactManifest,
 } from "./browser-prover.ts";
 export { createWorkflowClient } from "./workflow.ts";
 export type {
@@ -151,4 +184,3 @@ export type {
   WorkflowResult,
   WorkflowWallet,
 } from "./workflow.ts";
-

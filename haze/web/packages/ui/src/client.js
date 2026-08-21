@@ -8,6 +8,30 @@
     return response.json();
   }
 
+  function setBalanceFigure(selector, value) {
+    const el = document.querySelector(selector);
+    if (el && value != null) {
+      el.textContent = `${value} USDC`;
+    }
+  }
+
+  async function hydrateBalances() {
+    if (!document.querySelector("[data-pool-usdc]")) {
+      return;
+    }
+    try {
+      const data = await fetch("/api/live-balances").then((response) => response.json());
+      setBalanceFigure('[data-balance="public"] .haze-figure', data.publicUsdc);
+      setBalanceFigure('[data-balance="private"] .haze-figure', data.privateUsdc);
+      setBalanceFigure("[data-pool-usdc] .haze-figure", data.poolUsdc);
+    } catch {
+      /* keep last rendered figures */
+    }
+  }
+
+  globalThis.hazeRefreshBalances = hydrateBalances;
+  void hydrateBalances();
+
   async function connectWallet() {
     if (!window.ethereum) {
       throw new Error("NO_INJECTED_WALLET");

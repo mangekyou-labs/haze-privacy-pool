@@ -6,6 +6,44 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
 
 # Haze Avalanche Compliant Pool Testing Strategy
 
+## Deployed Fuji continuation evidence (2026-08-21)
+
+- [x] D2 TDD red: the browser-prover suite failed because `generateBrowserSecrets` was not exported;
+  the next red failed because `loadFujiArtifacts` did not exist on the browser prover.
+- [x] D2 green: `node --experimental-strip-types --test tests/browser-prover.test.mjs` passes 13/13.
+  It covers a Node-built-in/`Buffer`-free worker graph, browser CSPRNG secret separation,
+  request-scoped progress and success, cancellation, fake-runtime Groth16 compatibility, and
+  transfer of manifest-verified WASM/zkey bytes only. The SDK syntax build exits 0.
+- [x] D2 audit-envelope browser/Rust compatibility and recipient recovery pass, including wrong
+  AAD and non-canonical envelope rejection.
+- [x] D3 wallet derivation, encrypted persistence, legal transitions, pre-broadcast persistence,
+  and simulated browser-restart recovery pass.
+- [x] D4 approval ordering, immediate final `eth_call`, every receipt/event reconciliation outcome,
+  note preservation, and transaction-hash/log-scan recovery pass.
+- [x] D5 Rust tests cover authorized redaction, unsuccessful receipts, unauthorized fields, wrong
+  and expired wallet identities, missing/production keys, application/pool-version/action-reference/
+  commitment/envelope/canonical-CBOR failures. The Render client tests cover bounded cold-start
+  retries, HTTPS-only origin enforcement, stable errors, and no local fallback.
+- [x] Fresh D2-D5 targeted run (2026-08-21): 28 Node tests and 19 disclosure tests pass; SDK build,
+  `cargo clippy -p haze-disclosure --all-targets -- -D warnings`, and `git diff --check` pass.
+- [x] TDD red: `node --experimental-strip-types --test tests/browser-prover.test.mjs` exited 1
+  because `loadFujiProvingArtifacts` was not exported.
+- [x] TDD green: the same targeted suite passes 9/9, including URL and byte inputs, exact-size
+  rejection, SHA-256 rejection, and rejection of a non-Fuji/non-development manifest.
+- [x] SDK syntax build: `npm run build --workspace @haze-avalanche/sdk` exits 0.
+- [x] TDD manifest red: `node --test tests/fuji-artifact-manifest.test.mjs` failed `ENOENT` before
+  the public manifest existed; the green targeted run passes 10/10 with browser-prover coverage.
+- [x] Verified the committed immutable manifest against fresh Vercel Blob downloads. WASM:
+  2,611,219 bytes / SHA-256 `0fc940afbd43a8c16b34e2fd7947c4016963cdf120c7ae34d1188666069b5b57`;
+  zkey: 280,397,584 bytes / SHA-256
+  `374bb2394da985ab824ce61a95b3b3409b71355139f0a6b16fb8e0bff8e508d5`.
+- [x] `snarkjs zkey verify` reports `ZKey Ok!`. A fresh full proof has 29 public signals and a
+  256-byte Groth16 payload, and the Fuji pairing verifier production-path `eth_call` returns true.
+- [x] Fresh release gates: `npm test` passes 275/275 plus the Circom vector harness; `cargo test
+  --workspace` passes all Rust suites; the SDK syntax build and Next production build pass. The
+  Next gate first exposed and then closed an invalid shared-theme import plus missing explicit
+  TypeScript build dependencies.
+
 ## Test Coverage Goals
 
 - Cover every acceptance criterion in the requirements and every trust boundary in the design.

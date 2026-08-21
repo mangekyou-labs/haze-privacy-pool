@@ -5,6 +5,18 @@ use thiserror::Error;
 /// Typed disclosure denial or fail-closed outage.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DisclosureError {
+    /// The wallet requested a field outside the wallet-scoped allowlist.
+    #[error("UNAUTHORIZED_FIELD")]
+    UnauthorizedField,
+    /// Receipt, event, application, pool, version, or action binding differed.
+    #[error("INVALID_BINDING")]
+    InvalidBinding,
+    /// The Fuji receipt is missing or reverted.
+    #[error("RECEIPT_NOT_SUCCESSFUL")]
+    ReceiptNotSuccessful,
+    /// The configured Fuji development key is absent.
+    #[error("KEYS_MISSING")]
+    KeysMissing,
     /// Subject, role, or eligibility check failed.
     #[error("USER_INELIGIBLE")]
     UserIneligible,
@@ -36,6 +48,10 @@ impl DisclosureError {
     #[must_use]
     pub fn as_code(&self) -> &'static str {
         match self {
+            Self::UnauthorizedField => "UNAUTHORIZED_FIELD",
+            Self::InvalidBinding => "INVALID_BINDING",
+            Self::ReceiptNotSuccessful => "RECEIPT_NOT_SUCCESSFUL",
+            Self::KeysMissing => "KEYS_MISSING",
             Self::UserIneligible => "USER_INELIGIBLE",
             Self::AuthorizationExpired => "AUTHORIZATION_EXPIRED",
             Self::EncodingInvalid => "ENCODING_INVALID",

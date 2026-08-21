@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: haze-fuji-disclosure
+    runtime: rust
+    plan: free
+    rootDir: haze
+    buildCommand: cargo build --release -p haze-disclosure
+    startCommand: ./target/release/haze-disclosure
+    healthCheckPath: /healthz
+    autoDeploy: false
+    envVars:
+      - key: HAZE_CHAIN_ID
+        value: "43113"
+      - key: HAZE_FUJI_DEVELOPMENT_BUILD
+        value: "true"
+      - key: HAZE_APPLICATION_ID
+        sync: false
+      - key: HAZE_POOL_ADDRESS
+        sync: false
+      - key: HAZE_POOL_VERSION
+        sync: false
+      - key: HAZE_FUJI_RPC_URL
+        sync: false
+      - key: HAZE_FUJI_AUDIT_IKM
+        sync: false
+      - key: HAZE_VERCEL_ORIGIN
+        sync: false

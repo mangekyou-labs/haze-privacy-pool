@@ -12,15 +12,46 @@ export type CircuitArtifactManifest = {
   artifactHash: string;
 };
 
+export type FujiProvingArtifact = {
+  url: string;
+  byteSize: number;
+  sha256: string;
+};
+
+export type FujiProvingArtifactManifest = {
+  circuitId: string;
+  profile: "fuji-development";
+  notForProduction: true;
+  wasm: FujiProvingArtifact;
+  zkey: FujiProvingArtifact;
+};
+
 export type ArtifactCache = {
   get(hash: string): Promise<Uint8Array>;
   put(entry: { artifactHash: string; bytes: Uint8Array }): Promise<void>;
 };
 
 export type BrowserWorker = {
-  addEventListener(type: "message", listener: (event: { data: WorkerOutbound }) => void): void;
-  postMessage(data: { type: string; value?: number; circom?: Record<string, unknown> }): void;
+  addEventListener(type: "message", listener: (event: { data: BrowserWorkerOutbound }) => void): void;
+  removeEventListener?(type: "message", listener: (event: { data: BrowserWorkerOutbound }) => void): void;
+  postMessage(data: BrowserWorkerInbound): void;
 };
+
+export type BrowserProgress = { stage: string; percent: number };
+export type BrowserWorkerInbound = {
+  type: string;
+  requestId?: string;
+  value?: number;
+  circom?: Record<string, unknown>;
+  wasm?: Uint8Array;
+  zkey?: Uint8Array;
+};
+export type BrowserWorkerOutbound =
+  | WorkerOutbound
+  | { type: "progress"; requestId: string; stage: string; percent: number }
+  | { type: "success"; requestId: string; proof: DevelopmentProof | unknown }
+  | { type: "cancelled"; requestId?: string }
+  | { type: "error"; requestId?: string; code: string; message?: string };
 
 export type BrowserProverConfig = {
   worker: BrowserWorker;
@@ -31,6 +62,71 @@ export type BrowserProverConfig = {
 
 function normalizeHash(value: string) {
   return value.toLowerCase();
+}
+
+function hex(bytes: Uint8Array) {
+  return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Generate independent secret material using the browser CSPRNG. */
+export function generateBrowserSecrets(
+  browserCrypto: Pick<Crypto, "getRandomValues"> = globalThis.crypto,
+) {
+  if (typeof browserCrypto?.getRandomValues !== "function") {
+    throw new ProverError("UNSUPPORTED_RECOVERY");
+  }
+  const random32 = () => browserCrypto.getRandomValues(new Uint8Array(32));
+  return {
+    noteSecret: random32(),
+    blinding: random32(),
+    hpkeEphemeralSeed: random32(),
+  };
+}
+
+async function verifiedArtifact(
+  descriptor: FujiProvingArtifact,
+  supplied: Uint8Array | undefined,
+  fetchArtifact: typeof fetch,
+) {
+  let bytes = supplied;
+  if (bytes === undefined) {
+    const response = await fetchArtifact(descriptor.url);
+    if (!response.ok) {
+      throw new ProverError("ARTIFACT_INVALID");
+    }
+    bytes = new Uint8Array(await response.arrayBuffer());
+  }
+  if (bytes.byteLength !== descriptor.byteSize) {
+    throw new ProverError("ARTIFACT_INVALID");
+  }
+  const digest = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+  if (normalizeHash(digest) !== normalizeHash(descriptor.sha256)) {
+    throw new ProverError("ARTIFACT_INVALID");
+  }
+  return bytes;
+}
+
+/** Fetch or accept immutable Fuji proving bytes and reject every manifest mismatch. */
+export async function loadFujiProvingArtifacts(
+  manifest: FujiProvingArtifactManifest,
+  sources: {
+    wasm?: Uint8Array;
+    zkey?: Uint8Array;
+    fetch?: typeof fetch;
+  } = {},
+) {
+  if (manifest.profile !== "fuji-development" || manifest.notForProduction !== true) {
+    throw new ProverError("ARTIFACT_INVALID");
+  }
+  const fetchArtifact = sources.fetch ?? globalThis.fetch;
+  if (typeof fetchArtifact !== "function") {
+    throw new ProverError("ARTIFACT_INVALID");
+  }
+  const [wasm, zkey] = await Promise.all([
+    verifiedArtifact(manifest.wasm, sources.wasm, fetchArtifact),
+    verifiedArtifact(manifest.zkey, sources.zkey, fetchArtifact),
+  ]);
+  return { circuitId: manifest.circuitId, wasm, zkey };
 }
 
 /** In-memory proving-artifact cache keyed by content hash. */
@@ -83,23 +179,50 @@ function asProverError(code: string | undefined): ProverError {
   return new ProverError("PROOF_INVALID");
 }
 
-function requestWorker(worker: BrowserWorker, message: { type: string; value?: number; circom?: Record<string, unknown> }) {
-  return new Promise<Extract<WorkerOutbound, { type: "proof" }>>((resolve, reject) => {
-    const onMessage = (event: { data: WorkerOutbound }) => {
+let nextRequestId = 0;
+
+function requestWorker(
+  worker: BrowserWorker,
+  message: BrowserWorkerInbound,
+  onProgress?: (progress: BrowserProgress) => void,
+) {
+  const requestId = `haze-proof-${++nextRequestId}`;
+  return new Promise<{ proof: DevelopmentProof | unknown; stages: string[] }>((resolve, reject) => {
+    const cleanup = () => worker.removeEventListener?.("message", onMessage);
+    const onMessage = (event: { data: BrowserWorkerOutbound }) => {
       const data = event.data;
-      if (data.type === "cancelled" || data.type === "cleared") {
+      if ("requestId" in data && data.requestId !== undefined && data.requestId !== requestId) {
+        return;
+      }
+      if (data.type === "progress") {
+        onProgress?.({ stage: data.stage, percent: data.percent });
+        return;
+      }
+      if (data.type === "cancelled") {
+        cleanup();
+        reject(new ProverError("CANCELLED"));
+        return;
+      }
+      if (data.type === "cleared") {
         return;
       }
       if (data.type === "error") {
+        cleanup();
         reject(asProverError(data.code));
         return;
       }
+      if (data.type === "success") {
+        cleanup();
+        resolve({ proof: data.proof, stages: [] });
+        return;
+      }
       if (data.type === "proof") {
-        resolve(data);
+        cleanup();
+        resolve({ proof: data.proof, stages: data.stages });
       }
     };
     worker.addEventListener("message", onMessage);
-    worker.postMessage(message);
+    worker.postMessage({ ...message, requestId });
   });
 }
 
@@ -107,6 +230,7 @@ function requestWorker(worker: BrowserWorker, message: { type: string; value?: n
 export function createBrowserProver(config: BrowserProverConfig) {
   const cache = config.cache ?? createArtifactCache();
   const stages: string[] = [];
+  let fujiArtifacts: Awaited<ReturnType<typeof loadFujiProvingArtifacts>> | undefined;
 
   return {
     stages() {
@@ -117,6 +241,16 @@ export function createBrowserProver(config: BrowserProverConfig) {
     },
     clear() {
       config.worker.postMessage({ type: "clear" });
+      fujiArtifacts?.wasm.fill(0);
+      fujiArtifacts?.zkey.fill(0);
+      fujiArtifacts = undefined;
+    },
+    async loadFujiArtifacts(
+      manifest: FujiProvingArtifactManifest,
+      sources: Parameters<typeof loadFujiProvingArtifacts>[1] = {},
+    ) {
+      fujiArtifacts = await loadFujiProvingArtifacts(manifest, sources);
+      return fujiArtifacts.circuitId;
     },
     async ensureArtifacts(
       manifest: CircuitArtifactManifest & { bytes: Uint8Array },
@@ -128,18 +262,28 @@ export function createBrowserProver(config: BrowserProverConfig) {
       value: number,
       options?: { onProgress?: (stage: string) => void },
     ): Promise<DevelopmentProof> {
-      const result = await requestWorker(config.worker, { type: "prove-development", value });
+      const reportedProgress: BrowserProgress[] = [];
+      const result = await requestWorker(config.worker, { type: "prove-development", value }, (progress) => {
+        reportedProgress.push(progress);
+        if (!stages.includes(progress.stage)) stages.push(progress.stage);
+        options?.onProgress?.(progress as never);
+      });
       const reported = result.stages.length > 0 ? result.stages : ["development"];
       for (const stage of reported) {
         if (!stages.includes(stage)) {
           stages.push(stage);
         }
-        options?.onProgress?.(stage);
+        if (reportedProgress.length === 0) options?.onProgress?.(stage as never);
       }
-      return result.proof;
+      return result.proof as DevelopmentProof;
     },
     async proveSpend(circom: Record<string, unknown>) {
-      const result = await requestWorker(config.worker, { type: "prove-spend", circom });
+      const result = await requestWorker(config.worker, {
+        type: "prove-spend",
+        circom,
+        wasm: fujiArtifacts?.wasm,
+        zkey: fujiArtifacts?.zkey,
+      });
       return result.proof;
     },
   };

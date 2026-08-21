@@ -624,6 +624,35 @@ Overrides the 2026-08-10 two-deployment frontend split for this hosted UI only.
 
 ## Initial Next Actions
 
+## Deployed Fuji continuation (2026-08-21)
+
+The approved hosted-release continuation replaces the local operator hatch with a Vercel browser
+client and a stateless Render disclosure adapter. Acceptance excludes local HTTP services,
+filesystem notes, server-side proving, and `?live=1`.
+
+- [x] **D1 — Publish and enforce immutable Fuji proving artifacts.** The SDK accepts WASM/zkey URLs
+  or bytes and verifies exact byte size and SHA-256. The real operator-owned Fuji zkey and matching
+  WASM are published to the Haze project's public Vercel Blob store under content-addressed paths;
+  the committed `fuji-development`/`notForProduction` manifest pins their URLs, sizes, and hashes.
+  Fresh downloaded bytes, `snarkjs zkey verify`, a full proof, and a successful Fuji verifier
+  `eth_call` provide the release evidence. This does not approve production ceremony material.
+- [x] **D2 — Complete the browser proving worker and Rust-compatible audit envelopes.** Add
+  structured progress/success/cancellation errors and browser-native randomness for note secrets,
+  blindings, and HPKE ephemeral keys.
+- [x] **D3 — Add the wallet-derived encrypted IndexedDB operation vault.** Persist proving,
+  ready-to-submit, submitted, confirmed, and failed states before broadcast and recover restarts.
+- [x] **D4 — Reconcile Fuji transactions.** Require approval success, final pre-broadcast
+  `eth_call`, successful receipts, and matching `PrivateTransaction` events while preserving
+  withdraw notes on every incomplete/reverted outcome.
+- [x] **D5 — Ship the stateless Rust Render disclosure HTTP adapter.** Expose `/healthz`,
+  `/readyz`, and `/v1/fuji/disclosures/withdrawal` with receipt/event/envelope/EIP-712 verification,
+  stable errors, and exact-origin CORS.
+- [ ] **D6 — Build and deploy the same commit to Render Free and Vercel production.** Verify
+  deployed artifact bytes and configure bounded Render cold-start retries with no local fallback.
+- [ ] **D7 — Record desktop-Chromium Fuji acceptance and open the release PR.** Capture deposit,
+  restart recovery, same-note withdrawal, disclosure, hashes, blocks, receipts, URLs, and commit
+  provenance while preserving `haze/deployments/fuji-v1.json` as `broadcast:false`.
+
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and
    public-input binding tests in place, local Foundry gas pins refreshed, holistic review

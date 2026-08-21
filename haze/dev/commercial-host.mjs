@@ -12,7 +12,11 @@ import {
 import { renderHazePage } from "../web/packages/ui/src/html.ts";
 import {
   encodeLiveDeposit,
+  fetchLiveErc20Balance,
+  fetchLivePoolCommitmentExists,
+  fetchLivePoolNextIndex,
   fetchLiveSnapshot,
+  formatUsdc,
   planLiveOperatorShield,
   planLiveShieldDeposit,
 } from "../web/packages/ui/src/live-deposit.ts";
@@ -21,6 +25,7 @@ import { DEFAULT_ZKEY } from "./operator-prove.mjs";
 import {
   NOTE_SECRET_PATH,
   persistLiveCircuitNote,
+  persistLiveCircuitWithdraw,
   planLiveCircuitTransact,
   planUnusedLiveCircuitDeposit,
   proveLiveCircuit,
@@ -42,6 +47,14 @@ const ROUTES = [
 
 const APP_A = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const EXPECTED_CHAIN = 31337;
+const GRANTED_AUDIT_FIELDS = [
+  "amount",
+  "commitment",
+  "user",
+  "publicRecipient",
+  "applicationPolicyVersion",
+  "hazePolicyVersion",
+];
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -91,12 +104,54 @@ export function planOperatorCommercial(input = {}) {
   };
 }
 
+function notePrivateUsdc(note) {
+  if (note?.value == null) {
+    return "0.00";
+  }
+  return formatUsdc(note.value);
+}
+
+function auditEnvelopeFromPlan(plan, note = plan?.note) {
+  const rawAmount = plan?.intent?.publicAmount ?? plan?.circom?.publicAmount ?? note?.value;
+  const amount = rawAmount == null ? "0.00" : formatUsdc(rawAmount);
+  return {
+    amount,
+    commitment: note?.commitment ?? "",
+    user: plan?.intent?.user ?? plan?.user ?? "",
+    publicRecipient: plan?.intent?.publicRecipient ?? plan?.publicRecipient ?? "",
+    applicationPolicyVersion: String(
+      plan?.intent?.applicationPolicyVersion ?? plan?.circom?.applicationPolicyVersion ?? 1,
+    ),
+    hazePolicyVersion: String(plan?.intent?.hazePolicyVersion ?? plan?.circom?.hazePolicyVersion ?? 1),
+  };
+}
+
+async function planUnusedLiveCircuitDepositFromChain({ overlay, user, amount }) {
+  const leafIndex = await fetchLivePoolNextIndex(overlay);
+  for (let blinding = 2; blinding < 10_000; blinding += 1) {
+    const planned = planUnusedLiveCircuitDeposit({
+      user,
+      publicAmount: amount,
+      leafIndex,
+      startBlinding: blinding,
+    });
+    if (!(await fetchLivePoolCommitmentExists(overlay, planned.note.commitment))) {
+      return planned;
+    }
+  }
+  throw Object.assign(new Error("could not find an unused live note"), { code: "COMMITMENT_DUPLICATE" });
+}
+
 export function createCommercialHost({
   hostname = "127.0.0.1",
   port = 0,
   operatorProve = false,
   zkeyPath = DEFAULT_ZKEY,
   notePath = NOTE_SECRET_PATH,
+  publicUsdc = "—",
+  privateUsdc = "0.00",
+  poolUsdc = "—",
+  liveChainSync = false,
 } = {}) {
   const theme = readFileSync(join(ROOT, "../web/packages/ui/src/theme.css"), "utf8");
   const shieldLive = readFileSync(join(ROOT, "../web/packages/ui/src/shield-live.js"), "utf8");
@@ -104,6 +159,25 @@ export function createCommercialHost({
   const client = readFileSync(join(ROOT, "../web/packages/ui/src/client.js"), "utf8");
   const plex = readFileSync(join(ROOT, "../web/packages/ui/fonts/plex.css"), "utf8");
   const zkeyExists = existsSync(zkeyPath);
+  let initialPrivate = privateUsdc;
+  let initialNotes = 0;
+  if (existsSync(notePath)) {
+    try {
+      const stored = JSON.parse(readFileSync(notePath, "utf8"));
+      if (stored?.note) {
+        if (stored.spent === true) {
+          const remaining = BigInt(stored.note.value) - BigInt(stored.withdrawal?.amount ?? stored.note.value);
+          initialPrivate = formatUsdc(remaining);
+          initialNotes = remaining > 0n ? 1 : 0;
+        } else {
+          initialPrivate = notePrivateUsdc(stored.note);
+          initialNotes = 1;
+        }
+      }
+    } catch {
+      /* ignore unreadable local vault */
+    }
+  }
   const hatchOpen = () =>
     liveOperatorWithdrawAllowed({
       path: "/withdraw",
@@ -117,9 +191,12 @@ export function createCommercialHost({
     chainId: EXPECTED_CHAIN,
     reviewed: false,
     phase: "idle",
-    notes: 0,
+    notes: initialNotes,
     lastError: "",
     quote: "1.00",
+    publicUsdc,
+    privateUsdc: initialPrivate,
+    poolUsdc,
     admin: {
       manifestHash: "none",
       kmsHealth: "ok",
@@ -131,6 +208,8 @@ export function createCommercialHost({
       boundWallet: "",
       cases: [{ caseId: "case-1", title: "SAR-1" }],
       access: [],
+      rows: [],
+      envelope: null,
     },
     governance: {
       previewTarget: "0x1111111111111111111111111111111111111111",
@@ -185,6 +264,9 @@ export function createCommercialHost({
       notes: state.notes,
       lastError: state.lastError,
       quote: state.quote,
+      publicUsdc: state.publicUsdc,
+      privateUsdc: state.privateUsdc,
+      poolUsdc: state.poolUsdc,
       admin: state.admin,
       audit: state.audit,
       governance: state.governance,
@@ -378,14 +460,50 @@ export function createCommercialHost({
       const body = await readBody(request);
       const allowed = grantForAddress(apiAddress)?.role === "application-auditor" ||
         grantForAddress(apiAddress)?.role === "application-admin";
-      const overreach = Array.isArray(body.fields) && body.fields.includes("plaintext");
+      const fields = Array.isArray(body.fields) ? body.fields : ["commitment"];
+      const overreach = fields.some((field) => !GRANTED_AUDIT_FIELDS.includes(field));
       if (!allowed || overreach) {
         state.audit.access.push({ action: "export", allowed: false });
         send(response, 403, JSON.stringify({ code: "UNAUTHORIZED" }), "application/json");
         return;
       }
+      const envelope = state.audit.envelope ?? { commitment: "0xcc" };
+      const row = {};
+      for (const field of fields) {
+        row[field] = envelope[field] ?? (field === "commitment" ? "0xcc" : "");
+      }
+      state.audit.rows = fields.map((field) => ({ field, value: String(row[field] ?? "") }));
       state.audit.access.push({ action: "export", allowed: true });
-      send(response, 200, JSON.stringify({ ok: true, rows: [{ commitment: "0xcc" }] }), "application/json");
+      send(response, 200, JSON.stringify({ ok: true, rows: [row] }), "application/json");
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/live-balances") {
+      const overlay = sidecarOverlay();
+      try {
+        if (overlay?.broadcast === true) {
+          const holder = overlay.addresses?.HazePool;
+          if (holder) {
+            const pool = await fetchLiveErc20Balance(overlay, holder);
+            state.poolUsdc = pool.formatted;
+          }
+          if (state.address) {
+            const pub = await fetchLiveErc20Balance(overlay, state.address);
+            state.publicUsdc = pub.formatted;
+          }
+        }
+      } catch {
+        /* fail-closed display stays at last known figures */
+      }
+      send(
+        response,
+        200,
+        JSON.stringify({
+          publicUsdc: state.publicUsdc,
+          privateUsdc: state.privateUsdc,
+          poolUsdc: state.poolUsdc,
+        }),
+        "application/json",
+      );
       return;
     }
     if (request.method === "POST" && url.pathname === "/api/governance/preview") {
@@ -409,10 +527,16 @@ export function createCommercialHost({
       }
       try {
         if (hatchOpen()) {
-          const planned = planUnusedLiveCircuitDeposit({
-            user: body.user,
-            publicAmount: Number(body.amount ?? 1_000_000),
-          });
+          const planned = liveChainSync
+            ? await planUnusedLiveCircuitDepositFromChain({
+                overlay,
+                user: body.user,
+                amount: Number(body.amount ?? 1_000_000),
+              })
+            : planUnusedLiveCircuitDeposit({
+                user: body.user,
+                publicAmount: Number(body.amount ?? 1_000_000),
+              });
           const plan = planLiveOperatorShield({
             path: "/shield",
             live: true,
@@ -455,6 +579,8 @@ export function createCommercialHost({
           action: "deposit",
           user: body.user,
           publicAmount: Number(body.amount ?? 1_000_000),
+          leafIndex: body.leafIndex,
+          blinding: body.blinding,
           zkeyPath,
           notePath,
           skipPersist: true,
@@ -487,7 +613,13 @@ export function createCommercialHost({
       const body = await readBody(request);
       try {
         persistLiveCircuitNote({ plan: body.plan, notePath });
-        send(response, 200, JSON.stringify({ allowed: true }), "application/json");
+        state.notes = Math.max(state.notes, 1);
+        state.privateUsdc = notePrivateUsdc(body.plan?.note);
+        state.audit.envelope = auditEnvelopeFromPlan(body.plan);
+        if (!state.audit.cases.some((item) => item.caseId === "case-live-1")) {
+          state.audit.cases.push({ caseId: "case-live-1", title: "Fuji operator shield" });
+        }
+        send(response, 200, JSON.stringify({ allowed: true, privateUsdc: state.privateUsdc }), "application/json");
       } catch (error) {
         send(
           response,
@@ -516,6 +648,9 @@ export function createCommercialHost({
       }
       try {
         const stored = JSON.parse(readFileSync(notePath, "utf8"));
+        if (stored?.spent === true) {
+          throw Object.assign(new Error("circuit note has already been withdrawn"), { code: "NOTE_SPENT" });
+        }
         const planned = planLiveCircuitTransact({
           action: "withdraw",
           note: stored.note,
@@ -597,6 +732,35 @@ export function createCommercialHost({
       send(response, 200, JSON.stringify(encodeLiveWithdraw(body)), "application/json");
       return;
     }
+    if (request.method === "POST" && url.pathname === "/api/live-withdraw/persist") {
+      if (!hatchOpen()) {
+        send(response, 200, JSON.stringify({ allowed: false, reason: "KEYS_MISSING" }), "application/json");
+        return;
+      }
+      const body = await readBody(request);
+      try {
+        const stored = persistLiveCircuitWithdraw({
+          plan: body.plan,
+          receipt: body.receipt,
+          notePath,
+        });
+        state.privateUsdc = "0.00";
+        state.notes = 0;
+        state.audit.envelope = auditEnvelopeFromPlan(body.plan, stored.note);
+        if (!state.audit.cases.some((item) => item.caseId === "case-live-1")) {
+          state.audit.cases.push({ caseId: "case-live-1", title: "Fuji operator withdraw" });
+        }
+        send(response, 200, JSON.stringify({ allowed: true, privateUsdc: state.privateUsdc }), "application/json");
+      } catch (error) {
+        send(
+          response,
+          200,
+          JSON.stringify({ allowed: false, reason: error?.code ?? "WITNESS_INVALID" }),
+          "application/json",
+        );
+      }
+      return;
+    }
 
     let path = url.pathname;
     if (path === "/") {
@@ -653,6 +817,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const host = await createCommercialHost({
     port: Number(process.env.PORT ?? 3010),
     operatorProve,
+    liveChainSync: operatorProve,
   });
   console.log(`haze commercial ${host.url}`);
 }

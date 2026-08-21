@@ -25,6 +25,11 @@ haze/output/playwright/
 .playwright-cli/
 .playwright-mcp/
 
+# Isolated feature worktrees
+.worktrees/
+haze/.tools
+haze/dev/artifacts/ceremony-private
+
 # Editor / OS
 .DS_Store
 *.swp
