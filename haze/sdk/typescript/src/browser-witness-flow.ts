@@ -32,9 +32,13 @@ export function buildSealedBrowserWitness(input: {
   const actionReference = toHex(secrets.actionReference); const auditSalt = nonzeroField(secrets.auditSalt);
   const x25519 = toHex(deriveBrowserX25519PublicKey(secrets.noteSecret));
   const base = { ...input.witnessInput, secret: noteSecret, blinding, x25519, actionReference, auditSalt };
-  const initial = input.buildWitness(base); const note = initial.note as Record<string, string | number>;
-  const plaintext = encodeRecipientPlaintext({ value: Number(note.value), blinding, notePublicKey: String(note.npk), encryptionKeyHash: String(note.enc), applicationId: input.applicationId, poolVersion: input.poolVersion, commitment: String(note.commitment) });
-  const recipient = envelope("recipient", 0n, sealBrowserHpke({ recipientIkm: secrets.noteSecret, ephemeralSeed: secrets.recipientHpkeSeed, plaintext, info: RECIPIENT_INFO, aad: recipientAad({ ...input, outputCommitment: String(note.commitment) }) }));
+  const initial = input.buildWitness(base);
+  const outCommitment = String(initial.circom?.outputCommitment0 ?? "");
+  const hasOutputNote = outCommitment !== "" && outCommitment !== "0" && outCommitment !== `0x${"00".repeat(32)}`;
+  const note = initial.note as Record<string, string | number>;
+  const recipient = hasOutputNote
+    ? envelope("recipient", 0n, sealBrowserHpke({ recipientIkm: secrets.noteSecret, ephemeralSeed: secrets.recipientHpkeSeed, plaintext: encodeRecipientPlaintext({ value: Number(note.value), blinding, notePublicKey: String(note.npk), encryptionKeyHash: String(note.enc), applicationId: input.applicationId, poolVersion: input.poolVersion, commitment: String(note.commitment) }), info: RECIPIENT_INFO, aad: recipientAad({ ...input, outputCommitment: String(note.commitment) }) }))
+    : { hash: `0x${"00".repeat(32)}`, bytes: "0x" };
   const draft = input.buildWitness({ ...base, recipientEnvelope0: recipient });
   const auditPlaintext = encodeBrowserAuditRecord(draft.auditFacts, input.caseTag);
   const audit = envelope("audit", input.auditKeyVersion, sealBrowserHpkeToPublicKey({ recipientPublicKey: input.auditPublicKey, ephemeralSeed: secrets.auditHpkeSeed, plaintext: auditPlaintext, info: AUDIT_INFO, aad: browserAuditAad({ chainId: BigInt(input.chainId), pool: hexToBuf(input.pool), poolVersion: hexToBuf(input.poolVersion), applicationId: hexToBuf(input.applicationId), keyVersion: input.auditKeyVersion, auditDataCommitment: hexToBuf(draft.circom.auditDataCommitment), action: draft.auditFacts.action, actionReference: secrets.actionReference }) }));

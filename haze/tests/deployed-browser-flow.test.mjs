@@ -9,7 +9,7 @@ import {
 import { generateBrowserSecrets } from "../sdk/typescript/src/browser-prover.ts";
 import { buildSealedBrowserWitness } from "../sdk/typescript/src/browser-witness-flow.ts";
 import { planFujiWithdrawalDisclosure } from "../sdk/typescript/src/render-disclosure.ts";
-import { buildLiveDepositWitness } from "../dev/operator-circuit-witness.mjs";
+import { buildLiveDepositWitness, buildLiveWithdrawWitness } from "../dev/operator-circuit-witness.mjs";
 
 const HAZE = resolve(import.meta.dirname, "..");
 
@@ -117,6 +117,49 @@ test("browser witness seals real recipient and canonical audit envelopes with on
   });
   assert.equal(result.witness.actionReference, result.witness.auditFacts.actionReference);
   assert.equal(result.witness.envelopes.recipientCiphertextHash0, result.recipientEnvelope.hash);
+  assert.equal(result.witness.envelopes.auditCiphertextHash, result.auditEnvelope.hash);
+  assert.notEqual(result.witness.circom.auditDataCommitment, `0x${"00".repeat(32)}`);
+});
+
+test("browser witness seals withdrawal without output notes", () => {
+  let random = 0;
+  const depositWitness = buildSealedBrowserWitness({
+    buildWitness: buildLiveDepositWitness,
+    witnessInput: { pool: "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550", user: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32", applicationId: `0x${"00".repeat(30)}0a11`, poolVersion: `0x${"00".repeat(30)}b001`, publicAmount: 1_000_000, applicationPolicyVersion: 8, hazePolicyVersion: 1 },
+    chainId: 43113,
+    pool: "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550",
+    poolVersion: `0x${"00".repeat(30)}b001`, applicationId: `0x${"00".repeat(30)}0a11`,
+    auditPublicKey: Uint8Array.from("2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04".match(/../g), (byte) => Number.parseInt(byte, 16)),
+    auditKeyVersion: 1n, caseTag: new TextEncoder().encode("D7-DEPOSIT"),
+    browserCrypto: { getRandomValues(bytes) { bytes.fill(++random); return bytes; } },
+  });
+
+  const result = buildSealedBrowserWitness({
+    buildWitness: buildLiveWithdrawWitness,
+    witnessInput: {
+      pool: "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550",
+      user: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+      applicationId: `0x${"00".repeat(30)}0a11`,
+      poolVersion: `0x${"00".repeat(30)}b001`,
+      publicAmount: 1_000_000,
+      applicationPolicyVersion: 8,
+      hazePolicyVersion: 1,
+      publicRecipient: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+      note: depositWitness.witness.note,
+      treeLeaves: [{ leafIndex: 0, commitment: depositWitness.witness.note.commitment }],
+    },
+    chainId: 43113,
+    pool: "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550",
+    poolVersion: `0x${"00".repeat(30)}b001`,
+    applicationId: `0x${"00".repeat(30)}0a11`,
+    auditPublicKey: Uint8Array.from("2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04".match(/../g), (byte) => Number.parseInt(byte, 16)),
+    auditKeyVersion: 1n,
+    caseTag: new TextEncoder().encode("D7-WITHDRAWAL"),
+    browserCrypto: { getRandomValues(bytes) { bytes.fill(++random); return bytes; } },
+  });
+
+  assert.equal(result.witness.actionReference, result.witness.auditFacts.actionReference);
+  assert.equal(result.witness.envelopes.recipientCiphertextHash0, `0x${"00".repeat(32)}`);
   assert.equal(result.witness.envelopes.auditCiphertextHash, result.auditEnvelope.hash);
   assert.notEqual(result.witness.circom.auditDataCommitment, `0x${"00".repeat(32)}`);
 });
