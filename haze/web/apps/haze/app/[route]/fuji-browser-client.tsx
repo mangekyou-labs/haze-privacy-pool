@@ -53,7 +53,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
   const begin = useCallback(async () => { if (!vault.current || !wallet) return connect(); try {
     if (!/^(?:0x)?[0-9a-f]{64}$/i.test(AUDIT_KEY)) throw new Error("AUDIT_PUBLIC_KEY_MISSING");
     setTransactionStatus("building_witness"); const activeVault = vault.current; const leaves = await treeLeaves(); const current = await readSnapshot(); const secrets = generateBrowserSecrets();
-    const isWithdrawal = route === "withdraw"; const deposit = (await activeVault.list()).find((item) => item.kind === "deposit" && item.state === "confirmed" && item.note.spendable !== false);
+    const isWithdrawal = route === "withdraw"; const deposit = (await activeVault.list()).findLast((item) => item.kind === "deposit" && item.state === "confirmed" && item.note.spendable !== false);
     if (isWithdrawal && !deposit) throw new Error("DEPOSIT_NOTE_REQUIRED");
     const common = { pool: POOL, user: wallet, applicationId: APPLICATION_ID, poolVersion: POOL_VERSION, publicAmount: AMOUNT, applicationPolicyVersion: Number(current.membershipVersion), hazePolicyVersion: Number(current.hazePolicyVersion) };
     const witnessInput = isWithdrawal ? { ...common, note: deposit!.note, publicRecipient: wallet, treeLeaves: leaves } : { ...common, leafIndex: leaves.length };
