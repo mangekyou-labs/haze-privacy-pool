@@ -6,6 +6,11 @@ description: Technical implementation notes, patterns, and code guidelines
 
 ## D6-D7 browser continuation (2026-08-21)
 
+- D6 deployment packaging fix: the first monorepo-root Vercel archive reached the remote builder
+  but failed because the local `haze/.tools` symlink was uploaded. `haze/.vercelignore` now excludes
+  local toolchains, dependency/build outputs, Playwright state, environment files, and
+  ceremony-private artifacts. A focused deployment-config test locks the two security-critical
+  exclusions (`.tools` and `dev/artifacts/ceremony-private`).
 - In progress: browser operation randomness now produces independent note secret, blinding,
   action reference, audit salt, recipient HPKE seed, and audit HPKE seed.
 - Added a browser-safe Fuji orchestration boundary for policy-authority membership-root updates and

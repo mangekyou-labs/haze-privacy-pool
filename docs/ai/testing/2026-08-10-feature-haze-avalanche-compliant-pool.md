@@ -8,6 +8,9 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
 
 ## Deployed Fuji continuation evidence (2026-08-21)
 
+- [x] D6 Vercel packaging TDD: `tests/vercel-deployment.test.mjs` first failed `ENOENT` while
+  `.vercelignore` was absent. It passes after excluding `.tools`, ceremony-private material,
+  environment files, local dependency/build outputs, and Playwright state from deployment uploads.
 - [x] D7 continuation red/green: deployed-browser tests first failed on the absent browser Fuji
   orchestration module, then pass for authority-only membership update, successful-receipt wait,
   post-update version/root binding, approval receipt ordering, final preflight, persistence before

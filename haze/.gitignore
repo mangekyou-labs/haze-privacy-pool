@@ -6,3 +6,4 @@ contracts/out/
 .playwright/
 output/playwright/
 
+.vercel

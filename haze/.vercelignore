@@ -1,0 +1,10 @@
+.env
+.env.*
+.tools
+.playwright
+node_modules
+target
+contracts/cache
+contracts/out
+dev/artifacts/ceremony-private
+output/playwright
