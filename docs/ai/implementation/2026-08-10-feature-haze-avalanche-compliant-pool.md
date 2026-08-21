@@ -1429,14 +1429,15 @@ The feature is ready to push as a **development / library** checkpoint. It is **
   the Node fallback. No localhost, `?live=1`, server-side proving, or filesystem recovery path was added.
 - D7.1 Candidate Hardening complete:
   - Extracted wallet-confirmation logic into importable internal helper `haze/dev/wallet-confirmation-helper.mjs`. Added bounded retries for both already-visible MetaMask alerts and alerts that race confirmation clicks, while propagating unrelated click errors. Covered by `haze/tests/wallet-confirmation-helper.test.mjs`.
-  - Introduced shared default disclosure origin `DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure.onrender.com"` in `haze/sdk/typescript/src/render-disclosure.ts`. Aligned `next.config.ts` Content-Security-Policy and `fuji-browser-client.tsx` to use this fallback.
+  - Introduced shared default disclosure origin `DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure.onrender.com"` and default audit public key `DEFAULT_HAZE_AUDIT_PUBLIC_KEY = "0x2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04"` in `haze/sdk/typescript/src/render-disclosure.ts`. Aligned `next.config.ts` Content-Security-Policy and `fuji-browser-client.tsx` to use these fallbacks.
   - Made disclosure acceptance fail closed: requires `disclosureStatus === "success"`, response `ok: true`, and HTTP 2xx before returning success evidence.
   - Extended evidence format with `candidateGitSha` and `vercelDeploymentId`.
   - Fund-safe runner state: tracks deposit and withdrawal receipts, preserves session profile on post-deposit failure, and requires spendable note recovery/withdrawal before attempt two.
+  - Attempt 1 diagnosis: in deployed Vercel production without `NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY`, the client defaulted to empty string and failed `AUDIT_PUBLIC_KEY_MISSING` before deposit broadcast. Resolved by introducing `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` fallback.
 
 ### Fresh local evidence
 
-- `npm test` from `haze/`: 324 passed, 0 failed; `circom vector harness ok`.
+- `npm test` from `haze/`: 325 passed, 0 failed; `circom vector harness ok`.
 - `rustup run 1.97.1 cargo test --workspace`: exit 0; two fixture-writing tests ignored, 0 failures.
 - `cargo build --release -p haze-disclosure`: exit 0.
 - `cargo clippy -p haze-disclosure --all-targets -- -D warnings`: exit 0.

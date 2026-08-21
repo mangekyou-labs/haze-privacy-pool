@@ -9,7 +9,7 @@ import { createBrowserOperationVault, createIndexedDbOperationStore, type Browse
 import { createBrowserProver, generateBrowserSecrets } from "../../../../../sdk/typescript/src/browser-prover.ts";
 import { buildSealedBrowserWitness } from "../../../../../sdk/typescript/src/browser-witness-flow.ts";
 import { PRIVATE_TRANSACTION_TOPIC, decodePrivateTransaction, reconcileFujiOperation, recoverFujiOperation, type FujiLog, type FujiReceipt } from "../../../../../sdk/typescript/src/fuji-reconciliation.ts";
-import { DEFAULT_HAZE_DISCLOSURE_ORIGIN, planFujiWithdrawalDisclosure, requestFujiDisclosure } from "../../../../../sdk/typescript/src/render-disclosure.ts";
+import { DEFAULT_HAZE_AUDIT_PUBLIC_KEY, DEFAULT_HAZE_DISCLOSURE_ORIGIN, planFujiWithdrawalDisclosure, requestFujiDisclosure } from "../../../../../sdk/typescript/src/render-disclosure.ts";
 import { buildLiveDepositWitness, buildLiveWithdrawWitness } from "../../../../../dev/operator-circuit-witness.mjs";
 
 const CHAIN_ID = 43113; const CHAIN_HEX = "0xa869";
@@ -19,7 +19,7 @@ const USDC = "0x5425890298aed601595a70AB815c96711a31Bc65";
 const APPLICATION_REGISTRY = "0xcCB53D8430E5c5555c66d56D2747660f97826f9E";
 const POLICY_REGISTRY = "0x7147832d44094DD2a8A28470b9CD8C02e402162b";
 const POLICY_AUTHORITY = "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32";
-const AUDIT_KEY = process.env.NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY ?? "";
+const AUDIT_KEY = process.env.NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY || DEFAULT_HAZE_AUDIT_PUBLIC_KEY;
 const AMOUNT = 1_000_000;
 type Ethereum = { request(input: { method: string; params?: unknown[] }): Promise<unknown> };
 type Vault = Awaited<ReturnType<typeof createBrowserOperationVault>>;

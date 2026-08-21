@@ -1102,13 +1102,13 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 - Disclosure compatibility tests pin the Rust-supported field set and its canonical NUL-delimited hash.
 - Browser graph tests reject Node builtins, localhost/server hatches, and `?live=1`; Next aliases the
   transitive worker dependency to its browser implementation.
-- Fresh gates: Node 324/324 plus Circom vectors; Rust workspace tests green; disclosure release build
+- Fresh gates: Node 325/325 plus Circom vectors; Rust workspace tests green; disclosure release build
   and warning-denying clippy green; SDK and Next production builds green; secret scan and AI DevKit
   feature lint green.
 - D7.1 Candidate Hardening unit tests:
   - `haze/tests/wallet-confirmation-helper.test.mjs`: verifies bounded retries for visible and racing alert modals while propagating unrelated click errors.
-  - `haze/tests/render-disclosure.test.mjs`: verifies `DEFAULT_HAZE_DISCLOSURE_ORIGIN` constant export.
-  - `haze/tests/d7-deployed-acceptance-runner.test.mjs`: verifies candidate Git SHA, Vercel deployment ID, imported helper use, and fail-closed disclosure check (`D7_ACCEPTANCE_FAILED_CLOSED`).
+  - `haze/tests/render-disclosure.test.mjs`: verifies `DEFAULT_HAZE_DISCLOSURE_ORIGIN` and `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` constant exports.
+  - `haze/tests/deployed-browser-flow.test.mjs`: verifies candidate Git SHA, Vercel deployment ID, imported helper use, fail-closed disclosure check, and `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` client fallback.
 
 ## D7 npm Audit Assessment (2026-08-21)
 

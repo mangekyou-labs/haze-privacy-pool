@@ -41,6 +41,7 @@ test("the deployed client composes browser proving, vault, reconciliation, and d
   assert.match(client, /new Worker\(new URL\([^)]*prover-worker/);
   assert.doesNotMatch(client, /\/api\/live-|localhost|127\.0\.0\.1|node:|\bBuffer\b|\bfs\b/);
   assert.match(client, /NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY/);
+  assert.match(client, /DEFAULT_HAZE_AUDIT_PUBLIC_KEY/);
 });
 
 test("the Next worker graph pins web-worker to its browser implementation", () => {

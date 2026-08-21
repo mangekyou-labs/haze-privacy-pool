@@ -652,27 +652,10 @@ filesystem notes, server-side proving, and `?live=1`.
 - [ ] **D7 — Record desktop-Chromium Fuji acceptance and open the release PR.** Capture deposit,
   restart recovery, same-note withdrawal, disclosure, hashes, blocks, receipts, URLs, and commit
   provenance while preserving `haze/deployments/fuji-v1.json` as `broadcast:false`.
-  - 2026-08-21 runner status: focused TDD is green for the production-only origin, exact
-    environment wallet, fresh headed profile, shield/reload/recovery/withdraw ordering, safe
-    transaction observation, independent disclosure status, and redacted evidence schema. D7
-    remains open pending fresh deployed acceptance and release provenance.
-  - The third pre-transaction attempt exposed invalid Next.js document nesting: the route injected
-    `doctype`, `html`, `head`, `body`, and scripts inside a React `<div>`, so Vercel initially
-    rendered the page and then removed it during hydration. Local production-browser verification
-    also found the static CSP blocking Next's inline hydration bootstrap; the repair permits that
-    framework bootstrap and bundles the Plex fonts through Next. The deployment gate exception is
-    authorized only to ship and smoke-test this repair before D7. After that exact repaired SHA is
-    verified, D7 receives a fresh budget of at most three headed attempts; failures require a
-    diagnosis, regression, corrective deployment, and report before any retry.
-  - Post-fix headed attempt 1 reached active browser proving but emitted no deposit transaction
-    before the 20-minute observation deadline (`D7_DEPOSIT_TIMEOUT`). No evidence artifact or D7
-    success claim was produced. Attempt 2 requires a regression-tested 40-minute proving budget and
-    redacted terminal diagnostics, committed and deployed as a new exact SHA before retry.
-  - Post-fix headed attempt 2 stopped before any transaction when MetaMask's `alert-modal` overlay
-    intercepted an underlying confirmation control during vault reconnect. Attempt 3 is the final
-    budgeted run and requires an ordering regression plus explicit alert dismissal before confirmation,
-    committed and deployed as a new exact SHA.
-  - D7.1 Candidate hardening complete: Extracted wallet-confirmation logic into importable internal helper `haze/dev/wallet-confirmation-helper.mjs` with bounded retries for visible and racing alert modals while preserving click error propagation. Exported `DEFAULT_HAZE_DISCLOSURE_ORIGIN` in `haze/sdk/typescript/src/render-disclosure.ts` and aligned Next.js CSP and browser client. Enforced fail-closed disclosure acceptance (`disclosureStatus === "success"`, HTTP 2xx) and extended evidence with candidate SHA and Vercel deployment IDs. All gates pass cleanly (324 Node tests, Rust workspace tests, secret-scan ok, ai-devkit lint ok).
+  - [x] **D7.1 Candidate hardening:** Extracted wallet-confirmation logic into importable internal helper `haze/dev/wallet-confirmation-helper.mjs` with bounded retries for visible and racing alert modals while preserving click error propagation. Exported `DEFAULT_HAZE_DISCLOSURE_ORIGIN` in `haze/sdk/typescript/src/render-disclosure.ts` and aligned Next.js CSP and browser client. Enforced fail-closed disclosure acceptance (`disclosureStatus === "success"`, HTTP 2xx) and extended evidence with candidate SHA and Vercel deployment IDs. All gates pass cleanly (324 Node tests, Rust workspace tests, secret-scan ok, ai-devkit lint ok).
+  - [ ] **D7.2 Candidate deployment:** Run all pre-deployment gates, commit/push candidate SHA, deploy exact SHA to Vercel production, and verify live CSP + hydration.
+  - [ ] **D7.3 Headed acceptance:** Execute production-only Fuji workflow (`/shield`, reload recovery, `/withdraw`, disclosure) under the two-attempt policy.
+  - [ ] **D7.4 Release closeout:** Record evidence, deploy final release SHA, and open draft PR.
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and
