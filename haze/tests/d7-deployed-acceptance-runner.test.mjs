@@ -45,6 +45,8 @@ test("D7 runner dismisses MetaMask alert overlays before confirmation controls",
   const confirm = runner.indexOf('getByTestId("confirm-footer-button")');
   assert.ok(alert >= 0 && confirm > alert);
   assert.match(runner, /alert\.getByRole\("button"\)\.last\(\)/);
+  assert.match(runner, /button\.click\(\{ timeout: 2_000 \}\)/);
+  assert.match(runner, /if \(await alert\.isVisible\(\)\.catch\(\(\) => false\)\) continue/);
 });
 
 test("D7 evidence separates transactions from disclosure and redacts observations", () => {

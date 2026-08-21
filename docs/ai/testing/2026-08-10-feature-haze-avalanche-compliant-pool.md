@@ -1087,6 +1087,10 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 - Post-fix attempt 2 failed before transaction submission when MetaMask's `alert-modal` intercepted
   its confirmation footer. The runner regression requires alert detection/dismissal to precede the
   confirmation locator. Attempt 3 remains the final allowed run; no acceptance claim is recorded.
+- Post-fix attempt 3 exhausted the budget before transaction submission on the same alert overlay.
+  Diagnosis: the overlay appeared between the pre-check and underlying confirmation click. A
+  regression now pins a two-second click bound and post-interception alert recheck, but no fourth
+  attempt is permitted. D7, final evidence, Render deployment, and the release PR remain incomplete.
 - Browser witness tests bind one action reference across witness, audit facts, authorization nonce,
   and real recipient/audit envelope hashes.
 - Membership tests require a successful root-update receipt and the refetched incremented policy

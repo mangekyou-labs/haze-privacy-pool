@@ -672,6 +672,10 @@ filesystem notes, server-side proving, and `?live=1`.
     intercepted an underlying confirmation control during vault reconnect. Attempt 3 is the final
     budgeted run and requires an ordering regression plus explicit alert dismissal before confirmation,
     committed and deployed as a new exact SHA.
+  - Post-fix headed attempt 3, the final permitted attempt, stopped before transaction submission on
+    the same MetaMask overlay. The attempt-2 pre-check raced with the overlay appearing during the
+    confirmation click. D7 remains incomplete; no fourth attempt, success evidence, final Render
+    deployment, or release PR is authorized. A race-safe handler is retained for future authorization.
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and

@@ -89,7 +89,11 @@ async function confirmVisibleWalletAction() {
       if (await dismiss.isVisible().catch(() => false) && await dismiss.isEnabled().catch(() => false)) { await popup.bringToFront(); await dismiss.click({ force: true }); return true; }
     }
     const button = popup.getByTestId("confirm-footer-button").or(popup.getByTestId("confirm-btn")).or(popup.getByTestId("page-container-footer-next")).or(popup.getByRole("button", { name: /^(Confirm|Approve|Next|Sign)$/ })).first();
-    if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) { await popup.bringToFront(); await button.click(); return true; }
+    if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) {
+      await popup.bringToFront();
+      try { await button.click({ timeout: 2_000 }); return true; }
+      catch (error) { if (await alert.isVisible().catch(() => false)) continue; throw error; }
+    }
   }
   return false;
 }

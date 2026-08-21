@@ -1400,6 +1400,10 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 - Post-fix attempt 2 stopped before transaction submission because MetaMask rendered an
   `alert-modal` above the confirmation footer and Playwright correctly refused the obscured click.
   The final-attempt correction detects and dismisses that modal before selecting confirmation controls.
+- Post-fix attempt 3 exhausted the authorized budget on the same overlay because it appeared after
+  the visibility pre-check but during the confirmation click. The retained correction bounds the
+  click to two seconds, rechecks the alert after interception, and returns to the dismissal loop.
+  It has not been used for a fourth attempt; D7 and all success-gated release actions remain blocked.
 - A page-bound observer retains only transaction hash, destination, and four-byte selector. The final
   evidence enriches those observations from Fuji receipts with status, block, decoded matching
   `PrivateTransaction` fields, and Snowtrace links, then writes redacted JSON plus deposit-recovery,
