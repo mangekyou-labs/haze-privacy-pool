@@ -16,9 +16,9 @@ test("Next layout imports only global application styles", () => {
   assert.doesNotMatch(layout, /dangerouslySetInnerHTML|<script\b/i);
 });
 
-test("Next CSP permits the framework bootstrap and Vercel Blob store proving artifacts", () => {
+test("Next CSP permits the framework bootstrap, WebAssembly proving, and Vercel Blob store proving artifacts", () => {
   const nextConfig = readFileSync(new URL("../web/apps/haze/next.config.ts", import.meta.url), "utf8");
-  assert.match(nextConfig, /script-src 'self' 'unsafe-inline'/);
+  assert.match(nextConfig, /script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval'/);
   assert.match(nextConfig, /connect-src[^;]*https:\/\/\*\.public\.blob\.vercel-storage\.com/);
   assert.match(nextConfig, /connect-src[^;]*https:\/\/\*\.vercel-storage\.com/);
 });
