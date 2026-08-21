@@ -1364,6 +1364,39 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 
 ## D7 Browser Spend Implementation (2026-08-21, uncommitted)
 
+- Replaced the legacy withdrawal-only live runner with a D7 production acceptance runner locked to
+  `https://haze-mu-flax.vercel.app`. It rejects every alternate origin, accepts the exact policy
+  authority key only through `PRIVATE_KEY`, deletes that environment entry after capture, and never
+  records key material, wallet approvals, or transaction payloads.
+- The runner creates one fresh headed Chromium/MetaMask profile, imports and verifies the exact Fuji
+  authority wallet, performs `/shield`, reloads after the persisted deposit hash, records encrypted
+  IndexedDB recovery, then performs `/withdraw` against that same profile and requests wallet-scoped
+  disclosure without conflating its result with transaction confirmation.
+- Attempt 1 exposed an environment compatibility edge before browser launch: `PRIVATE_KEY` was a
+  valid unprefixed 32-byte hex value. A focused regression now requires both prefixed and unprefixed
+  forms; the runner validates either and adds the prefix only to the in-memory MetaMask import value.
+- Attempt 2 exposed a MetaMask navigation compatibility edge before any Fuji transaction: the
+  imported-account flow did not return to the account home expected by dappwright's network helper.
+  The runner now unwinds through current back/escape controls until the account-options control is
+  visible before switching networks. This correction is locally regression-tested but was not used
+  for a third live attempt because D7 explicitly caps deployed acceptance at two attempts.
+- The subsequent non-transactional deployed inspection is recorded as the third pre-transaction
+  failure: `renderHazePage` supplied a complete standalone document to `dangerouslySetInnerHTML`
+  inside the Next document. Browser parsing and React hydration disagreed, causing `/shield` and
+  `/withdraw` to disappear after initial paint. A production-build Chromium check then exposed a
+  second blocker: the static CSP rejected Next's inline hydration bootstrap. The repair permits
+  that framework bootstrap, resolves Plex font URLs through the imported global stylesheet, adds an application-only fragment,
+  preserves the complete standalone commercial document, emits one Fuji mount slot with no legacy
+  controls or `KEYS_MISSING` state, and portals the sole browser transaction client into that slot.
+  D7 wallet selection is scoped to the named Fuji transaction region and exact connect button.
+- The authorized gate exception permits deploying this verified UI repair before D7 solely to
+  validate the production artifact and non-transactional hydration/reload behavior. Once verified,
+  the post-fix headed budget resets to at most three attempts, with diagnosis, regression, gates,
+  exact-SHA deployment, and reporting required between failures.
+- A page-bound observer retains only transaction hash, destination, and four-byte selector. The final
+  evidence enriches those observations from Fuji receipts with status, block, decoded matching
+  `PrivateTransaction` fields, and Snowtrace links, then writes redacted JSON plus deposit-recovery,
+  withdrawal, and disclosure screenshots under `haze/output/playwright/`.
 - Added browser-random note, blinding, action-reference, audit-salt, and independent recipient/audit
   HPKE seeds. The browser derives the note X25519 public key, seals the recipient record, derives
   canonical audit facts, seals the Rust-compatible CBOR audit record to the published Fuji audit
@@ -1388,10 +1421,12 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 
 ### Fresh local evidence
 
-- `npm test` from `haze/`: 307 passed, 0 failed; `circom vector harness ok`.
+- `npm test` from `haze/`: 312 passed, 0 failed; `circom vector harness ok`.
 - `cargo test --workspace`: exit 0; two fixture-writing tests ignored, no failures.
 - `cargo build --release -p haze-disclosure`: exit 0.
 - `cargo clippy -p haze-disclosure --all-targets -- -D warnings`: exit 0.
 - SDK build and Next production build: exit 0; Next compiled without the prior Node worker warning.
 - `node dev/secret-scan.mjs`: `secret-scan ok`.
-- `npx ai-devkit@latest lint --feature haze-avalanche-compliant-pool`: all checks passed.
+- AI DevKit base and feature lint: all checks passed.
+- `npm audit --json`: six high / zero critical. Reachability and upgrade follow-up are recorded in
+  the testing document; no dependency mutation or force-fix was performed.

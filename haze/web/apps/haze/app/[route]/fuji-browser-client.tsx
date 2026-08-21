@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { functionSelector } from "../../../../../sdk/typescript/src/abi.ts";
 import { encodeBrowserFujiSpend, encodeBrowserGroth16Proof, encodeErc20Approve, encodeMembershipRootUpdate, planBrowserFujiSpend } from "../../../../../sdk/typescript/src/browser-fuji-contracts.ts";
 import { executeFujiBrowserTransaction, updateFujiMembershipRoot } from "../../../../../sdk/typescript/src/browser-fuji-flow.ts";
@@ -30,9 +31,13 @@ function snapshot(app: string, version: string, root: string) { const values = w
 function binding(operation: BrowserOperation, wallet: string) { return { chainId: CHAIN_ID, pool: POOL, poolVersion: POOL_VERSION, applicationId: APPLICATION_ID, user: wallet, action: operation.kind === "deposit" ? 1 : 3, commitment: operation.kind === "deposit" ? String(operation.note.commitment ?? "") : undefined, nullifier: operation.kind === "withdrawal" ? String(operation.note.nullifier ?? "") : undefined, kind: operation.kind, transactionHash: typeof operation.transaction.hash === "string" && operation.transaction.hash !== "pending" ? operation.transaction.hash : undefined } as const; }
 
 export function FujiBrowserClient({ route }: { route: string }) {
+  const [mount, setMount] = useState<HTMLElement | null>(null);
   const [wallet, setWallet] = useState(""); const [transactionStatus, setTransactionStatus] = useState("wallet_disconnected"); const [disclosureStatus, setDisclosureStatus] = useState("not_requested"); const [message, setMessage] = useState("Connect the Fuji policy-authority wallet.");
   const vault = useRef<Vault | undefined>(undefined); const worker = useRef<Worker | undefined>(undefined); const lastWithdrawal = useRef<BrowserOperation | undefined>(undefined);
-  useEffect(() => () => worker.current?.terminate(), []);
+  useEffect(() => {
+    setMount(document.getElementById("fuji-browser-transaction-root"));
+    return () => worker.current?.terminate();
+  }, []);
   const rpc = useCallback((method: string, params: unknown[] = []) => ethereum().request({ method, params }), []);
   const receipt = useCallback(async (hash: string) => { for (let attempt = 0; attempt < 120; attempt += 1) { const found = await rpc("eth_getTransactionReceipt", [hash]) as FujiReceipt | null; if (found) return found; await new Promise((resolve) => setTimeout(resolve, 2_000)); } return undefined; }, [rpc]);
   const readSnapshot = useCallback(async () => snapshot(
@@ -63,5 +68,17 @@ export function FujiBrowserClient({ route }: { route: string }) {
   } catch (error) { setTransactionStatus("error"); setMessage(error instanceof Error ? error.message : "TRANSACTION_FAILED"); } }, [connect, prover, readSnapshot, receipt, route, rpc, treeLeaves, wallet]);
 
   const disclose = useCallback(async () => { const operation = lastWithdrawal.current; const hash = operation?.transaction.hash; if (typeof hash !== "string") return; setDisclosureStatus("requesting"); try { const expiresAt = Math.floor(Date.now() / 1000) + 600; const plan = planFujiWithdrawalDisclosure({ transactionHash: hash, applicationId: APPLICATION_ID, pool: POOL, chainId: CHAIN_ID, expiresAt }); const signature = await rpc("eth_signTypedData_v4", [wallet, JSON.stringify(plan.typedData)]) as string; await requestFujiDisclosure({ origin: process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN ?? "https://haze-fuji-disclosure.onrender.com", body: { transactionHash: hash, applicationId: APPLICATION_ID, requestedFields: plan.requestedFields, expiresAt, signature } }); setDisclosureStatus("success"); } catch (error) { setDisclosureStatus("failed"); setMessage(error instanceof Error ? error.message : "DISCLOSURE_FAILED"); } }, [rpc, wallet]);
-  return <section aria-label="Fuji browser transaction" style={{ margin: "1rem auto", maxWidth: 720, padding: "1rem" }}><p data-transaction-status={transactionStatus}>Transaction: {transactionStatus}</p><p data-disclosure-status={disclosureStatus}>Disclosure: {disclosureStatus}</p><p>{message}</p><button type="button" onClick={begin}>{wallet ? `${route === "withdraw" ? "Withdraw" : "Deposit"} 1 USDC` : "Connect wallet"}</button>{route === "withdraw" && lastWithdrawal.current ? <button type="button" onClick={disclose}>Request wallet-scoped disclosure</button> : null}</section>;
+  if (!mount) return null;
+  return createPortal(
+    <section className="haze-form" aria-label="Fuji browser transaction">
+      <p className="haze-mono" data-transaction-status={transactionStatus}>Transaction: {transactionStatus}</p>
+      <p className="haze-mono" data-disclosure-status={disclosureStatus}>Disclosure: {disclosureStatus}</p>
+      <p className="haze-muted">{message}</p>
+      <div className="haze-actions">
+        <button className="haze-button" type="button" onClick={begin}>{wallet ? `${route === "withdraw" ? "Withdraw" : "Deposit"} 1 USDC` : "Connect wallet"}</button>
+        {route === "withdraw" && lastWithdrawal.current ? <button className="haze-button haze-button-secondary" type="button" onClick={disclose}>Request wallet-scoped disclosure</button> : null}
+      </div>
+    </section>,
+    mount,
+  );
 }

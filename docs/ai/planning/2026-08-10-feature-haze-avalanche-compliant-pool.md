@@ -647,11 +647,23 @@ filesystem notes, server-side proving, and `?live=1`.
 - [x] **D5 — Ship the stateless Rust Render disclosure HTTP adapter.** Expose `/healthz`,
   `/readyz`, and `/v1/fuji/disclosures/withdrawal` with receipt/event/envelope/EIP-712 verification,
   stable errors, and exact-origin CORS.
-- [ ] **D6 — Build and deploy the same commit to Render Free and Vercel production.** Verify
+- [x] **D6 — Build and deploy the same commit to Render Free and Vercel production.** Verify
   deployed artifact bytes and configure bounded Render cold-start retries with no local fallback.
 - [ ] **D7 — Record desktop-Chromium Fuji acceptance and open the release PR.** Capture deposit,
   restart recovery, same-note withdrawal, disclosure, hashes, blocks, receipts, URLs, and commit
   provenance while preserving `haze/deployments/fuji-v1.json` as `broadcast:false`.
+  - 2026-08-21 runner status: focused TDD is green for the production-only origin, exact
+    environment wallet, fresh headed profile, shield/reload/recovery/withdraw ordering, safe
+    transaction observation, independent disclosure status, and redacted evidence schema. D7
+    remains open pending fresh deployed acceptance and release provenance.
+  - The third pre-transaction attempt exposed invalid Next.js document nesting: the route injected
+    `doctype`, `html`, `head`, `body`, and scripts inside a React `<div>`, so Vercel initially
+    rendered the page and then removed it during hydration. Local production-browser verification
+    also found the static CSP blocking Next's inline hydration bootstrap; the repair permits that
+    framework bootstrap and bundles the Plex fonts through Next. The deployment gate exception is
+    authorized only to ship and smoke-test this repair before D7. After that exact repaired SHA is
+    verified, D7 receives a fresh budget of at most three headed attempts; failures require a
+    diagnosis, regression, corrective deployment, and report before any retry.
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and

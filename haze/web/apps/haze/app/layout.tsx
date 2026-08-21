@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import "../../../packages/ui/src/theme.css";
+import "../../../packages/ui/fonts/plex.css";
 
 export const metadata = { title: "Haze" };
 

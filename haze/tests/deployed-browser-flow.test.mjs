@@ -21,6 +21,15 @@ test("the deployed route mounts the browser Fuji client without a live query hat
   const route = source("web/apps/haze/app/[route]/page.tsx");
   assert.match(route, /FujiBrowserClient/);
   assert.doesNotMatch(route, /query\.live|live:\s*query\.live|\?live=1/);
+  assert.match(route, /renderHazeFragment/);
+  assert.doesNotMatch(route, /renderHazePage/);
+});
+
+test("the deployed client portals into the single Fuji renderer mount slot", () => {
+  const client = source("web/apps/haze/app/[route]/fuji-browser-client.tsx");
+  assert.match(client, /createPortal/);
+  assert.match(client, /getElementById\("fuji-browser-transaction-root"\)/);
+  assert.match(client, /return createPortal\(/);
 });
 
 test("the deployed client composes browser proving, vault, reconciliation, and disclosure", () => {

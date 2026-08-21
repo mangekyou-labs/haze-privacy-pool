@@ -1054,6 +1054,32 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 
 ## D7 Browser Spend Coverage (2026-08-21)
 
+- D7 headed-runner TDD red: `node --test tests/d7-deployed-acceptance-runner.test.mjs`
+  failed 3/3 against the withdrawal-only local/query-hatch runner for the intended missing
+  production-origin, route/recovery, and evidence behaviors.
+- D7 headed-runner green/refactor: the same command passes 3/3; `node --check
+  dev/dappwright-live-spend-walk.mjs` and `git diff --check` exit 0. The contract excludes
+  local origins, query hatches, sidecars, filesystem note input, shared key loaders, and
+  operator proving, while requiring separate transaction/disclosure statuses and screenshots.
+- D7 deployed attempt 1 stopped before Chromium launch or Fuji activity with
+  `D7_PRIVATE_KEY_REQUIRED`: the worktree environment contains an unprefixed 64-hex-character key.
+  Corrective TDD first failed 1/3 on missing key normalization, then passed 3/3 after accepting both
+  canonical 32-byte environment forms and normalizing only in memory.
+- D7 deployed attempt 2 launched headed Chromium but stopped before Fuji activity when the current
+  MetaMask UI remained inside imported-account navigation and dappwright timed out waiting for
+  `sort-by-networks`. The two-attempt limit is exhausted; no deposit, withdrawal, or disclosure
+  acceptance claim is recorded. A follow-up regression failed 1/4, then passed 4/4 after requiring
+  an explicit return to account home before Fuji network switching.
+- Third pre-transaction failure: a non-wallet Vercel browser inspection showed `/shield` and
+  `/withdraw` briefly paint and then disappear after hydration. Root cause is the complete HTML
+  document injected inside the Next React tree, compounded by a static CSP that rejected Next's
+  inline hydration bootstrap. Renderer regressions now require a document-free,
+  script-free Next fragment; a complete standalone document; one Fuji mount slot with no legacy
+  wallet/form controls or misleading key state; portal mounting; and a region-scoped exact connect
+  locator; a CSP regression pins the required framework bootstrap policy. Production Chromium now
+  keeps both routes visible across reload with one connect control and zero console errors. The
+  authorized repair-deployment exception precedes D7, after which at most three new
+  headed attempts are allowed under diagnose/fix/redeploy-before-retry rules.
 - Browser witness tests bind one action reference across witness, audit facts, authorization nonce,
   and real recipient/audit envelope hashes.
 - Membership tests require a successful root-update receipt and the refetched incremented policy
@@ -1065,8 +1091,25 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 - Disclosure compatibility tests pin the Rust-supported field set and its canonical NUL-delimited hash.
 - Browser graph tests reject Node builtins, localhost/server hatches, and `?live=1`; Next aliases the
   transitive worker dependency to its browser implementation.
-- Fresh gates: Node 307/307 plus Circom vectors; Rust workspace tests green; disclosure release build
+- Fresh gates: Node 312/312 plus Circom vectors; Rust workspace tests green; disclosure release build
   and warning-denying clippy green; SDK and Next production builds green; secret scan and AI DevKit
   feature lint green.
-- Deployed-browser acceptance was intentionally not run because this implementation-only continuation
-  excluded deployment. D7 is not complete and no deployed acceptance claim is made.
+- Deployed-browser acceptance ran twice under the bounded D7 policy; both attempts stopped before
+  Fuji transaction activity. D7 is not complete and no deployed acceptance claim is made.
+
+## D7 npm Audit Assessment (2026-08-21)
+
+- `npm audit --json` reports six high-severity dependency findings and no critical findings:
+  `next@15.5.23` through `postcss@8.4.31` and `sharp@0.34.5`, plus `snarkjs@0.7.6`
+  through `bfj@7.1.0`, `jsonpath@1.3.0`, and `underscore@1.13.6`.
+- The application has no runtime `next/image` import and no path that accepts attacker-controlled
+  CSS or image-processing input. The generated `next-env.d.ts` image type reference is not runtime
+  reachability. Upgrade Next/sharp/PostCSS together in a separately tested framework migration.
+- `snarkjs` is used by the SDK prover and ceremony/operator tooling, but repository search found no
+  direct `bfj`, `jsonpath`, or `underscore` application import. The browser uses the dedicated
+  `snarkjs/build/browser.esm.js` worker entry; the vulnerable JSON-processing chain is therefore not
+  demonstrated in the deployed browser or disclosure-service request paths. Upgrade `snarkjs` and
+  revalidate proof vectors/bundles separately.
+- No dependency was changed and no force-fix was run. A newly demonstrated production-reachable
+  exploit path remains a release blocker; on current evidence these findings are tracked follow-up
+  work and do not replace the missing D7 acceptance evidence.

@@ -13,6 +13,7 @@ import type { createHazeSite } from "./site.ts";
 type Site = ReturnType<typeof createHazeSite>;
 
 export type RenderOptions = {
+  mode?: "standalone" | "fuji-browser";
   live?: boolean;
   operatorProve?: boolean;
   zkeyExists?: boolean;
@@ -235,7 +236,8 @@ function governanceWorkspace(options: RenderOptions) {
   </div>`;
 }
 
-export function renderHazePage(site: Site, path: string, options: RenderOptions = {}) {
+export function renderHazeFragment(site: Site, path: string, options: RenderOptions = {}) {
+  const fujiBrowser = options.mode === "fuji-browser" && (path === "/shield" || path === "/withdraw");
   const decision = site.decide(path);
   const walletStatus = options.walletStatus ?? (options.address ? "connected" : "disconnected");
   const reviewed = Boolean(options.reviewed);
@@ -304,8 +306,9 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
       : `<span class="haze-chip" data-role="${escapeHtml(site.session.role ?? "")}">${escapeHtml(site.session.role ?? "")}</span>`
     : "";
 
-  const walletChip =
-    walletStatus === "connected" && options.address
+  const walletChip = fujiBrowser
+    ? ""
+    : walletStatus === "connected" && options.address
       ? `<span class="haze-chip haze-chip-wallet" data-address="${escapeHtml(options.address)}">${escapeHtml(truncateAddress(options.address))}</span>
          <button class="haze-button haze-button-secondary" type="button" data-action="disconnect">Disconnect</button>`
       : `<button class="haze-button" type="button" data-action="connect">Connect wallet</button>`;
@@ -323,7 +326,7 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
           `<div class="haze-banner" role="alert" data-code="wrong-chain">${humanStatus("wrong-chain")} <button class="haze-button" type="button" data-action="switch-network">Switch network</button></div>`,
         ]
       : []),
-    ...strip
+    ...(!fujiBrowser ? strip : [])
       .filter(
         (item) =>
           item.code === "live-sidecar" ||
@@ -336,9 +339,11 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
       ),
   ].join("");
 
-  const warningsMarkup = reviewPanel(site, path, reviewed);
+  const warningsMarkup = fujiBrowser ? "" : reviewPanel(site, path, reviewed);
 
-  const body = !decision.ok
+  const body = fujiBrowser
+    ? `<div id="fuji-browser-transaction-root"></div>`
+    : !decision.ok
     ? `<p>${deniedCopy}</p>`
     : path === "/admin"
       ? adminWorkspace(options)
@@ -350,10 +355,40 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
 
   const title = TITLES[path] ?? path.slice(1);
 
-  const statusChips = strip
+  const statusChips = (fujiBrowser ? [] : strip)
     .map((item) => `<span class="haze-chip" data-code="${item.code}">${escapeHtml(item.message)}</span>`)
     .join("");
 
+  return `<a class="haze-skip" href="#content">Skip to content</a>
+  <div class="haze-shell" data-origin="single" data-chrome="${chrome}">
+    <header class="haze-top">
+      <a class="haze-brand" href="${chrome === "dex" ? "/shield" : "/admin"}">Haze</a>
+      <div class="haze-status" role="status">${statusChips}</div>
+      <div class="haze-session">
+        <span class="haze-chip" data-network>${fujiBrowser || options.live ? "Fuji · 43113" : "Local · 31337"}</span>
+        ${workspaceChip}
+        ${walletChip}
+      </div>
+    </header>
+    <main id="content" class="haze-stage">
+      <section class="haze-card" data-card="${chrome === "dex" ? "pool" : "compliance"}">
+        <nav class="haze-dex-tabs" aria-label="${chrome === "dex" ? "Pool" : "Compliance"}">${tabNav}</nav>
+        <h1 class="haze-title">${escapeHtml(title)}</h1>
+        ${chrome === "dex" && !fujiBrowser ? dexBalances(options) : ""}
+        ${banners}
+        ${!fujiBrowser && decision.ok && path !== "/history" && path !== "/admin" && path !== "/audit" && path !== "/governance" ? warningsMarkup : ""}
+        ${body}
+        ${fujiBrowser ? "" : `<p class="haze-mono haze-phase">Phase ${escapeHtml(options.phase ?? "idle")} · Notes ${options.notes ?? 0}</p>
+        <p class="haze-mono" data-error>${escapeHtml(options.lastError ?? "")}</p>`}
+        <nav class="haze-more">${moreNav}</nav>
+      </section>
+    </main>
+  </div>`;
+}
+
+export function renderHazePage(site: Site, path: string, options: RenderOptions = {}) {
+  const title = TITLES[path] ?? path.slice(1);
+  const hatch = hatchAllowed(path, options);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -366,31 +401,7 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
   <style>html{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}</style>
 </head>
 <body>
-  <a class="haze-skip" href="#content">Skip to content</a>
-  <div class="haze-shell" data-origin="single" data-chrome="${chrome}">
-    <header class="haze-top">
-      <a class="haze-brand" href="${chrome === "dex" ? "/shield" : "/admin"}">Haze</a>
-      <div class="haze-status" role="status">${statusChips}</div>
-      <div class="haze-session">
-        <span class="haze-chip" data-network>${options.live ? "Fuji · 43113" : "Local · 31337"}</span>
-        ${workspaceChip}
-        ${walletChip}
-      </div>
-    </header>
-    <main id="content" class="haze-stage">
-      <section class="haze-card" data-card="${chrome === "dex" ? "pool" : "compliance"}">
-        <nav class="haze-dex-tabs" aria-label="${chrome === "dex" ? "Pool" : "Compliance"}">${tabNav}</nav>
-        <h1 class="haze-title">${escapeHtml(title)}</h1>
-        ${chrome === "dex" ? dexBalances(options) : ""}
-        ${banners}
-        ${decision.ok && path !== "/history" && path !== "/admin" && path !== "/audit" && path !== "/governance" ? warningsMarkup : ""}
-        ${body}
-        <p class="haze-mono haze-phase">Phase ${escapeHtml(options.phase ?? "idle")} · Notes ${options.notes ?? 0}</p>
-        <p class="haze-mono" data-error>${escapeHtml(options.lastError ?? "")}</p>
-        <nav class="haze-more">${moreNav}</nav>
-      </section>
-    </main>
-  </div>
+  ${renderHazeFragment(site, path, options)}
   <script src="/client.js" defer></script>
   ${path === "/shield" && options.live ? `<script src="/shield-live.js" defer></script>` : ""}
   ${hatch ? `<script src="/withdraw-live.js" defer></script>` : ""}
