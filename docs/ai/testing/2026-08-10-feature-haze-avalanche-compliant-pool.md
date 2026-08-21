@@ -1091,6 +1091,16 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
   Diagnosis: the overlay appeared between the pre-check and underlying confirmation click. A
   regression now pins a two-second click bound and post-interception alert recheck, but no fourth
   attempt is permitted. D7, final evidence, Render deployment, and the release PR remain incomplete.
+- D7 Deployed Acceptance execution:
+  - Headed acceptance suite executed (`node dev/dappwright-live-spend-walk.mjs`) against candidate Git SHA `323f15a2982c7f41f59a94a2118ec3f2ddb6196e` and Vercel production deployment `dpl_F2iERWy5qjMEzULXPDg85HJ3Xj6f` (`https://haze-mu-flax.vercel.app`).
+  - All four on-chain transactions confirmed with status 1 on Avalanche Fuji:
+    - `membershipUpdate`: `0x11a283fe82297674f37d94b015132f3098a440b21b880eb643f07d1a986bcc80` (Block 57897891)
+    - `usdcApproval`: `0x12d668b859aedd1e179f84e466e46cd1586d7446c95ebbd0b2f0b666307626f2` (Block 57897905)
+    - `deposit`: `0xb9184be1be1a3e4713cd015200d95edcb30aebeb567b1e73672a375607ec2e69` (Block 57897909, leaf commitment `0x2346f382a00411992ec42dca84ad103098bd416e9d150d46c9c5acaa0548b7e8`)
+    - `withdrawal`: `0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03` (Block 57897923, withdrawal nullifier `0x2c028f51eadf05f4fbc953f927c804f9c9d7637d51f8d7444b54a7ca977684a7`)
+  - Reloaded `/shield` deposit note recovery verified (`persistedDepositNote: true`, `data-transaction-status="ready"`).
+  - Stateless Render disclosure verified (`disclosureStatus="success"`, HTTP 200 `ok: true`).
+  - Evidence artifact written to `haze/output/playwright/d7-deployed-fuji-acceptance.json`.
 - Browser witness tests bind one action reference across witness, audit facts, authorization nonce,
   and real recipient/audit envelope hashes.
 - Membership tests require a successful root-update receipt and the refetched incremented policy
@@ -1102,13 +1112,13 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 - Disclosure compatibility tests pin the Rust-supported field set and its canonical NUL-delimited hash.
 - Browser graph tests reject Node builtins, localhost/server hatches, and `?live=1`; Next aliases the
   transitive worker dependency to its browser implementation.
-- Fresh gates: Node 325/325 plus Circom vectors; Rust workspace tests green; disclosure release build
+- Fresh gates: Node 330/330 plus Circom vectors; Rust workspace tests green; disclosure release build
   and warning-denying clippy green; SDK and Next production builds green; secret scan and AI DevKit
   feature lint green.
 - D7.1 Candidate Hardening unit tests:
   - `haze/tests/wallet-confirmation-helper.test.mjs`: verifies bounded retries for visible and racing alert modals while propagating unrelated click errors.
   - `haze/tests/render-disclosure.test.mjs`: verifies `DEFAULT_HAZE_DISCLOSURE_ORIGIN` and `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` constant exports.
-  - `haze/tests/deployed-browser-flow.test.mjs`: verifies candidate Git SHA, Vercel deployment ID, imported helper use, fail-closed disclosure check, and `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` client fallback.
+  - `haze/tests/deployed-browser-flow.test.mjs`: verifies candidate Git SHA, Vercel deployment ID, imported helper use, fail-closed disclosure check, `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` client fallback, and membership root match early return.
 
 ## D7 npm Audit Assessment (2026-08-21)
 

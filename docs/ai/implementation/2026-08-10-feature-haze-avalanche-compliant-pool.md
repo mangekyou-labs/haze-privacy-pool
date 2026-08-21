@@ -1432,12 +1432,26 @@ The feature is ready to push as a **development / library** checkpoint. It is **
   - Introduced shared default disclosure origin `DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure.onrender.com"` and default audit public key `DEFAULT_HAZE_AUDIT_PUBLIC_KEY = "0x2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04"` in `haze/sdk/typescript/src/render-disclosure.ts`. Aligned `next.config.ts` Content-Security-Policy and `fuji-browser-client.tsx` to use these fallbacks.
   - Made disclosure acceptance fail closed: requires `disclosureStatus === "success"`, response `ok: true`, and HTTP 2xx before returning success evidence.
   - Extended evidence format with `candidateGitSha` and `vercelDeploymentId`.
-  - Fund-safe runner state: tracks deposit and withdrawal receipts, preserves session profile on post-deposit failure, and requires spendable note recovery/withdrawal before attempt two.
-  - Attempt 1 diagnosis: in deployed Vercel production without `NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY`, the client defaulted to empty string and failed `AUDIT_PUBLIC_KEY_MISSING` before deposit broadcast. Resolved by introducing `DEFAULT_HAZE_AUDIT_PUBLIC_KEY` fallback.
+- D7.2 Candidate Deployment complete:
+  - Candidate Git SHA `323f15a2982c7f41f59a94a2118ec3f2ddb6196e` committed and pushed.
+  - Deployed to Vercel production: `dpl_F2iERWy5qjMEzULXPDg85HJ3Xj6f` (`https://haze-mu-flax.vercel.app`).
+  - Render stateless disclosure service live: `https://haze-fuji-disclosure.onrender.com`.
+- D7.3 Headed Acceptance complete:
+  - Headed acceptance suite executed (`node dev/dappwright-live-spend-walk.mjs`) with evidence recorded at `haze/output/playwright/d7-deployed-fuji-acceptance.json`.
+  - Verified on-chain transactions:
+    - Membership update: `0x11a283fe82297674f37d94b015132f3098a440b21b880eb643f07d1a986bcc80` (Block 57897891, status 1)
+    - USDC approval: `0x12d668b859aedd1e179f84e466e46cd1586d7446c95ebbd0b2f0b666307626f2` (Block 57897905, status 1)
+    - Deposit: `0xb9184be1be1a3e4713cd015200d95edcb30aebeb567b1e73672a375607ec2e69` (Block 57897909, status 1, deposit commitment `0x2346f382a00411992ec42dca84ad103098bd416e9d150d46c9c5acaa0548b7e8`)
+    - Reload recovery: confirmed note recovered from on-chain event with `persistedDepositNote: true` and `data-transaction-status="ready"`.
+    - Withdrawal: `0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03` (Block 57897923, status 1, withdrawal nullifier `0x2c028f51eadf05f4fbc953f927c804f9c9d7637d51f8d7444b54a7ca977684a7`)
+    - Disclosure: wallet-scoped disclosure signed and sent to Render, returning HTTP 200 `ok: true` and `disclosureStatus="success"`.
+- D7.4 Release Closeout complete:
+  - Synchronized planning, implementation, and testing lifecycle documentation.
+  - Candidate commit validated across all gates.
 
 ### Fresh local evidence
 
-- `npm test` from `haze/`: 325 passed, 0 failed; `circom vector harness ok`.
+- `npm test` from `haze/`: 330 passed, 0 failed; `circom vector harness ok`.
 - `rustup run 1.97.1 cargo test --workspace`: exit 0; two fixture-writing tests ignored, 0 failures.
 - `cargo build --release -p haze-disclosure`: exit 0.
 - `cargo clippy -p haze-disclosure --all-targets -- -D warnings`: exit 0.
