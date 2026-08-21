@@ -1,4 +1,27 @@
+import { keccakHex } from "./abi.ts";
+
 const RETRYABLE = new Set([502, 503, 504]);
+
+const FUJI_DISCLOSURE_FIELDS = ["user", "amount", "counterparty", "tx_hash", "policy_version"] as const;
+
+export function planFujiWithdrawalDisclosure(input: {
+  transactionHash: string; applicationId: string; pool: string; chainId: number; expiresAt: number;
+}) {
+  const requestedFields = [...FUJI_DISCLOSURE_FIELDS];
+  const requestedFieldsHash = keccakHex(new TextEncoder().encode(`${requestedFields.join("\0")}\0`));
+  return {
+    requestedFields,
+    typedData: {
+      types: {
+        EIP712Domain: [{ name: "name", type: "string" }, { name: "version", type: "string" }, { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" }],
+        WithdrawalDisclosure: [{ name: "transactionHash", type: "bytes32" }, { name: "applicationId", type: "bytes32" }, { name: "requestedFieldsHash", type: "bytes32" }, { name: "expiresAt", type: "uint64" }],
+      },
+      primaryType: "WithdrawalDisclosure",
+      domain: { name: "Haze Fuji Disclosure", version: "1", chainId: input.chainId, verifyingContract: input.pool },
+      message: { transactionHash: input.transactionHash, applicationId: input.applicationId, requestedFieldsHash, expiresAt: input.expiresAt },
+    },
+  };
+}
 
 export async function requestFujiDisclosure(options: {
   origin: string;

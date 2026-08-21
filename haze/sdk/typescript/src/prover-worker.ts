@@ -1,7 +1,9 @@
 import { createBrowserWorkerSession } from "./browser-worker-session.ts";
 
 const handle = createBrowserWorkerSession(async () => {
-  const module = await import("snarkjs");
+  // Use the package's browser build explicitly so bundlers cannot select its Node condition.
+  // @ts-expect-error snarkjs does not publish declarations for this browser entry.
+  const module = await import("../../../node_modules/snarkjs/build/browser.esm.js");
   return module.groth16;
 });
 

@@ -3,6 +3,8 @@ import { sha256 } from "@noble/hashes/sha2";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { x25519 } from "@noble/curves/ed25519";
 import { keccak256 } from "./keccak.ts";
+import { ProverError, type DevelopmentProof, type WorkerOutbound } from "./prover-types.ts";
+export { ProverError, type DevelopmentProof, type ProverErrorCode } from "./prover-types.ts";
 
 const KEY_DOMAIN_NAME = "Haze Shielded Account";
 const KEY_DOMAIN_VERSION = "1";
@@ -48,23 +50,6 @@ export const SPEND_PUBLIC_CAMEL = [
   "auditCiphertextHashLo",
 ] as const;
 
-export type ProverErrorCode =
-  | "CANCELLED"
-  | "KEYS_MISSING"
-  | "UNSUPPORTED_RECOVERY"
-  | "ARTIFACT_INVALID"
-  | "WITNESS_INVALID"
-  | "PROOF_INVALID";
-
-export class ProverError extends Error {
-  readonly code: ProverErrorCode;
-  constructor(code: ProverErrorCode) {
-    super(code);
-    this.code = code;
-    this.name = "ProverError";
-  }
-}
-
 export type ShieldedAccountRequest = {
   chainId: number;
   pool: string;
@@ -88,13 +73,6 @@ export type ArtifactSet = {
   circuit: string;
   fixture: string;
   manifest: string;
-};
-
-export type DevelopmentProof = {
-  profile: "development";
-  notForProduction: true;
-  publicValue: number;
-  verified: boolean;
 };
 
 export type OperatorGroth16Proof = {
@@ -529,12 +507,6 @@ export type WorkerInbound = {
   value?: number;
   circom?: Record<string, unknown>;
 };
-
-export type WorkerOutbound =
-  | { type: "cancelled" }
-  | { type: "cleared" }
-  | { type: "proof"; proof: DevelopmentProof; stages: string[] }
-  | { type: "error"; code: string };
 
 /** Worker message handler used by the browser proving worker. */
 export async function handleProverWorkerMessage(session: ProverSession, message: WorkerInbound) {

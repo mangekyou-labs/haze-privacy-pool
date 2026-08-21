@@ -8,6 +8,14 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
 
 ## Deployed Fuji continuation evidence (2026-08-21)
 
+- [x] D7 continuation red/green: deployed-browser tests first failed on the absent browser Fuji
+  orchestration module, then pass for authority-only membership update, successful-receipt wait,
+  post-update version/root binding, approval receipt ordering, final preflight, persistence before
+  broadcast, event reconciliation, and withdrawal-note preservation on incomplete outcomes.
+- [x] D2 continuation red/green: browser-operation randomness first exposed only three values; it now
+  produces six independent 32-byte values for note, blinding, action reference, audit salt, and the
+  separate recipient/audit HPKE channels.
+
 - [x] D2 TDD red: the browser-prover suite failed because `generateBrowserSecrets` was not exported;
   the next red failed because `loadFujiArtifacts` did not exist on the browser prover.
 - [x] D2 green: `node --experimental-strip-types --test tests/browser-prover.test.mjs` passes 13/13.
@@ -1040,3 +1048,22 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
   impact. Track for the next release unless it creates misleading privacy claims.
 - Every defect receives a regression test at the lowest effective layer plus end-to-end coverage when
   it affects a user or compliance workflow.
+
+## D7 Browser Spend Coverage (2026-08-21)
+
+- Browser witness tests bind one action reference across witness, audit facts, authorization nonce,
+  and real recipient/audit envelope hashes.
+- Membership tests require a successful root-update receipt and the refetched incremented policy
+  version before final witness construction.
+- Transaction tests require approval receipt ordering, final preflight, encrypted persistence before
+  pool broadcast, actual hash persistence, and matching receipt/event reconciliation.
+- Withdrawal failure cases cover missing, reverted, and event-mismatched receipts without consuming
+  the deposit note. Recovery covers submitted operations and linked-note consumption only on confirmation.
+- Disclosure compatibility tests pin the Rust-supported field set and its canonical NUL-delimited hash.
+- Browser graph tests reject Node builtins, localhost/server hatches, and `?live=1`; Next aliases the
+  transitive worker dependency to its browser implementation.
+- Fresh gates: Node 307/307 plus Circom vectors; Rust workspace tests green; disclosure release build
+  and warning-denying clippy green; SDK and Next production builds green; secret scan and AI DevKit
+  feature lint green.
+- Deployed-browser acceptance was intentionally not run because this implementation-only continuation
+  excluded deployment. D7 is not complete and no deployed acceptance claim is made.

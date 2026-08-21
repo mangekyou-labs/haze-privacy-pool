@@ -93,7 +93,7 @@ test("the browser worker module graph does not import Node builtins", () => {
   assert.deepEqual(bufferUses, []);
 });
 
-test("browser secrets use browser cryptography for notes, blindings, and HPKE ephemeral keys", () => {
+test("browser secrets use browser cryptography for notes, bindings, and distinct HPKE channels", () => {
   let next = 1;
   const secrets = generateBrowserSecrets({
     getRandomValues(bytes) {
@@ -103,9 +103,12 @@ test("browser secrets use browser cryptography for notes, blindings, and HPKE ep
   });
   assert.equal(secrets.noteSecret.length, 32);
   assert.equal(secrets.blinding.length, 32);
-  assert.equal(secrets.hpkeEphemeralSeed.length, 32);
+  assert.equal(secrets.actionReference.length, 32);
+  assert.equal(secrets.auditSalt.length, 32);
+  assert.equal(secrets.recipientHpkeSeed.length, 32);
+  assert.equal(secrets.auditHpkeSeed.length, 32);
   assert.notDeepEqual([...secrets.noteSecret], [...secrets.blinding]);
-  assert.notDeepEqual([...secrets.blinding], [...secrets.hpkeEphemeralSeed]);
+  assert.equal(new Set(Object.values(secrets).map((bytes) => bytes[0])).size, 6);
 });
 
 test("the browser prover host proves through a worker and reports progress", async () => {

@@ -1,4 +1,3 @@
-import { keccakHex, hexToBuf, uintWord } from "../../../../sdk/typescript/src/abi.ts";
 import { AUTH_TYPE, EIP712_DOMAIN_TYPE, intentStructHash } from "../../../../sdk/typescript/src/eip712.ts";
 import type { ApplicationAuthorizationFields, HazeIntentFields } from "../../../../sdk/typescript/src/eip712.ts";
 import { POOL_SELECTORS } from "../../../../sdk/typescript/src/bindings.ts";
@@ -10,6 +9,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 = `0x${"00".repeat(32)}`;
 
 export type LiveWithdrawWitness = {
+  actionReference: string;
   circom: {
     noteTreeRoot: string;
     applicationPolicyVersion: string;
@@ -119,13 +119,7 @@ export function planLiveOperatorWithdraw(input: {
     hazePolicyVersion: intent.hazePolicyVersion,
     auditDataCommitment: intent.auditDataCommitment,
     auditCiphertextHash: intent.auditCiphertextHash,
-    nonce: keccakHex(
-      Buffer.concat([
-        Buffer.from("haze-fuji-poseidon-withdraw"),
-        hexToBuf(input.user),
-        uintWord(input.now),
-      ]),
-    ),
+    nonce: input.witness.actionReference,
     validAfter: input.now - 1,
     validUntil: input.now + 3600,
   };

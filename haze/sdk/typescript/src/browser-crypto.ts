@@ -29,7 +29,7 @@ function extract(salt: Uint8Array, ikm: Uint8Array) { return hmac(sha256, salt.l
 function expand(prk: Uint8Array, info: Uint8Array, length: number) {
   let previous = new Uint8Array(); const output: Uint8Array[] = [];
   for (let index = 1; output.reduce((n, part) => n + part.length, 0) < length; index += 1) {
-    previous = hmac(sha256, prk, concat(previous, info, Uint8Array.of(index)));
+    previous = Uint8Array.from(hmac(sha256, prk, concat(previous, info, Uint8Array.of(index))));
     output.push(previous);
   }
   return concat(...output).slice(0, length);
@@ -45,6 +45,10 @@ function keypair(ikm: Uint8Array) {
   const prk = labeledExtract(KEM_SUITE, new Uint8Array(), "dkp_prk", ikm);
   const secret = labeledExpand(KEM_SUITE, prk, "sk", new Uint8Array(), 32);
   return { secret, publicKey: x25519.getPublicKey(secret) };
+}
+
+export function deriveBrowserX25519PublicKey(ikm: Uint8Array) {
+  return keypair(ikm).publicKey;
 }
 function schedule(shared: Uint8Array, info: Uint8Array) {
   const empty = new Uint8Array();
@@ -70,8 +74,14 @@ export function openBrowserHpke(input: { recipientIkm: Uint8Array; encapsulatedK
 
 export function sealBrowserHpke(input: { recipientIkm: Uint8Array; ephemeralSeed: Uint8Array; plaintext: Uint8Array; info: Uint8Array; aad: Uint8Array }) {
   const recipient = keypair(input.recipientIkm);
+  return sealBrowserHpkeToPublicKey({ ...input, recipientPublicKey: recipient.publicKey });
+}
+
+/** Seal to a published X25519 recipient key; private recipient IKM must never enter the browser. */
+export function sealBrowserHpkeToPublicKey(input: { recipientPublicKey: Uint8Array; ephemeralSeed: Uint8Array; plaintext: Uint8Array; info: Uint8Array; aad: Uint8Array }) {
+  if (input.recipientPublicKey.length !== 32) fail("ENCODING_INVALID");
   const ephemeral = keypair(input.ephemeralSeed);
-  const context = schedule(sharedSecret(ephemeral.secret, recipient.publicKey, ephemeral.publicKey, recipient.publicKey), input.info);
+  const context = schedule(sharedSecret(ephemeral.secret, input.recipientPublicKey, ephemeral.publicKey, input.recipientPublicKey), input.info);
   return { encapsulatedKey: ephemeral.publicKey, ciphertext: chacha20poly1305(context.key, context.nonce, input.aad).encrypt(input.plaintext) };
 }
 

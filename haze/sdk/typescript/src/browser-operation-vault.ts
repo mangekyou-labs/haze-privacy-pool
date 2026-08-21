@@ -172,6 +172,20 @@ export async function createBrowserOperationVault(options: {
       await transition(id, "submitted", transaction);
       return broadcast();
     },
+    async recordSubmittedHash(id: string, hash: string): Promise<BrowserOperation> {
+      const operation = operations.find((candidate) => candidate.id === id);
+      if (!operation || operation.state !== "submitted") throw new Error("INVALID_STATE");
+      operation.transaction = { ...operation.transaction, hash };
+      await persist();
+      return structuredClone(operation);
+    },
+    async consumeConfirmedNote(id: string): Promise<BrowserOperation> {
+      const operation = operations.find((candidate) => candidate.id === id);
+      if (!operation || operation.state !== "confirmed") throw new Error("INVALID_STATE");
+      operation.note = { ...operation.note, spendable: false };
+      await persist();
+      return structuredClone(operation);
+    },
   };
 }
 

@@ -145,8 +145,12 @@ export {
   encodeBrowserEnvelope,
   openBrowserHpke,
   sealBrowserHpke,
+  sealBrowserHpkeToPublicKey,
+  deriveBrowserX25519PublicKey,
 } from "./browser-crypto.ts";
 export type { BrowserEnvelope } from "./browser-crypto.ts";
+export { encodeBrowserAuditRecord } from "./browser-audit.ts";
+export type { BrowserAuditFacts } from "./browser-audit.ts";
 export {
   createBrowserOperationVault,
   createIndexedDbOperationStore,
@@ -167,7 +171,10 @@ export {
   recoverFujiOperation,
 } from "./fuji-reconciliation.ts";
 export type { FujiLog, FujiReceipt, FujiRpc } from "./fuji-reconciliation.ts";
-export { requestFujiDisclosure } from "./render-disclosure.ts";
+export { planFujiWithdrawalDisclosure, requestFujiDisclosure } from "./render-disclosure.ts";
+export { executeFujiBrowserTransaction, updateFujiMembershipRoot } from "./browser-fuji-flow.ts";
+export { buildSealedBrowserWitness } from "./browser-witness-flow.ts";
+export { encodeBrowserFujiSpend, encodeBrowserGroth16Proof, encodeErc20Approve, encodeMembershipRootUpdate, planBrowserFujiSpend } from "./browser-fuji-contracts.ts";
 export type {
   ArtifactCache,
   BrowserProverConfig,

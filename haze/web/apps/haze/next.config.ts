@@ -1,8 +1,14 @@
 import type { NextConfig } from "next";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@haze-avalanche/ui"],
   poweredByHeader: false,
+  webpack(config) {
+    config.resolve.alias["web-worker"] = resolve(dirname(fileURLToPath(import.meta.url)), "../../../node_modules/web-worker/cjs/browser.js");
+    return config;
+  },
   async headers() {
     const disclosureOrigin = process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN;
     const disclosureConnect = disclosureOrigin?.startsWith("https://") ? ` ${disclosureOrigin}` : "";

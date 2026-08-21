@@ -76,6 +76,21 @@ test("live deposit rebind changes pool-bound fields and keeps the sentinel block
   assert.equal(note.secret, `0x${"00".repeat(31)}01`);
 });
 
+test("browser-planned witnesses bind the post-update application policy version", () => {
+  const { circom } = buildLiveDepositWitness({
+    pool: LIVE_POOL,
+    user: LIVE_OPERATOR,
+    applicationId: LIVE_APP,
+    poolVersion: LIVE_POOL_VERSION,
+    applicationPolicyVersion: 2,
+    hazePolicyVersion: 1,
+    secret: 7,
+    blinding: 8,
+  });
+  assert.equal(circom.applicationPolicyVersion, "2");
+  assert.equal(circom.hazePolicyVersion, "1");
+});
+
 test("live withdraw with treeLeaves uses the two-leaf Poseidon root", () => {
   const first = buildLiveDepositWitness({
     pool: LIVE_POOL,

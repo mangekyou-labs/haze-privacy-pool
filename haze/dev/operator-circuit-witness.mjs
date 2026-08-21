@@ -138,7 +138,7 @@ export function sentinelBlocklistTree() {
 }
 
 function toHexBytes(bytes) {
-  return `0x${Buffer.from(bytes).toString("hex")}`;
+  return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function dummyRecipientEnvelope(tag) {
@@ -350,6 +350,8 @@ function pairPath(a, b) {
 
 function buildCase(input) {
   const action = input.action;
+  const applicationPolicyVersion = input.applicationPolicyVersion ?? 1;
+  const hazePolicyVersion = input.hazePolicyVersion ?? 1;
   const bindings = {
     pool: input.pool,
     user: input.user,
@@ -429,9 +431,13 @@ function buildCase(input) {
     void screened;
   }
 
-  const recipient0 = outSlots[0].enabled ? dummyRecipientEnvelope(0x11) : { hash: ZERO, bytes: "0x" };
-  const recipient1 = outSlots[1].enabled ? dummyRecipientEnvelope(0x21) : { hash: ZERO, bytes: "0x" };
-  const auditEnvelope = dummyAuditEnvelope();
+  const recipient0 = outSlots[0].enabled
+    ? input.recipientEnvelope0 ?? dummyRecipientEnvelope(0x11)
+    : { hash: ZERO, bytes: "0x" };
+  const recipient1 = outSlots[1].enabled
+    ? input.recipientEnvelope1 ?? dummyRecipientEnvelope(0x21)
+    : { hash: ZERO, bytes: "0x" };
+  const auditEnvelope = input.auditEnvelope ?? dummyAuditEnvelope();
   const rc0 = recipient0.hash;
   const rc1 = recipient1.hash;
   const auditCt = auditEnvelope.hash;
@@ -448,8 +454,8 @@ function buildCase(input) {
   const cm0 = outSlots[0].enabled ? outSlots[0].commitment : ZERO;
   const cm1 = outSlots[1].enabled ? outSlots[1].commitment : ZERO;
 
-  const auditSalt = fieldHex(AUDIT_SALT);
-  const auditCommitment = auditDataCommitment({
+  const auditSalt = input.auditSalt ?? fieldHex(AUDIT_SALT);
+  const auditFacts = {
     chainId: FUJI_CHAIN_ID,
     pool: bindings.pool,
     poolVersion: bindings.poolVersion,
@@ -459,8 +465,8 @@ function buildCase(input) {
     usdc: bindings.usdc,
     publicAmount,
     publicRecipient,
-    applicationPolicyVersion: 1,
-    hazePolicyVersion: 1,
+    applicationPolicyVersion,
+    hazePolicyVersion,
     actionReference: bindings.actionReference,
     inputEnabled: [inSlots[0].enabled ? 1 : 0, inSlots[1].enabled ? 1 : 0],
     inputValues: [inSlots[0].value, inSlots[1].value],
@@ -474,7 +480,8 @@ function buildCase(input) {
     outputCommitments: [cm0, cm1],
     recipientCiphertextHashes: [rc0, rc1],
     auditSalt,
-  });
+  };
+  const auditCommitment = auditDataCommitment(auditFacts);
 
   const intentHash = intentDigest(
     {
@@ -484,8 +491,8 @@ function buildCase(input) {
       poolVersion: bindings.poolVersion,
       action,
       noteTreeRoot,
-      applicationPolicyVersion: 1,
-      hazePolicyVersion: 1,
+      applicationPolicyVersion,
+      hazePolicyVersion,
       applicationMembershipRoot: appTree.root(),
       hazeBlocklistRoot: blockTree.root(),
       inputNullifier0: nf0,
@@ -517,8 +524,8 @@ function buildCase(input) {
     applicationIdHi: appHi,
     applicationIdLo: appLo,
     noteTreeRoot,
-    applicationPolicyVersion: dec(1),
-    hazePolicyVersion: dec(1),
+    applicationPolicyVersion: dec(applicationPolicyVersion),
+    hazePolicyVersion: dec(hazePolicyVersion),
     applicationMembershipRoot: appTree.root(),
     hazeBlocklistRoot: blockTree.root(),
     inputNullifier0: nf0,
@@ -578,6 +585,8 @@ function buildCase(input) {
   const primary = action === DEPOSIT ? outSlots[0] : inSlots[0];
   return {
     circom,
+    auditFacts,
+    actionReference: bindings.actionReference,
     note: {
       value: primary.value,
       secret: primary.secret,
@@ -625,6 +634,13 @@ export function buildLiveDepositWitness(input) {
     poolVersion: input.poolVersion,
     publicAmount: input.publicAmount ?? 1_000_000,
     publicRecipient: ZERO_ADDRESS,
+    applicationPolicyVersion: input.applicationPolicyVersion,
+    hazePolicyVersion: input.hazePolicyVersion,
+    actionReference: input.actionReference,
+    auditSalt: input.auditSalt,
+    recipientEnvelope0: input.recipientEnvelope0,
+    recipientEnvelope1: input.recipientEnvelope1,
+    auditEnvelope: input.auditEnvelope,
     outputs: [
       {
         value: input.value ?? 1_000_000,
@@ -647,6 +663,13 @@ export function buildLiveWithdrawWitness(input) {
     poolVersion: input.poolVersion,
     publicAmount: input.publicAmount ?? note.value,
     publicRecipient: input.publicRecipient ?? input.user,
+    applicationPolicyVersion: input.applicationPolicyVersion,
+    hazePolicyVersion: input.hazePolicyVersion,
+    actionReference: input.actionReference,
+    auditSalt: input.auditSalt,
+    recipientEnvelope0: input.recipientEnvelope0,
+    recipientEnvelope1: input.recipientEnvelope1,
+    auditEnvelope: input.auditEnvelope,
     inputs: [
       {
         value: note.value,

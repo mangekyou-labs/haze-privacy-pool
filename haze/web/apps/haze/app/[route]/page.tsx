@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createHazeSite } from "../../../../packages/ui/src/site.ts";
 import { renderHazePage } from "../../../../packages/ui/src/html.ts";
 import type { Role } from "../../../../../apps/_shared/ux.ts";
+import { FujiBrowserClient } from "./fuji-browser-client.tsx";
 
 const ROUTES = new Set([
   "swap",
@@ -21,7 +22,7 @@ export default async function RoutePage({
   searchParams,
 }: {
   params: Promise<{ route: string }>;
-  searchParams: Promise<{ role?: string; live?: string }>;
+  searchParams: Promise<{ role?: string }>;
 }) {
   const { route } = await params;
   const query = await searchParams;
@@ -34,6 +35,9 @@ export default async function RoutePage({
     role,
     applicationId: "0x0000000000000000000000000000000000000000000000000000000000000a11",
   });
-  const html = renderHazePage(site, `/${route}`, { live: query.live === "1" });
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+  const html = renderHazePage(site, `/${route}`);
+  return <>
+    <div dangerouslySetInnerHTML={{ __html: html }} />
+    {route === "shield" || route === "withdraw" ? <FujiBrowserClient route={route} /> : null}
+  </>;
 }

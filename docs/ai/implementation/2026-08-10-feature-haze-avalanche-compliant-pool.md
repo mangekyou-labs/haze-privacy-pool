@@ -4,6 +4,19 @@ title: Implementation Guide
 description: Technical implementation notes, patterns, and code guidelines
 ---
 
+## D6-D7 browser continuation (2026-08-21)
+
+- In progress: browser operation randomness now produces independent note secret, blinding,
+  action reference, audit salt, recipient HPKE seed, and audit HPKE seed.
+- Added a browser-safe Fuji orchestration boundary for policy-authority membership-root updates and
+  transaction ordering. Membership changes require the exact authority wallet, a successful receipt,
+  and a refetched root with an incremented version. Transaction submission waits for approval,
+  performs the final preflight, persists submitted state before wallet broadcast, and delegates final
+  receipt/event confirmation to reconciliation.
+- Remaining before D6/D7: connect this boundary to the deployed client, construct canonical recipient
+  and audit envelopes, prove/encode/sign deposit and same-note withdrawal, persist/recover complete
+  bindings, issue wallet-scoped disclosure, then run all release and deployed-browser gates.
+
 # Implementation Guide
 
 ## Progress — 2026-08-21 deployed Fuji continuation
@@ -1343,3 +1356,37 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 ### Next phase
 
 `dev-pr` / first commit when the operator is ready. Do not flip SC-09, `fuji-v1.json` `broadcast`, or `mainnet-v1.json` `authorized`.
+
+## D7 Browser Spend Implementation (2026-08-21, uncommitted)
+
+- Added browser-random note, blinding, action-reference, audit-salt, and independent recipient/audit
+  HPKE seeds. The browser derives the note X25519 public key, seals the recipient record, derives
+  canonical audit facts, seals the Rust-compatible CBOR audit record to the published Fuji audit
+  key, and rebuilds the final witness with the real envelope bytes and hashes.
+- Added browser-safe Groth16 proof encoding, Fuji spend ABI encoding, gatekeeper EIP-712 planning,
+  ERC-20 approval encoding, and membership-root update encoding.
+- The Fuji client now reconstructs ordered note leaves from `PrivateTransaction` logs, updates the
+  application membership root with the exact policy-authority wallet, waits for a successful receipt,
+  refetches the incremented version, proves with immutable verified artifacts in a Web Worker, signs
+  in the connected wallet, waits for approval, performs a final `eth_call`, persists submission before
+  broadcast, and confirms only a status-1 receipt with the matching event.
+- Withdrawal uses the persisted deposit note and leaf index, preserves it for missing/reverted/mismatched
+  receipts, and consumes it only after matching confirmation. Submitted operations retain the actual
+  transaction hash for restart recovery.
+- Wallet disclosure uses the exact Rust `WithdrawalDisclosure` typed data and only service-supported
+  fields (`user`, `amount`, `counterparty`, `tx_hash`, `policy_version`). Transaction and disclosure
+  states remain independent, including after recovery.
+- Webpack pins `web-worker` to its browser implementation; the production worker graph no longer pulls
+  the Node fallback. No localhost, `?live=1`, server-side proving, or filesystem recovery path was added.
+- No commit, push, deployment, or ceremony action was performed. D7 remains open until fresh deployed
+  Chromium deposit/restart/withdraw/disclosure evidence exists.
+
+### Fresh local evidence
+
+- `npm test` from `haze/`: 307 passed, 0 failed; `circom vector harness ok`.
+- `cargo test --workspace`: exit 0; two fixture-writing tests ignored, no failures.
+- `cargo build --release -p haze-disclosure`: exit 0.
+- `cargo clippy -p haze-disclosure --all-targets -- -D warnings`: exit 0.
+- SDK build and Next production build: exit 0; Next compiled without the prior Node worker warning.
+- `node dev/secret-scan.mjs`: `secret-scan ok`.
+- `npx ai-devkit@latest lint --feature haze-avalanche-compliant-pool`: all checks passed.

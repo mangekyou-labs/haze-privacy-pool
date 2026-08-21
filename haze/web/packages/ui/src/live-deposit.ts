@@ -66,6 +66,7 @@ export type LiveShieldPlan = {
 };
 
 export type LiveCircuitWitness = {
+  actionReference: string;
   circom: {
     noteTreeRoot: string;
     applicationPolicyVersion: string;
@@ -99,7 +100,7 @@ function asBytes32(value: string) {
 function encodeBytes(hex: string) {
   const raw = hexToBuf(hex === "0x" ? "0x" : hex);
   const padded = Buffer.alloc(Math.ceil(raw.length / 32) * 32);
-  raw.copy(padded);
+  padded.set(raw);
   return Buffer.concat([uintWord(raw.length), padded]);
 }
 
@@ -524,13 +525,7 @@ export function planLiveOperatorShield(input: {
     hazePolicyVersion: intent.hazePolicyVersion,
     auditDataCommitment: intent.auditDataCommitment,
     auditCiphertextHash: intent.auditCiphertextHash,
-    nonce: keccakHex(
-      Buffer.concat([
-        Buffer.from("haze-fuji-poseidon-deposit"),
-        hexToBuf(input.user),
-        uintWord(input.now),
-      ]),
-    ),
+    nonce: input.witness.actionReference,
     validAfter: input.now - 1,
     validUntil: input.now + 3600,
   };

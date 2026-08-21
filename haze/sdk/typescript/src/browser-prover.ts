@@ -4,7 +4,7 @@ import {
   type DevelopmentProof,
   type ProverErrorCode,
   type WorkerOutbound,
-} from "./prover-session.ts";
+} from "./prover-types.ts";
 
 export type CircuitArtifactManifest = {
   profile: string;
@@ -79,7 +79,10 @@ export function generateBrowserSecrets(
   return {
     noteSecret: random32(),
     blinding: random32(),
-    hpkeEphemeralSeed: random32(),
+    actionReference: random32(),
+    auditSalt: random32(),
+    recipientHpkeSeed: random32(),
+    auditHpkeSeed: random32(),
   };
 }
 

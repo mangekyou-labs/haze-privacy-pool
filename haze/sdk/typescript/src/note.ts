@@ -1,4 +1,3 @@
-import { rejectLowOrderX25519 } from "./address.ts";
 import { domainField, poolDomain } from "./domain.ts";
 import { SdkError } from "./errors.ts";
 import { bytes32Limbs, fieldFromHex, fieldFromU128, parseHex } from "./field.ts";
@@ -13,7 +12,20 @@ export function notePublicKey(spendingSecret: string): string {
 }
 
 export function encryptionKeyHash(x25519PublicKey: string): string {
-  rejectLowOrderX25519(x25519PublicKey);
+  const key = parseHex(x25519PublicKey);
+  const lowOrder = new Set([
+    "0".repeat(64), `01${"0".repeat(62)}`,
+    "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+    "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+  ]);
+  if (key.length !== 32) throw new SdkError("ENCODING_INVALID");
+  const raw = Array.from(key, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const canonical = Uint8Array.from(key); canonical[31] &= 0x7f;
+  const canonicalHex = Array.from(canonical, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (lowOrder.has(raw) || lowOrder.has(canonicalHex)) throw new SdkError("FIELD_OUT_OF_RANGE");
   const [hi, lo] = bytes32Limbs(x25519PublicKey);
   return poseidon2HashHex(domainField("haze/avalanche/v1/encryption-key"), [hi, lo]);
 }
@@ -72,11 +84,13 @@ export function encodeRecipientPlaintext(plaintext: {
   applicationId: string;
   poolVersion: string;
   commitment: string;
-}): Buffer {
+}): Uint8Array {
   const value = typeof plaintext.value === "number" ? BigInt(plaintext.value) : plaintext.value;
-  const out = Buffer.alloc(8);
-  out.writeBigUInt64BE(value);
-  return Buffer.concat([
+  const out = new Uint8Array(8);
+  let cursor = value;
+  for (let index = 7; index >= 0; index -= 1) { out[index] = Number(cursor & 255n); cursor >>= 8n; }
+  if (cursor !== 0n) throw new SdkError("FIELD_OUT_OF_RANGE");
+  const parts = [
     out,
     parseHex(plaintext.blinding),
     parseHex(plaintext.notePublicKey),
@@ -84,5 +98,9 @@ export function encodeRecipientPlaintext(plaintext: {
     parseHex(plaintext.applicationId),
     parseHex(plaintext.poolVersion),
     parseHex(plaintext.commitment),
-  ]);
+  ];
+  const encoded = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let offset = 0;
+  for (const part of parts) { encoded.set(part, offset); offset += part.length; }
+  return encoded;
 }

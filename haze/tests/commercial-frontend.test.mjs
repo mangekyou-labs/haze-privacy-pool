@@ -490,6 +490,7 @@ test("operator withdraw hatch encodes transact and stays off the default host", 
     applicationId: overlay.applicationId,
     poolVersion: overlay.poolVersion,
     note: deposit.note,
+    actionReference: `0x${"42".repeat(32)}`,
   });
   const denied = planLiveOperatorWithdraw({
     path: "/send",
@@ -518,6 +519,7 @@ test("operator withdraw hatch encodes transact and stays off the default host", 
   });
   assert.equal(plan.allowed, true);
   assert.equal(plan.intent?.action, 3);
+  assert.equal(plan.authorization?.nonce, witness.actionReference);
   assert.equal(plan.approve, undefined);
   const encoded = encodeLiveWithdraw({
     plan,
@@ -623,10 +625,14 @@ test("hatch live shield plans a Poseidon note; digest shield stays keccak", asyn
     now: 1_700_000_000,
     snapshot,
   });
-  const circuit = planLiveCircuitTransact({
-    action: "deposit",
+  const { buildLiveDepositWitness } = await import("../dev/operator-circuit-witness.mjs");
+  const circuit = buildLiveDepositWitness({
+    pool: overlay.addresses.HazePool,
     user,
+    applicationId: overlay.applicationId,
+    poolVersion: overlay.poolVersion,
     publicAmount: 1_000_000,
+    actionReference: `0x${"24".repeat(32)}`,
   });
   assert.notEqual(digest.intent.outputCommitment0.toLowerCase(), circuit.circom.outputCommitment0.toLowerCase());
   const denied = planLiveOperatorShield({
@@ -655,6 +661,7 @@ test("hatch live shield plans a Poseidon note; digest shield stays keccak", asyn
   assert.equal(hatch.allowed, true);
   assert.equal(hatch.operatorHatch, true);
   assert.equal(hatch.intent.action, 1);
+  assert.equal(hatch.authorization.nonce, circuit.actionReference);
   assert.equal(hatch.intent.outputCommitment0.toLowerCase(), circuit.circom.outputCommitment0.toLowerCase());
   assert.equal(hatch.approve.to.toLowerCase(), overlay.usdc.toLowerCase());
   const published = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.json"), "utf8"));

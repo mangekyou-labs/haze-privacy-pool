@@ -4,10 +4,14 @@ import test from "node:test";
 import {
   browserAuditAad,
   decodeBrowserEnvelope,
+  deriveBrowserX25519PublicKey,
   encodeBrowserEnvelope,
   openBrowserHpke,
   sealBrowserHpke,
+  sealBrowserHpkeToPublicKey,
 } from "../sdk/typescript/src/browser-crypto.ts";
+import { encodeBrowserAuditRecord } from "../sdk/typescript/src/browser-audit.ts";
+import { buildFixtureDepositWitness } from "../dev/operator-circuit-witness.mjs";
 
 const vectors = JSON.parse(readFileSync(new URL("../circuits/vectors/v1/haze-protocol-v1.json", import.meta.url)));
 const named = (name) => vectors.positive.find((entry) => entry.name === name);
@@ -42,6 +46,30 @@ test("browser HPKE seals envelopes that the Rust-compatible receiver recovers", 
   }
 });
 
+test("browser note key derivation exposes only the X25519 public key", () => {
+  const vector = named("recipient_hpke_seal_open");
+  assert.equal(hex(deriveBrowserX25519PublicKey(bytes(vector.recipient_ikm))), vector.recipient_public_key);
+});
+
+test("browser HPKE seals to a published recipient key without receiving private IKM", () => {
+  const vector = named("audit_hpke_seal_open");
+  const sealed = sealBrowserHpkeToPublicKey({
+    recipientPublicKey: bytes(vector.recipient_public_key),
+    ephemeralSeed: bytes(vector.sender_seed),
+    plaintext: bytes(vector.plaintext),
+    info: new TextEncoder().encode(vector.info),
+    aad: bytes(vector.aad),
+  });
+  const opened = openBrowserHpke({
+    recipientIkm: bytes(vector.recipient_ikm),
+    encapsulatedKey: sealed.encapsulatedKey,
+    ciphertext: sealed.ciphertext,
+    info: new TextEncoder().encode(vector.info),
+    aad: bytes(vector.aad),
+  });
+  assert.equal(hex(opened), vector.plaintext);
+});
+
 test("browser envelope framing and audit AAD are canonical and reject trailing bytes", () => {
   const vector = named("audit_hpke_seal_open");
   const envelope = encodeBrowserEnvelope({ purpose: "audit", keyVersion: 1n, encapsulatedKey: bytes(vector.encapsulated_key), ciphertext: bytes(vector.ciphertext) });
@@ -54,4 +82,12 @@ test("browser HPKE rejects wrong AAD", () => {
   const vector = named("audit_hpke_seal_open");
   const aad = bytes(vector.aad); aad[0] ^= 1;
   assert.throws(() => openBrowserHpke({ recipientIkm: bytes(vector.recipient_ikm), encapsulatedKey: bytes(vector.encapsulated_key), ciphertext: bytes(vector.ciphertext), info: new TextEncoder().encode(vector.info), aad }), /CIPHERTEXT_INVALID/);
+});
+
+test("browser audit CBOR matches the frozen Rust canonical record", () => {
+  const vector = named("audit_hpke_seal_open");
+  const witness = buildFixtureDepositWitness();
+  const recipientHash = named("recipient_envelope_hash").hash;
+  const facts = { ...witness.auditFacts, recipientCiphertextHashes: [recipientHash, witness.auditFacts.recipientCiphertextHashes[1]] };
+  assert.equal(hex(encodeBrowserAuditRecord(facts, new TextEncoder().encode("case-1"))), vector.plaintext);
 });
