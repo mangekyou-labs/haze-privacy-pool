@@ -73,6 +73,29 @@ test("membership update waits for success and binds the refetched policy version
   assert.equal(result.membershipVersion, 8n);
 });
 
+test("membership update polls readApplication through temporary RPC replication lag", async () => {
+  let reads = 0;
+  const result = await updateFujiMembershipRoot({
+    membershipRoot: `0x${"12".repeat(32)}`,
+    applicationId: `0x${"34".repeat(32)}`,
+    policyAuthority: "0xed37fd0d6f0f69236e7472b36796e133d20ecc32",
+    wallet: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+    readApplication: async () => {
+      reads += 1;
+      // First read is 'before' (reads=1).
+      // Second and third reads simulate RPC lag returning old version.
+      // Fourth read returns updated version.
+      if (reads <= 3) return { membershipVersion: 7n, membershipRoot: "0xold" };
+      return { membershipVersion: 8n, membershipRoot: `0x${"12".repeat(32)}` };
+    },
+    sendUpdate: async () => "0xupdate",
+    waitReceipt: async () => ({ status: "0x1" }),
+    sleep: async () => {},
+  });
+  assert.equal(result.membershipVersion, 8n);
+  assert.ok(reads >= 4);
+});
+
 test("each browser operation generates six independent random values", () => {
   let value = 0;
   const secrets = generateBrowserSecrets({ getRandomValues(bytes) { bytes.fill(++value); return bytes; } });

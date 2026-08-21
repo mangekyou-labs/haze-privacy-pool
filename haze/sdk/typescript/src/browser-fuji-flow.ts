@@ -10,12 +10,22 @@ export async function updateFujiMembershipRoot(input: {
   readApplication: () => Promise<{ membershipVersion: bigint; membershipRoot: string }>;
   sendUpdate: (applicationId: string, membershipRoot: string) => Promise<string>;
   waitReceipt: (hash: string) => Promise<Receipt | undefined>;
+  sleep?: (ms: number) => Promise<void>;
 }) {
   if (input.wallet.toLowerCase() !== input.policyAuthority.toLowerCase()) throw new Error("POLICY_AUTHORITY_REQUIRED");
   const before = await input.readApplication();
   const hash = await input.sendUpdate(input.applicationId, input.membershipRoot);
   const receipt = await input.waitReceipt(hash);
   if (receipt?.status !== "0x1") throw new Error("MEMBERSHIP_UPDATE_FAILED");
+  const pause = input.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const after = await input.readApplication();
+    if (after.membershipVersion === before.membershipVersion + 1n
+      && after.membershipRoot.toLowerCase() === input.membershipRoot.toLowerCase()) {
+      return after;
+    }
+    await pause(1_000);
+  }
   const after = await input.readApplication();
   if (after.membershipVersion !== before.membershipVersion + 1n
     || after.membershipRoot.toLowerCase() !== input.membershipRoot.toLowerCase()) {

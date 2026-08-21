@@ -3,14 +3,14 @@
   "circuit": "development-equality",
   "worker": true,
   "samples_ms": [
-    0.012,
-    0.023,
-    0.037,
+    0.026,
+    0.029,
+    0.038,
     0.048,
-    0.133
+    0.078
   ],
-  "duration_ms": 0.256,
-  "p95_ms": 0.133,
+  "duration_ms": 0.226,
+  "p95_ms": 0.078,
   "p95_target_ms": 15000,
   "not_for_production": true,
   "spend_keys": "T7.4",
