@@ -44,13 +44,28 @@ export async function executeFujiBrowserTransaction(input: {
   markSubmittedBeforeBroadcast: <T>(id: string, transaction: Record<string, unknown>, broadcast: () => Promise<T>) => Promise<T>;
   recordSubmittedHash?: (id: string, hash: string) => Promise<unknown>;
   reconcile: (receipt: Receipt | undefined) => { confirmed: boolean; noteSpendable?: boolean; event?: unknown };
+  sleep?: (ms: number) => Promise<void>;
 }) {
   if (input.approvalTransaction) {
     const approvalHash = await input.send(input.approvalTransaction);
     const approvalReceipt = await input.waitReceipt(approvalHash);
     if (approvalReceipt?.status !== "0x1") throw new Error("APPROVAL_NOT_SUCCESSFUL");
   }
-  await input.preflight(input.poolTransaction);
+  const pause = input.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  let preflightError: unknown;
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    try {
+      await input.preflight(input.poolTransaction);
+      preflightError = undefined;
+      break;
+    } catch (error) {
+      preflightError = error;
+      await pause(1_000);
+    }
+  }
+  if (preflightError) {
+    throw preflightError;
+  }
   const transactionHash = await input.markSubmittedBeforeBroadcast(
     input.operation.id,
     { hash: "pending", bindings: input.operation.transaction },

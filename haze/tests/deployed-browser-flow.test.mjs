@@ -139,6 +139,30 @@ test("browser transaction persists before broadcast, waits approval, preflights,
   assert.deepEqual(calls, ["approval-send", "approval-receipt", "preflight", "persist:pending", "pool-send", "hash:0xpool", "pool-receipt"]);
 });
 
+test("executeFujiBrowserTransaction retries preflight through temporary RPC replication lag", async () => {
+  let preflightAttempts = 0;
+  const sleepCalls = [];
+  const operation = { id: "op-2", kind: "deposit", state: "ready_to_submit", note: {}, transaction: {} };
+  const result = await executeFujiBrowserTransaction({
+    operation,
+    poolTransaction: { to: "0xpool" },
+    send: async () => "0xpool",
+    waitReceipt: async () => ({ status: "0x1", logs: [{}] }),
+    preflight: async () => {
+      preflightAttempts += 1;
+      if (preflightAttempts < 3) {
+        throw new Error("REPLICATION_LAG");
+      }
+    },
+    markSubmittedBeforeBroadcast: async (_id, _tx, broadcast) => broadcast(),
+    reconcile: () => ({ confirmed: true, event: {} }),
+    sleep: async (ms) => { sleepCalls.push(ms); },
+  });
+  assert.equal(result.confirmed, true);
+  assert.equal(preflightAttempts, 3);
+  assert.deepEqual(sleepCalls, [1_000, 1_000]);
+});
+
 test("browser withdrawal remains spendable when receipt or event reconciliation fails", async () => {
   for (const receipt of [undefined, { status: "0x0", logs: [] }, { status: "0x1", logs: [] }]) {
     const result = await executeFujiBrowserTransaction({
