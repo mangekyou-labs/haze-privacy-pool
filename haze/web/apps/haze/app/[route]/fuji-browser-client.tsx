@@ -18,7 +18,7 @@ const USDC = "0x5425890298aed601595a70AB815c96711a31Bc65";
 const APPLICATION_REGISTRY = "0xcCB53D8430E5c5555c66d56D2747660f97826f9E";
 const POLICY_REGISTRY = "0x7147832d44094DD2a8A28470b9CD8C02e402162b";
 const POLICY_AUTHORITY = "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32";
-const AUDIT_KEY = "2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04";
+const AUDIT_KEY = process.env.NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY ?? "";
 const AMOUNT = 1_000_000;
 type Ethereum = { request(input: { method: string; params?: unknown[] }): Promise<unknown> };
 type Vault = Awaited<ReturnType<typeof createBrowserOperationVault>>;
@@ -46,6 +46,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
   const prover = useCallback(() => { worker.current ??= new Worker(new URL("../../../../../sdk/typescript/src/prover-worker.ts", import.meta.url), { type: "module" }); return createBrowserProver({ worker: worker.current, profile: "fuji-development", expectedArtifactHash: "0x374bb2394da985ab824ce61a95b3b3409b71355139f0a6b16fb8e0bff8e508d5" }); }, []);
 
   const begin = useCallback(async () => { if (!vault.current || !wallet) return connect(); try {
+    if (!/^(?:0x)?[0-9a-f]{64}$/i.test(AUDIT_KEY)) throw new Error("AUDIT_PUBLIC_KEY_MISSING");
     setTransactionStatus("building_witness"); const activeVault = vault.current; const leaves = await treeLeaves(); const current = await readSnapshot(); const secrets = generateBrowserSecrets();
     const isWithdrawal = route === "withdraw"; const deposit = (await activeVault.list()).find((item) => item.kind === "deposit" && item.state === "confirmed" && item.note.spendable !== false);
     if (isWithdrawal && !deposit) throw new Error("DEPOSIT_NOTE_REQUIRED");
