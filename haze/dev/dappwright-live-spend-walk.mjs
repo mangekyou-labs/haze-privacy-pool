@@ -78,6 +78,8 @@ await context.addInitScript(({ registry, usdc, pool }) => {
 }, { registry: APPLICATION_REGISTRY, usdc: USDC, pool: POOL });
 
 const page = await context.newPage();
+page.on("console", (msg) => console.log(`[BROWSER CONSOLE ${msg.type()}]:`, msg.text()));
+page.on("pageerror", (err) => console.error("[BROWSER ERROR]:", err));
 const disclosureResponses = [];
 page.on("response", (response) => { if (response.url().includes("/v1/fuji/disclosures/withdrawal")) disclosureResponses.push({ httpStatus: response.status(), ok: response.ok() }); });
 import { confirmVisibleWalletAction } from "./wallet-confirmation-helper.mjs";
