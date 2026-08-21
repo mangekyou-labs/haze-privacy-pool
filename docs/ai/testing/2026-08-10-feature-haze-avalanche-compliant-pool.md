@@ -1080,6 +1080,10 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
   keeps both routes visible across reload with one connect control and zero console errors. The
   authorized repair-deployment exception precedes D7, after which at most three new
   headed attempts are allowed under diagnose/fix/redeploy-before-retry rules.
+- Post-fix attempt 1 failed `D7_DEPOSIT_TIMEOUT` after the page renderer stayed CPU-active for the
+  full 20-minute observation budget; no deposit transaction or evidence file was observed. The
+  runner regression now pins a 40-minute proving budget and redacted terminal diagnostics before
+  attempt 2. No D7 acceptance claim is recorded from this attempt.
 - Browser witness tests bind one action reference across witness, audit facts, authorization nonce,
   and real recipient/audit envelope hashes.
 - Membership tests require a successful root-update receipt and the refetched incremented policy

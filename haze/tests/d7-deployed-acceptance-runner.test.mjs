@@ -23,6 +23,8 @@ test("D7 runner deposits, reload-recovers, then withdraws in one fresh profile",
   assert.match(runner, /ready|confirmed/);
   assert.match(runner, /sameBrowserProfile:\s*true/);
   assert.match(runner, /persistedDepositNote/);
+  assert.match(runner, /PROVING_TIMEOUT_MS\s*=\s*2_400_000/);
+  assert.match(runner, /observedKinds/);
 });
 
 test("D7 runner scopes wallet connection to the Fuji transaction region", () => {

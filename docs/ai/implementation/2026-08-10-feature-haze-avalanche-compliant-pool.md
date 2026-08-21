@@ -1393,6 +1393,10 @@ The feature is ready to push as a **development / library** checkpoint. It is **
   validate the production artifact and non-transactional hydration/reload behavior. Once verified,
   the post-fix headed budget resets to at most three attempts, with diagnosis, regression, gates,
   exact-SHA deployment, and reporting required between failures.
+- Post-fix attempt 1 remained CPU-active in the Haze renderer through the 20-minute deposit
+  observation window and terminated `D7_DEPOSIT_TIMEOUT` without an observed transaction. The
+  corrective runner doubles the bounded proving window to 40 minutes and emits only route, status,
+  error code, and observed transaction kinds on terminal deposit failure.
 - A page-bound observer retains only transaction hash, destination, and four-byte selector. The final
   evidence enriches those observations from Fuji receipts with status, block, decoded matching
   `PrivateTransaction` fields, and Snowtrace links, then writes redacted JSON plus deposit-recovery,

@@ -664,6 +664,10 @@ filesystem notes, server-side proving, and `?live=1`.
     authorized only to ship and smoke-test this repair before D7. After that exact repaired SHA is
     verified, D7 receives a fresh budget of at most three headed attempts; failures require a
     diagnosis, regression, corrective deployment, and report before any retry.
+  - Post-fix headed attempt 1 reached active browser proving but emitted no deposit transaction
+    before the 20-minute observation deadline (`D7_DEPOSIT_TIMEOUT`). No evidence artifact or D7
+    success claim was produced. Attempt 2 requires a regression-tested 40-minute proving budget and
+    redacted terminal diagnostics, committed and deployed as a new exact SHA before retry.
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and

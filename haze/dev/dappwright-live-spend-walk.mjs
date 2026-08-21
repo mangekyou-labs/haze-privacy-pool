@@ -17,6 +17,7 @@ const POOL = "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550";
 const OUTPUT = join(ROOT, "../output/playwright");
 const SCREENSHOTS = { depositRecovery: join(OUTPUT, "d7-deposit-recovery.png"), withdrawal: join(OUTPUT, "d7-withdrawal.png"), disclosure: join(OUTPUT, "d7-disclosure.png") };
 const EVIDENCE_PATH = join(OUTPUT, "d7-deployed-fuji-acceptance.json");
+const PROVING_TIMEOUT_MS = 2_400_000;
 
 function assertProductionOrigin(value) {
   const url = new URL(value);
@@ -96,12 +97,24 @@ async function connectVault() {
 }
 const observations = () => page.evaluate(() => JSON.parse(localStorage.getItem("haze-d7-transactions") ?? "[]"));
 const setPhase = (value) => page.evaluate((phase) => localStorage.setItem("haze-d7-phase", phase), value);
-const waitForObservation = (kind, timeoutMs = 1_200_000) => until(async () => (await observations()).findLast((item) => item.kind === kind), Boolean, timeoutMs, `D7_${kind.toUpperCase()}_TIMEOUT`);
+const waitForObservation = (kind, timeoutMs = PROVING_TIMEOUT_MS) => until(async () => (await observations()).findLast((item) => item.kind === kind), Boolean, timeoutMs, `D7_${kind.toUpperCase()}_TIMEOUT`);
+async function reportRedactedFailure(error) {
+  const observedKinds = [...new Set((await observations().catch(() => [])).map((item) => item.kind))];
+  console.error(JSON.stringify({
+    code: error instanceof Error ? error.message : "D7_ATTEMPT_FAILED",
+    route: new URL(page.url()).pathname,
+    transactionStatus: await status("data-transaction-status"),
+    disclosureStatus: await status("data-disclosure-status"),
+    observedKinds,
+  }));
+}
 async function reloadAfterDepositHash() { await sleep(300); await page.reload({ waitUntil: "domcontentloaded" }); await page.getByRole("region", { name: "Fuji browser transaction" }).waitFor({ timeout: 45_000 }); await connectVault(); }
 
 mkdirSync(OUTPUT, { recursive: true });
 await openRoute("/shield"); await connectVault(); await setPhase("deposit"); await page.getByRole("button", { name: "Deposit 1 USDC" }).click();
-const depositObservation = await waitForObservation("deposit"); await reloadAfterDepositHash(); const depositReceipt = await waitForReceipt(depositObservation.hash);
+let depositObservation;
+try { depositObservation = await waitForObservation("deposit"); } catch (error) { await reportRedactedFailure(error); await context.close(); throw error; }
+await reloadAfterDepositHash(); const depositReceipt = await waitForReceipt(depositObservation.hash);
 if (await status("data-transaction-status") !== "ready") throw new Error("DEPOSIT_RECOVERY_NOT_READY");
 await page.screenshot({ path: SCREENSHOTS.depositRecovery, fullPage: true });
 
