@@ -96,6 +96,21 @@ test("membership update polls readApplication through temporary RPC replication 
   assert.ok(reads >= 4);
 });
 
+test("membership update returns existing snapshot without sending transaction when root matches", async () => {
+  let sent = false;
+  const result = await updateFujiMembershipRoot({
+    membershipRoot: `0x${"12".repeat(32)}`,
+    applicationId: `0x${"34".repeat(32)}`,
+    policyAuthority: "0xed37fd0d6f0f69236e7472b36796e133d20ecc32",
+    wallet: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+    readApplication: async () => ({ membershipVersion: 9n, membershipRoot: `0x${"12".repeat(32)}` }),
+    sendUpdate: async () => { sent = true; return "0xupdate"; },
+    waitReceipt: async () => ({ status: "0x1" }),
+  });
+  assert.equal(sent, false);
+  assert.equal(result.membershipVersion, 9n);
+});
+
 test("each browser operation generates six independent random values", () => {
   let value = 0;
   const secrets = generateBrowserSecrets({ getRandomValues(bytes) { bytes.fill(++value); return bytes; } });

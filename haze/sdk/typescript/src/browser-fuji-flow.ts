@@ -14,6 +14,7 @@ export async function updateFujiMembershipRoot(input: {
 }) {
   if (input.wallet.toLowerCase() !== input.policyAuthority.toLowerCase()) throw new Error("POLICY_AUTHORITY_REQUIRED");
   const before = await input.readApplication();
+  if (before.membershipRoot.toLowerCase() === input.membershipRoot.toLowerCase()) return before;
   const hash = await input.sendUpdate(input.applicationId, input.membershipRoot);
   const receipt = await input.waitReceipt(hash);
   if (receipt?.status !== "0x1") throw new Error("MEMBERSHIP_UPDATE_FAILED");
