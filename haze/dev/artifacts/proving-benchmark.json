@@ -5,12 +5,12 @@
   "samples_ms": [
     0.01,
     0.012,
-    0.014,
-    0.014,
-    0.025
+    0.015,
+    0.017,
+    0.03
   ],
-  "duration_ms": 0.077,
-  "p95_ms": 0.025,
+  "duration_ms": 0.088,
+  "p95_ms": 0.03,
   "p95_target_ms": 15000,
   "not_for_production": true,
   "spend_keys": "T7.4",

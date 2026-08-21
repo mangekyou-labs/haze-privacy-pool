@@ -9,8 +9,8 @@ export async function confirmVisibleWalletAction({ context, origin, maxRetries =
     if (await alert.isVisible().catch(() => false)) {
       const dismiss = alert.getByRole("button").last();
       if (await dismiss.isVisible().catch(() => false) && await dismiss.isEnabled().catch(() => false)) {
-        await popup.bringToFront();
-        await dismiss.click({ force: true });
+        await popup.bringToFront().catch(() => {});
+        await dismiss.click({ force: true }).catch(() => {});
         return true;
       }
     }
@@ -24,21 +24,26 @@ export async function confirmVisibleWalletAction({ context, origin, maxRetries =
       .first();
 
     if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) {
-      await popup.bringToFront();
+      await popup.bringToFront().catch(() => {});
       for (let attempt = 0; attempt < maxRetries; attempt += 1) {
         try {
-          await button.click({ timeout: 2_000 });
+          await button.click({ timeout: 2_000, force: true });
           return true;
         } catch (error) {
           // If click failed, check if an alert modal appeared/raced the click
           if (await alert.isVisible().catch(() => false)) {
             const dismiss = alert.getByRole("button").last();
             if (await dismiss.isVisible().catch(() => false) && await dismiss.isEnabled().catch(() => false)) {
-              await popup.bringToFront();
-              await dismiss.click({ force: true });
+              await popup.bringToFront().catch(() => {});
+              await dismiss.click({ force: true }).catch(() => {});
               // Continue to next attempt after alert dismissal
               continue;
             }
+          }
+          // If popup was closed or destroyed because MetaMask processed the action, treat as handled
+          const msg = String(error?.message || error);
+          if (msg.includes("Target page, context or browser has been closed") || msg.includes("Execution context was destroyed") || msg.includes("Target closed")) {
+            return true;
           }
           // Unrelated click error: propagate error immediately
           throw error;

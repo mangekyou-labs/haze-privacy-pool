@@ -124,6 +124,15 @@ test("confirmVisibleWalletAction retries when alert races confirmation click", a
   assert.equal(attempts, 2);
 });
 
+test("confirmVisibleWalletAction treats popup closing on confirmation click as handled", async () => {
+  const popup = createMockPopup({ clickError: new Error("locator.click: Target page, context or browser has been closed"), alertOnFail: false });
+  const context = { pages: () => [popup] };
+  const origin = "https://haze-mu-flax.vercel.app";
+
+  const handled = await confirmVisibleWalletAction({ context, origin });
+  assert.equal(handled, true);
+});
+
 test("confirmVisibleWalletAction propagates unrelated click errors when no alert appears", async () => {
   const popup = createMockPopup({ clickError: new Error("Target detached"), alertOnFail: false });
   const context = { pages: () => [popup] };
