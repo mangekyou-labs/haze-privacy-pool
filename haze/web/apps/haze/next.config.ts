@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.avax-test.network${disclosureConnect}; font-src 'self'`,
+              `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.avax-test.network https://*.public.blob.vercel-storage.com https://*.vercel-storage.com${disclosureConnect}; font-src 'self'`,
           },
         ],
       },
