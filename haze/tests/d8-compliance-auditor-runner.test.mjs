@@ -23,8 +23,10 @@ test("D8 bootstrap runner uses Dappwright for MetaMask SIWE on Fuji and exports 
 
 test("D8 production walk runner performs visible investigation against production origin", () => {
   assert.match(walkRunner, /https:\/\/haze-mu-flax\.vercel\.app/);
-  assert.match(walkRunner, /fuji-withdrawal-8218e5a4/);
-  assert.match(walkRunner, /0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03/);
+  assert.match(walkRunner, /D8_RUNTIME_DISCOVERED_CASE_REQUIRED/);
+  assert.match(walkRunner, /runtimeCase\.transactionHash/);
+  assert.doesNotMatch(walkRunner, /fuji-withdrawal-8218e5a4/);
+  assert.doesNotMatch(walkRunner, /0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03/);
   assert.match(walkRunner, /12/);
   assert.match(walkRunner, /D8_INSUFFICIENT_FINALITY/);
   assert.match(walkRunner, /verify-case/);

@@ -9,8 +9,8 @@ description: Technical implementation notes, patterns, and code guidelines
 - Reopened D8 as in progress to reconcile local implementation vs. deployed acceptance evidence.
 - Preserved verified local Rust logic in `haze-disclosure` (EIP-4361 SIWE challenge/verification, opaque hashed sessions, 12-confirmation checking, envelope hashing, in-memory redaction, signed canonical export, hash-chained access logging).
 - Delivered local implementation items:
-  - **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion (Complete locally):** Implemented `FujiLogPoller` in `haze/services/disclosure/src/poller.rs` to scan `HazePool`, detect `PrivateTransaction` withdrawal events, store evidence idempotently, create `pending_finality` cases, and promote to `ready` at 12 confirmations. Updated production startup to seed ONLY the dedicated auditor grant with dynamic case assignment.
-  - **D8.0b / D8.4 React Workstation UX Remediation (Complete locally):** Embedded full-width audit workstation cleanly inside existing Haze shell (`data-card="compliance-audit"`) and `theme.css` tokens (`var(--haze-accent)` `#1f6b62`, IBM Plex font, existing surfaces/borders). Removed neon teal and duplicated headers. Implemented `?case=<id>` deep links, semantic accessible buttons/dialogs with focus trapping, genuine empty states, 5-field disclosure with strict user/counterparty redaction, and comprehensive error states.
+  - **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion (Complete locally):** Production now uses the async PostgreSQL repository and additive `0004` migration for grants, cases, evidence, export counters, access-log heads, and poller checkpoints. Bounded reorg replay and replacement are transactional, RPC/database errors remain visible in checkpoint health, and production startup seeds only the dedicated auditor grant. Real-PostgreSQL restart, idempotency, and concurrent-chain tests pass. Production acceptance remains part of D8.5–D8.7.
+  - **D8.0b / D8.4 React Workstation UX Remediation (Complete locally):** Real Chromium verification covers the actual Next.js client, mobile list-to-detail Back navigation, 390px overflow, hash wrapping, 44px targets, queue arrow navigation, modal Tab trapping/Escape/focus restoration, SIWE session refresh, and deliberate session/error states. Browser payload sanitization restricts disclosure/export data to the five-field contract. Production acceptance remains part of D8.5–D8.7.
 - Open production acceptance deliverables:
   - **D8.5–D8.7 Production E2E & Product Quality Gate:** Execute fresh Fuji deposit→withdraw→auditor SIWE journey with real transaction hashes and separate auditor wallet. Run named `playwright-cli -s=haze-d8` session against production Vercel origin. Reclassify prior screenshots and manifests as local mocked fixtures.
 
@@ -1471,3 +1471,13 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 - AI DevKit base and feature lint (`npx ai-devkit@latest lint --feature haze-avalanche-compliant-pool`): all checks passed.
 - `npm audit --json`: six high / zero critical. Reachability and upgrade follow-up are recorded in
   the testing document; no dependency mutation or force-fix was performed.
+
+### D8 durable-runtime restart (2026-08-22)
+
+- Reopened D8.0b, D8.2, and D8.4 after confirming production still used the mutex-backed fixture
+  store and a volatile poller cursor.
+- Added append-only migration `0004_compliance_runtime.sql` for assignments, event provenance,
+  finality/integrity state, durable evidence, checkpoints, access-log heads, and export counters.
+- Began the async PostgreSQL repository with idempotent grant/case/checkpoint persistence,
+  restart-safe IDs, one-time challenge consumption, sessions, exports, and transaction-serialized
+  access-log chaining. Production wiring and poller integration remain open.

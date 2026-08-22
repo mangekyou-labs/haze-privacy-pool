@@ -133,6 +133,8 @@ fn evidence(config: &FujiDisclosureConfig, plaintext_suffix: &[u8]) -> FujiWithd
         receipt_successful: true,
         transaction_hash: [0x77; 32],
         block_number: 100,
+        block_hash: [0x78; 32],
+        log_index: 0,
         current_block_number: 120,
         pool: config.pool,
         application_id: config.application_id,

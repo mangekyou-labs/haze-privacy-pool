@@ -137,8 +137,9 @@ if (transactions.find((item) => item.kind === "deposit").PrivateTransaction.leng
 if (transactions.find((item) => item.kind === "withdrawal").PrivateTransaction.length !== 1) throw new Error("WITHDRAWAL_EVENT_MISSING");
 const statusHistory = await page.evaluate(() => JSON.parse(localStorage.getItem("haze-d7-status-history") ?? "[]"));
 const persistedDepositNote = statusHistory.some((item) => item.route === "/shield" && item.value === "recovering") && statusHistory.some((item) => item.route === "/shield" && (item.value === "ready" || item.value === "confirmed"));
-const candidateGitSha = process.env.CANDIDATE_GIT_SHA ?? process.env.GIT_SHA ?? "7a27dec";
-const vercelDeploymentId = process.env.VERCEL_DEPLOYMENT_ID ?? "dpl_haze_fuji_prod";
+const candidateGitSha = process.env.CANDIDATE_GIT_SHA ?? process.env.GIT_SHA;
+const vercelDeploymentId = process.env.VERCEL_DEPLOYMENT_ID;
+if (!candidateGitSha || !vercelDeploymentId) throw new Error("D8_EXACT_DEPLOYMENT_IDENTIFIERS_REQUIRED");
 
 const evidence = { schema: "haze-d7-deployed-fuji-acceptance-v1", origin, candidateGitSha, vercelDeploymentId, chainId: 43113, applicationId: APPLICATION_ID, wallet: EXPECTED_WALLET, sameBrowserProfile: true, persistedDepositNote, transactionStatus: await status("data-transaction-status"), disclosureStatus: await status("data-disclosure-status"), disclosure: disclosureResponses.at(-1) ?? { httpStatus: null, ok: false }, transactions, statusHistory, screenshots: SCREENSHOTS };
 writeFileSync(EVIDENCE_PATH, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });

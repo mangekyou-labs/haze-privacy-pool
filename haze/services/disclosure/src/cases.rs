@@ -11,13 +11,8 @@ pub const DEFAULT_FUJI_TX_HASH: &str =
     "0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03";
 
 /// Canonical granted field names.
-pub const DEFAULT_GRANTED_FIELDS: [&str; 5] = [
-    "tx_hash",
-    "amount",
-    "asset",
-    "timestamp",
-    "policy_version",
-];
+pub const DEFAULT_GRANTED_FIELDS: [&str; 5] =
+    ["tx_hash", "amount", "asset", "timestamp", "policy_version"];
 
 /// Explicitly denied field names.
 pub const DEFAULT_DENIED_FIELDS: [&str; 2] = ["user", "counterparty"];
@@ -174,4 +169,3 @@ pub fn seed_default_fuji_case(application_id: [u8; 32]) -> ComplianceCase {
         integrity_status: "verified".to_owned(),
     }
 }
-

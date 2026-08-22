@@ -6,7 +6,7 @@ services:
     rootDir: haze
     buildCommand: cargo build --release -p haze-disclosure
     startCommand: ./target/release/haze-disclosure
-    healthCheckPath: /healthz
+    healthCheckPath: /readyz
     autoDeploy: false
     envVars:
       - key: HAZE_CHAIN_ID
@@ -25,3 +25,20 @@ services:
         sync: false
       - key: HAZE_VERCEL_ORIGIN
         sync: false
+      - key: HAZE_AUDITOR_WALLET
+        sync: false
+      - key: HAZE_DEPLOYMENT_BLOCK
+        sync: false
+      - key: HAZE_POLLER_REPLAY_WINDOW
+        value: "32"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: haze-compliance-fuji
+          property: connectionString
+
+databases:
+  - name: haze-compliance-fuji
+    plan: basic-256mb
+    databaseName: haze_compliance
+    user: haze_disclosure
+    postgresMajorVersion: "16"

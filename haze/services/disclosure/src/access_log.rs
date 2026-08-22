@@ -74,7 +74,11 @@ pub fn verify_access_log_chain(entries: &[ComplianceAccessLogEntry]) -> Result<(
             return Err(DisclosureError::IntegrityFailure);
         }
         let prev_hex = format!("0x{}", hex::encode(prev));
-        if entry.prev_hash != prev_hex && (index > 0 || entry.prev_hash != "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        if entry.prev_hash != prev_hex
+            && (index > 0
+                || entry.prev_hash
+                    != "0x0000000000000000000000000000000000000000000000000000000000000000")
+        {
             return Err(DisclosureError::IntegrityFailure);
         }
 

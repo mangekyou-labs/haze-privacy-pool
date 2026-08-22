@@ -83,9 +83,14 @@ test("Playwright Chromium E2E: unauthenticated caller cannot access /admin or /g
   }
 });
 
-test("Playwright Chromium E2E: interactive React compliance workstation flow with screenshots", async () => {
+test("Playwright Chromium E2E: interactive React compliance workstation flow with screenshots", async (t) => {
   mkdirSync(OUTPUT_DIR, { recursive: true });
-  const host = await createCommercialHost({ port: 0 });
+  const nextOrigin = process.env.HAZE_NEXT_TEST_ORIGIN;
+  if (!nextOrigin) {
+    t.skip("HAZE_NEXT_TEST_ORIGIN is required for the real Next.js browser test");
+    return;
+  }
+  const host = { url: nextOrigin, close: async () => {} };
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
@@ -265,7 +270,7 @@ test("Playwright Chromium E2E: interactive React compliance workstation flow wit
     await page.goto(`${host.url}/audit`);
 
     // Take login screenshot
-    await page.screenshot({ path: join(OUTPUT_DIR, "d8-audit-production-login.png") });
+    await page.screenshot({ path: join(OUTPUT_DIR, "d8-local-fixtures-login.png") });
 
     // 2. Perform Connect & Authenticate SIWE
     const connectSiweBtn = page.locator('button[data-action="connect-siwe"], button:has-text("Connect & Authenticate SIWE")');
@@ -273,15 +278,39 @@ test("Playwright Chromium E2E: interactive React compliance workstation flow wit
       await connectSiweBtn.click();
     }
 
+    await page.waitForSelector('[data-session-status="authenticated"]', { state: "attached" });
+    const caseButton = page.locator('[data-case-id]').first();
+    await caseButton.focus();
+    await page.keyboard.press("ArrowDown");
+    assert.match(page.url(), /case=fuji-withdrawal-8218e5a4/);
+    await page.reload({ waitUntil: "networkidle" });
+    assert.match(page.url(), /case=fuji-withdrawal-8218e5a4/);
+
+    await page.locator('[data-action="verify-case"]').click();
+    await page.waitForSelector(".haze-disclosure-table");
+    await page.locator('[data-action="export-case"]').click();
+    const closeExport = page.locator('[data-action="close-export-modal"]');
+    await closeExport.waitFor({ state: "visible" });
+    assert.equal(await closeExport.evaluate((element) => element === document.activeElement), true);
+    await page.keyboard.press("Tab");
+    assert.equal(await page.locator(".haze-modal").evaluate((modal) => modal.contains(document.activeElement)), true);
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator('[data-action="export-case"]').evaluate((element) => element === document.activeElement), true);
+
     // 3. Verify Workstation is rendered
-    await page.screenshot({ path: join(OUTPUT_DIR, "d8-audit-production-disclosure.png") });
+    await page.screenshot({ path: join(OUTPUT_DIR, "d8-local-fixtures-disclosure.png") });
 
     // Export Modal Screenshot
-    await page.screenshot({ path: join(OUTPUT_DIR, "d8-audit-production-export.png") });
+    await page.screenshot({ path: join(OUTPUT_DIR, "d8-local-fixtures-export.png") });
 
     // 4. Test Mobile view screenshot
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: join(OUTPUT_DIR, "d8-audit-production-mobile.png") });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    const backButton = page.getByRole("button", { name: "Back to assigned cases" });
+    await backButton.click();
+    assert.doesNotMatch(page.url(), /[?&]case=/);
+    assert.equal(await caseButton.isVisible(), true);
+    await page.screenshot({ path: join(OUTPUT_DIR, "d8-local-fixtures-mobile.png") });
 
     // Return to desktop
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -289,6 +318,7 @@ test("Playwright Chromium E2E: interactive React compliance workstation flow wit
     // 5. Generate and write D8 evidence manifest
     const manifest = {
       releaseMilestone: "D8",
+      evidenceClass: "local-fixtures",
       origin: host.url,
       network: "Avalanche Fuji",
       chainId: 43113,
@@ -302,17 +332,17 @@ test("Playwright Chromium E2E: interactive React compliance workstation flow wit
       txCountBefore: "0x0",
       txCountAfter: "0x0",
       screenshots: {
-        login: "d8-audit-production-login.png",
-        disclosure: "d8-audit-production-disclosure.png",
-        export: "d8-audit-production-export.png",
-        mobile: "d8-audit-production-mobile.png",
+        login: "d8-local-fixtures-login.png",
+        disclosure: "d8-local-fixtures-disclosure.png",
+        export: "d8-local-fixtures-export.png",
+        mobile: "d8-local-fixtures-mobile.png",
       },
       verificationTimestamp: new Date().toISOString(),
       status: "PASS",
     };
     const { writeFileSync } = await import("node:fs");
     writeFileSync(
-      join(OUTPUT_DIR, "d8-production-audit-acceptance.json"),
+      join(OUTPUT_DIR, "d8-local-fixtures-audit-acceptance.json"),
       JSON.stringify(manifest, null, 2),
       "utf8",
     );

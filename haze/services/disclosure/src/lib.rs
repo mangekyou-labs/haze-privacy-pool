@@ -2,14 +2,15 @@
 
 #![forbid(unsafe_code)]
 
-mod error;
 pub mod access_log;
 pub mod auth;
 pub mod cases;
+mod error;
 pub mod export;
 pub mod fuji;
 pub mod http;
 pub mod poller;
+pub mod repository;
 pub mod store;
 
 use std::{
@@ -41,7 +42,7 @@ pub const TEST_KEY_REF: &str = "app/audit/v1";
 const EXPORT_TTL_SECS: u64 = 600;
 
 /// Indexed audit ciphertext ready for scoped disclosure.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct StoredAuditRecord {
     /// Stable record identifier.
     pub record_id: [u8; 32],

@@ -156,20 +156,7 @@ fn format_iso_timestamp(secs: u64) -> String {
         };
         let days_in_year = 365 + leap;
         if day_count < days_in_year {
-            let month_days = [
-                31,
-                28 + leap,
-                31,
-                30,
-                31,
-                30,
-                31,
-                31,
-                30,
-                31,
-                30,
-                31,
-            ];
+            let month_days = [31, 28 + leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
             for (i, &md) in month_days.iter().enumerate() {
                 let month = i + 1;
                 if day_count < md {
@@ -194,8 +181,8 @@ pub fn verify_siwe_signature(
     signature_bytes: &[u8; 65],
     expected_wallet: [u8; 20],
 ) -> Result<()> {
-    let recovered = recover_personal(message, signature_bytes)
-        .map_err(|_| DisclosureError::InvalidBinding)?;
+    let recovered =
+        recover_personal(message, signature_bytes).map_err(|_| DisclosureError::InvalidBinding)?;
     if recovered != expected_wallet {
         return Err(DisclosureError::InvalidBinding);
     }

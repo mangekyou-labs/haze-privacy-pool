@@ -14,8 +14,6 @@ const DEPLOYED_ORIGIN = process.env.HAZE_DEPLOYED_ORIGIN || "https://haze-mu-fla
 const FUJI_RPC = process.env.AVALANCHE_FUJI_RPC || "https://api.avax-test.network/ext/bc/C/rpc";
 const FUJI_CHAIN_ID = 43113;
 
-const SEEDED_CASE_ID = "fuji-withdrawal-8218e5a4";
-const SEEDED_TX_HASH = "0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03";
 const GRANTED_FIELDS = ["tx_hash", "amount", "asset", "timestamp", "policy_version"];
 const DENIED_FIELDS = ["user", "counterparty"];
 
@@ -60,26 +58,10 @@ export async function runProductionAuditWalk(options = {}) {
     } catch {}
   }
 
-  // 1. Direct Fuji on-chain receipt and confirmation verification via RPC
-  const receipt = await rpc("eth_getTransactionReceipt", [SEEDED_TX_HASH]);
-  if (!receipt) throw new Error(`D8_RECEIPT_NOT_FOUND_FOR_${SEEDED_TX_HASH}`);
-  const txBlockNumber = Number.parseInt(receipt.blockNumber, 16);
-  const currentBlockHex = await rpc("eth_blockNumber", []);
-  const currentBlockNumber = Number.parseInt(currentBlockHex, 16);
-  const confirmationCount = currentBlockNumber - txBlockNumber;
-
-  if (confirmationCount < 12) {
-    throw new Error(`D8_INSUFFICIENT_FINALITY: ${confirmationCount} < 12 required confirmations`);
-  }
-  if (Number.parseInt(receipt.status, 16) !== 1) {
-    throw new Error("D8_CANONICAL_RECEIPT_REVERTED");
-  }
-
   // Check initial auditor tx count
   const auditorAddress = bootstrapMeta?.auditorAddress;
-  const txCountInitial = auditorAddress
-    ? await rpc("eth_getTransactionCount", [auditorAddress, "latest"])
-    : "0x0";
+  if (!auditorAddress) throw new Error("D8_AUDITOR_BOOTSTRAP_METADATA_REQUIRED");
+  const txCountInitial = await rpc("eth_getTransactionCount", [auditorAddress, "latest"]);
 
   // 2. Launch Playwright Chromium
   const browser = await chromium.launch({ headless: options.headless ?? true });
@@ -154,6 +136,21 @@ export async function runProductionAuditWalk(options = {}) {
   await page.waitForSelector('.haze-case-list, .haze-workstation-panel', {
     timeout: 15_000,
   });
+
+  const casesPayload = complianceResponses.find((item) => item.url.endsWith("/api/compliance/cases") && item.ok)?.body;
+  const runtimeCase = Array.isArray(casesPayload) ? casesPayload[0] : casesPayload?.cases?.[0];
+  if (!runtimeCase?.caseId || !/^0x[0-9a-f]{64}$/i.test(runtimeCase.transactionHash || "")) {
+    throw new Error("D8_RUNTIME_DISCOVERED_CASE_REQUIRED");
+  }
+  const caseId = runtimeCase.caseId;
+  const transactionHash = runtimeCase.transactionHash;
+  const receipt = await rpc("eth_getTransactionReceipt", [transactionHash]);
+  if (!receipt) throw new Error(`D8_RECEIPT_NOT_FOUND_FOR_${transactionHash}`);
+  const txBlockNumber = Number.parseInt(receipt.blockNumber, 16);
+  const currentBlockNumber = Number.parseInt(await rpc("eth_blockNumber", []), 16);
+  const confirmationCount = currentBlockNumber - txBlockNumber + 1;
+  if (confirmationCount < 12) throw new Error(`D8_INSUFFICIENT_FINALITY: ${confirmationCount}`);
+  if (Number.parseInt(receipt.status, 16) !== 1) throw new Error("D8_CANONICAL_RECEIPT_REVERTED");
 
   // If a case is present, select it and verify
   const caseButton = page.locator('.haze-case-item, button[data-case-id]').first();
@@ -246,17 +243,17 @@ export async function runProductionAuditWalk(options = {}) {
   // E. Compile and Save Production Evidence JSON Manifest
   const evidenceManifest = {
     releaseMilestone: "D8",
-    candidateGitSha: options.gitSha || process.env.VERCEL_GIT_COMMIT_SHA || "committed-d8",
+    candidateGitSha: options.gitSha || process.env.VERCEL_GIT_COMMIT_SHA,
     origin,
     network: "Avalanche Fuji",
     chainId: FUJI_CHAIN_ID,
-    caseId: SEEDED_CASE_ID,
-    transactionHash: SEEDED_TX_HASH,
+    caseId,
+    transactionHash,
     confirmations: confirmationCount,
     receiptStatus: "0x1",
     grantedFields: GRANTED_FIELDS,
     deniedFields: DENIED_FIELDS,
-    auditorAddress: auditorAddress || "0x5151515151515151515151515151515151515151",
+    auditorAddress,
     txCountBefore: txCountInitial,
     txCountAfter: txCountFinal,
     screenshots: {

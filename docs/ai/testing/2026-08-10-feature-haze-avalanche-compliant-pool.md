@@ -17,17 +17,19 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
   - Strict field redaction (granted: `tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`; denied: `user`, `counterparty`).
   - Signed canonical export bundle creation, timestamp expiry, and detached signature verification.
   - Write-once hash-chained access log verification (`verify_access_log_chain`) and sequence/tamper detection.
-- [x] Durable schema migration `0003_compliance_portal.sql` and `SCHEMA_VERSION = 3` in `haze/crates/protocol/tests/ops.rs`.
+- [x] Additive durable runtime migration `0004` and real-PostgreSQL repository tests. Preserved deployed `0003`; verified restart, idempotent replay/checkpoint recovery, independent per-application sequences, and 16 concurrent access-log writers against PostgreSQL.
 - [x] **D8.3 Local Next.js BFF unit tests (`haze/tests/fuji-compliance-auditor.test.mjs`):**
   - Handler export validation, error forwarding (503 on service outage), and cookie issuance.
-- [x] **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion tests (`haze/services/disclosure/tests/compliance_auditor.rs`):**
+- [x] **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion tests (`haze/services/disclosure/tests/compliance_auditor.rs` plus PostgreSQL integration coverage; complete locally):**
   - Poller log parsing, event extraction, confirmation tracking, pre-finality dynamic case creation, and promotion to `ready` at 12 confirmations.
   - Production startup seeding only the dedicated auditor grant with dynamic unconstrained case matching.
   - Sequential hash chain head retrieval (`get_access_log_head`).
-- [x] **D8.4 React Workstation UI & Accessibility tests (`haze/tests/fuji-compliance-auditor.test.mjs`):**
+- [x] **D8.4 React Workstation UI & Accessibility tests (`haze/tests/fuji-compliance-auditor.test.mjs` plus real-browser coverage; complete locally):**
   - Full-width shell mounting (`data-card="compliance-audit"`), `theme.css` tokens (`#1f6b62` accent, IBM Plex font), omission of pool tabs and DEX balances.
   - 5-field disclosure output verification with strict redaction of `user` and `counterparty`.
   - Focus trapping and keyboard accessibility in export review modal with `?case=<id>` deep link synchronization.
+  - Fresh actual-Next Chromium run: `HAZE_NEXT_TEST_ORIGIN=http://127.0.0.1:3010 node --test tests/playwright-audit-e2e.test.mjs` — 3 passed, 0 failed. Captures and manifest are explicitly classified `local-fixtures`.
+  - Fresh release gates: `cargo test -p haze-disclosure`, clippy with warnings denied, 343 Node tests (342 pass, one environment-gated browser test skipped in the aggregate run), TypeScript, Next production build, formatting, and `git diff --check` all pass. The separately enabled actual-Next browser test passes.
 - [ ] **D8.5–D8.7 Fresh Fuji Deposit→Withdrawal→Compliance Journey & Production E2E:**
   - Real Fuji deposit and withdrawal transaction execution.
   - Automatic poller ingestion and dynamic case promotion.
@@ -1165,3 +1167,14 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 - No dependency was changed and no force-fix was run. A newly demonstrated production-reachable
   exploit path remains a release blocker; on current evidence these findings are tracked follow-up
   work and do not replace the missing D7 acceptance evidence.
+
+## D8 PostgreSQL Runtime Coverage (2026-08-22)
+
+- Migration catalog test: `cargo test -p haze-protocol --test ops` — 10 passed, 0 failed; migration
+  0004 applies after preserved deployed history and rolls back independently.
+- Real PostgreSQL integration: `cargo test -p haze-disclosure --test postgres_repository` with an
+  isolated PostgreSQL server — 2 passed, 0 failed.
+- Coverage currently proves restart persistence and idempotent replay for the auditor grant, case,
+  and poller checkpoint, plus a valid immutable hash chain under 16 concurrent access-log writers.
+- This evidence is partial and does not complete D8.0b, D8.2, or D8.4; HTTP production wiring,
+  evidence/reorg ingestion, failure health, and end-to-end restart tests remain required.

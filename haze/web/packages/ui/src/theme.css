@@ -344,7 +344,11 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
 }
+
+.haze-session-loading { max-width: 540px; margin: 32px auto; text-align: center; }
+.haze-mobile-back { display: none; }
 
 .haze-workstation-grid {
   display: grid;
@@ -393,7 +397,20 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
   font: inherit;
   width: 100%;
+  min-height: 44px;
 }
+
+.haze-case-item:focus-visible,
+.haze-workstation button:focus-visible,
+.haze-workstation input:focus-visible,
+.haze-workstation a:focus-visible {
+  outline: 2px solid var(--haze-accent);
+  outline-offset: 2px;
+}
+
+.haze-workstation-panel a,
+.haze-workstation-panel td,
+.haze-modal { overflow-wrap: anywhere; }
 
 .haze-case-item[aria-pressed="true"],
 .haze-case-item.haze-active {
@@ -520,12 +537,20 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (max-width: 720px) {
+  .haze-card[data-card="compliance-audit"], .haze-workstation-card { padding: 12px; overflow: hidden; }
   .haze-workstation-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
+  .haze-case-queue.haze-mobile-detail-active { display: none; }
+  .haze-case-detail:not(.haze-mobile-detail-active) { display: none; }
+  .haze-workstation-aside { display: none; }
+  .haze-mobile-back { display: inline-flex; min-height: 44px; align-items: center; align-self: flex-start; }
+  .haze-workstation button { min-height: 44px; }
+  .haze-disclosure-table, .haze-disclosure-table tbody, .haze-disclosure-table tr, .haze-disclosure-table th, .haze-disclosure-table td { display: block; width: 100%; box-sizing: border-box; }
+  .haze-modal { padding: 16px; max-height: calc(100dvh - 24px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
-

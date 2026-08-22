@@ -9,16 +9,11 @@ use haze_disclosure::{
     DisclosureError, StoredAuditRecord,
     access_log::verify_access_log_chain,
     auth::{
-        SiweConfig, StoredSession, format_siwe_message, hash_session_token,
-        verify_siwe_signature,
+        SiweConfig, StoredSession, format_siwe_message, hash_session_token, verify_siwe_signature,
     },
-    cases::{
-        DEFAULT_FUJI_CASE_ID, DEFAULT_FUJI_TX_HASH, DEFAULT_GRANTED_FIELDS,
-    },
+    cases::{DEFAULT_FUJI_CASE_ID, DEFAULT_FUJI_TX_HASH, DEFAULT_GRANTED_FIELDS},
     export::{DEFAULT_SIGNING_KEY_ID, create_signed_export, verify_export_bundle},
-    fuji::{
-        FujiDisclosureConfig, FujiWithdrawalEvidence, verify_compliance_case_evidence,
-    },
+    fuji::{FujiDisclosureConfig, FujiWithdrawalEvidence, verify_compliance_case_evidence},
     store::ComplianceStore,
 };
 use haze_protocol::{
@@ -166,6 +161,8 @@ fn mock_evidence(
             receipt_successful,
             transaction_hash: tx_hash,
             block_number,
+            block_hash: [0x77; 32],
+            log_index: 0,
             current_block_number,
             pool: config.pool,
             application_id: config.application_id,
@@ -251,7 +248,11 @@ fn grant_isolation_and_assigned_cases() {
     // Auditor has active grant
     let grant = store.get_grant(&auditor, &APP_ID).expect("grant");
     assert!(!grant.revoked);
-    assert!(grant.assigned_cases.contains(&DEFAULT_FUJI_CASE_ID.to_string()));
+    assert!(
+        grant
+            .assigned_cases
+            .contains(&DEFAULT_FUJI_CASE_ID.to_string())
+    );
 
     // Stranger has no grant
     assert!(store.get_grant(&stranger_wallet(), &APP_ID).is_none());
@@ -285,8 +286,14 @@ fn twelve_confirmations_required_for_disclosure() {
     assert_eq!(resp.confirmations, 12);
     assert_eq!(resp.checks.len(), 6);
     assert!(resp.checks.iter().all(|c| c.status == "pass"));
-    assert_eq!(resp.fields.get("amount").map(String::as_str), Some("1000000"));
-    assert_eq!(resp.fields.get("policy_version").map(String::as_str), Some("1"));
+    assert_eq!(
+        resp.fields.get("amount").map(String::as_str),
+        Some("1000000")
+    );
+    assert_eq!(
+        resp.fields.get("policy_version").map(String::as_str),
+        Some("1")
+    );
 
     // 11 confirmations: mined at 100, current at 110 -> 11 confirmations -> INSUFFICIENT_FINALITY
     let (evidence_11, _) = mock_evidence(&cfg, 100, 110, true);
@@ -381,7 +388,10 @@ fn canonical_export_and_detached_signature_verification() {
     let mut fields = BTreeMap::new();
     fields.insert("tx_hash".into(), DEFAULT_FUJI_TX_HASH.into());
     fields.insert("amount".into(), "1000000".into());
-    fields.insert("asset".into(), "0x5425890298aed601595a70AB815c96711a31Bc65".into());
+    fields.insert(
+        "asset".into(),
+        "0x5425890298aed601595a70AB815c96711a31Bc65".into(),
+    );
 
     let mut provenance = BTreeMap::new();
     provenance.insert("chainId".into(), "43113".into());
@@ -422,15 +432,7 @@ fn access_log_hash_chain_and_tampering_detection() {
     let wallet = auditor_wallet();
 
     // Log 3 operations
-    store.append_access_log(
-        "auth",
-        &APP_ID,
-        None,
-        &wallet,
-        vec![],
-        true,
-        NOW,
-    );
+    store.append_access_log("auth", &APP_ID, None, &wallet, vec![], true, NOW);
     store.append_access_log(
         "query",
         &APP_ID,
@@ -516,4 +518,3 @@ fn dynamic_case_ingestion_and_twelve_confirmation_promotion() {
     assert_eq!(updated_cases[0].status, "ready");
     assert_eq!(updated_cases[0].confirmations, 13);
 }
-

@@ -106,25 +106,24 @@ test("Audit workstation mounting renders full-width compliance card without pool
   // Must NOT render pool tabs or dex balances in fuji-browser audit mode
   assert.doesNotMatch(html, /class="haze-dex-tabs"/);
   assert.doesNotMatch(html, /class="haze-balances"/);
+  assert.doesNotMatch(html, /Connect a wallet that is granted this workspace/);
 });
 
 test("Disclosure responses contain only the 5 granted fields and strictly redact user and counterparty", async () => {
-  const sampleDisclosure = {
-    transactionHash: "0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03",
-    fields: {
-      tx_hash: "0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03",
-      amount: "1000000",
-      asset: "0x5425890298aed601595a70AB815c96711a31Bc65",
-      timestamp: "1700000000",
-      policy_version: "1",
-    },
-  };
-
-  const allowedKeys = new Set(["tx_hash", "amount", "asset", "timestamp", "policy_version"]);
-  for (const key of Object.keys(sampleDisclosure.fields)) {
-    assert.ok(allowedKeys.has(key), `Unexpected field ${key} in disclosure`);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({
+    transactionHash: `0x${"82".repeat(32)}`,
+    authorizedUser: "0xsecret-user",
+    fields: { tx_hash: `0x${"82".repeat(32)}`, amount: "1000000", asset: "USDC", timestamp: "1700000000", policy_version: "1", user: "alice", counterparty: "bob", memo: "secret" },
+  });
+  try {
+    const response = await disclosureHandler(new Request("http://localhost/api/compliance/cases/runtime/disclosure", { method: "POST" }), { params: Promise.resolve({ caseId: "runtime" }) });
+    const payload = await response.json();
+    assert.deepEqual(Object.keys(payload.fields).sort(), ["amount", "asset", "policy_version", "timestamp", "tx_hash"]);
+    assert.equal(JSON.stringify(payload).includes("secret-user"), false);
+    assert.equal(JSON.stringify(payload).includes("alice"), false);
+    assert.equal(JSON.stringify(payload).includes("bob"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
-  assert.equal(sampleDisclosure.fields.user, undefined);
-  assert.equal(sampleDisclosure.fields.counterparty, undefined);
 });
-

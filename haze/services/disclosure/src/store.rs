@@ -114,7 +114,6 @@ impl ComplianceStore {
         inner.grants.insert((auditor_wallet, application_id), grant);
     }
 
-
     /// Store a new SIWE challenge.
     pub fn save_challenge(&self, challenge: StoredChallenge) {
         let mut inner = self.inner.lock().expect("store mutex");
@@ -141,7 +140,9 @@ impl ComplianceStore {
     /// Save an active auditor grant.
     pub fn save_grant(&self, grant: AuditorGrant) {
         let mut inner = self.inner.lock().expect("store mutex");
-        inner.grants.insert((grant.wallet, grant.application_id), grant);
+        inner
+            .grants
+            .insert((grant.wallet, grant.application_id), grant);
     }
 
     /// Store an authenticated session.
@@ -203,13 +204,20 @@ impl ComplianceStore {
     }
 
     /// Get all cases assigned to a given grant / application.
-    pub fn list_cases(&self, application_id: &[u8; 32], assigned_case_ids: &[String]) -> Vec<ComplianceCase> {
+    pub fn list_cases(
+        &self,
+        application_id: &[u8; 32],
+        assigned_case_ids: &[String],
+    ) -> Vec<ComplianceCase> {
         let inner = self.inner.lock().expect("store mutex");
         let app_hex = format!("0x{}", hex::encode(application_id));
         inner
             .cases
             .values()
-            .filter(|c| c.application_id.eq_ignore_ascii_case(&app_hex) && (assigned_case_ids.is_empty() || assigned_case_ids.contains(&c.case_id)))
+            .filter(|c| {
+                c.application_id.eq_ignore_ascii_case(&app_hex)
+                    && (assigned_case_ids.is_empty() || assigned_case_ids.contains(&c.case_id))
+            })
             .cloned()
             .collect()
     }
@@ -225,7 +233,6 @@ impl ComplianceStore {
         let mut inner = self.inner.lock().expect("store mutex");
         inner.exports.insert(bundle.export_id.clone(), bundle);
     }
-
 
     /// Look up a compliance export bundle by ID.
     pub fn get_export(&self, export_id: &str) -> Option<ComplianceExportBundle> {
@@ -283,7 +290,11 @@ impl ComplianceStore {
     }
 
     /// List access log entries for an application (and optionally a case).
-    pub fn list_access_log(&self, application_id: &[u8; 32], case_id: Option<&str>) -> Vec<ComplianceAccessLogEntry> {
+    pub fn list_access_log(
+        &self,
+        application_id: &[u8; 32],
+        case_id: Option<&str>,
+    ) -> Vec<ComplianceAccessLogEntry> {
         let inner = self.inner.lock().expect("store mutex");
         let app_hex = format!("0x{}", hex::encode(application_id));
         inner
@@ -304,7 +315,9 @@ impl ComplianceStore {
             .access_log
             .last()
             .map(|e| e.entry_hash.clone())
-            .unwrap_or_else(|| "0x0000000000000000000000000000000000000000000000000000000000000000".to_owned())
+            .unwrap_or_else(|| {
+                "0x0000000000000000000000000000000000000000000000000000000000000000".to_owned()
+            })
     }
 
     /// Generate next deterministic unique ID.

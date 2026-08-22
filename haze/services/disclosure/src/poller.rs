@@ -1,9 +1,6 @@
 //! Internal Fuji on-chain log poller and dynamic compliance case ingestion.
 
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use haze_protocol::{action::WITHDRAW, envelope::Envelope, keccak::keccak256};
 use serde_json::{Value, json};
@@ -12,12 +9,12 @@ use crate::{
     DisclosureError, StoredAuditRecord,
     cases::create_withdrawal_case,
     fuji::{FujiDisclosureConfig, FujiWithdrawalEvidence},
+    repository::{ComplianceRepository, PollerCheckpoint},
     store::ComplianceStore,
 };
 
 /// Event signature for HazePool PrivateTransaction.
-pub const PRIVATE_TRANSACTION_SIGNATURE: &str =
-    "PrivateTransaction(bytes32,uint8,address,uint64,uint64,uint256,uint256,uint256,uint256,uint256,uint64,address,bytes32,bytes32,uint256,bytes32,bytes,bytes,bytes)";
+pub const PRIVATE_TRANSACTION_SIGNATURE: &str = "PrivateTransaction(bytes32,uint8,address,uint64,uint64,uint256,uint256,uint256,uint256,uint256,uint64,address,bytes32,bytes32,uint256,bytes32,bytes,bytes,bytes)";
 
 /// Internal poller that scans Fuji logs, ingests withdrawal cases, and updates confirmations.
 pub struct FujiLogPoller {
@@ -26,22 +23,43 @@ pub struct FujiLogPoller {
     /// JSON-RPC URL.
     pub rpc_url: String,
     /// Target store.
-    pub store: Arc<ComplianceStore>,
+    pub store: Arc<ComplianceRepository>,
+    /// First deployment block eligible for backfill.
+    pub deployment_block: u64,
+    /// Canonical blocks replayed on each cycle to detect short reorgs.
+    pub replay_window: u64,
     client: reqwest::Client,
 }
 
 impl FujiLogPoller {
     /// Create a new log poller.
     #[must_use]
-    pub fn new(
+    pub fn new(config: FujiDisclosureConfig, rpc_url: String, store: Arc<ComplianceStore>) -> Self {
+        Self {
+            config,
+            rpc_url,
+            store: Arc::new(store.into()),
+            deployment_block: 0,
+            replay_window: 32,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    /// Create a production poller over a durable repository.
+    #[must_use]
+    pub fn with_repository(
         config: FujiDisclosureConfig,
         rpc_url: String,
-        store: Arc<ComplianceStore>,
+        store: ComplianceRepository,
+        deployment_block: u64,
+        replay_window: u64,
     ) -> Self {
         Self {
             config,
             rpc_url,
-            store,
+            store: Arc::new(store),
+            deployment_block,
+            replay_window,
             client: reqwest::Client::new(),
         }
     }
@@ -80,7 +98,11 @@ impl FujiLogPoller {
     }
 
     /// Scan a specific block range on the configured HazePool for withdrawal events.
-    pub async fn scan_range(&self, from_block: u64, to_block: u64) -> Result<usize, DisclosureError> {
+    pub async fn scan_range(
+        &self,
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<usize, DisclosureError> {
         let event_sig = keccak256(PRIVATE_TRANSACTION_SIGNATURE.as_bytes());
         let pool_hex = format!("0x{}", hex::encode(self.config.pool));
         let app_topic = format!("0x{}", hex::encode(self.config.application_id));
@@ -96,13 +118,12 @@ impl FujiLogPoller {
         let logs_val = self.rpc("eth_getLogs", json!([filter])).await?;
         let logs = logs_val.as_array().ok_or(DisclosureError::Unavailable)?;
 
-        let head = self.current_block_number().await.unwrap_or(to_block);
-        let mut ingested_count = 0;
+        let head = self.current_block_number().await?;
+        let mut ingested = Vec::new();
 
         for log in logs {
-            if let Ok((evidence, tx_hash)) = self.parse_log_evidence(log, head).await
-                && evidence.action == WITHDRAW
-            {
+            let (evidence, tx_hash) = self.parse_log_evidence(log, head).await?;
+            if evidence.action == WITHDRAW {
                 let confirmations = if head >= evidence.block_number {
                     head - evidence.block_number + 1
                 } else {
@@ -114,12 +135,20 @@ impl FujiLogPoller {
                     confirmations,
                     self.config.application_id,
                 );
-                self.store.save_case(case);
-                self.store.save_evidence(tx_hash, evidence);
-                ingested_count += 1;
+                ingested.push((case, evidence));
             }
         }
-
+        let ingested_count = ingested.len();
+        self.store
+            .replace_ingestion_range(
+                self.config.chain_id,
+                self.config.pool,
+                from_block,
+                to_block,
+                ingested,
+            )
+            .await
+            .map_err(|_| DisclosureError::Unavailable)?;
         Ok(ingested_count)
     }
 
@@ -144,6 +173,23 @@ impl FujiLogPoller {
             .ok_or(DisclosureError::InvalidBinding)?;
         let block_number = u64::from_str_radix(block_num_str.trim_start_matches("0x"), 16)
             .map_err(|_| DisclosureError::InvalidBinding)?;
+        let block_hash: [u8; 32] = hex::decode(
+            log.get("blockHash")
+                .and_then(Value::as_str)
+                .ok_or(DisclosureError::InvalidBinding)?
+                .trim_start_matches("0x"),
+        )
+        .map_err(|_| DisclosureError::InvalidBinding)?
+        .try_into()
+        .map_err(|_| DisclosureError::InvalidBinding)?;
+        let log_index = u64::from_str_radix(
+            log.get("logIndex")
+                .and_then(Value::as_str)
+                .ok_or(DisclosureError::InvalidBinding)?
+                .trim_start_matches("0x"),
+            16,
+        )
+        .map_err(|_| DisclosureError::InvalidBinding)?;
 
         let topics = log
             .get("topics")
@@ -211,7 +257,8 @@ impl FujiLogPoller {
 
         // Dynamic offset for envelope bytes
         let offset_word = data_words[15];
-        let offset = u64::from_be_bytes(offset_word[24..32].try_into().unwrap_or_default()) as usize;
+        let offset =
+            u64::from_be_bytes(offset_word[24..32].try_into().unwrap_or_default()) as usize;
         let envelope = if data_bytes.len() >= offset + 32 {
             let len = u64::from_be_bytes(
                 data_bytes[offset..offset + 32]
@@ -254,6 +301,8 @@ impl FujiLogPoller {
             receipt_successful: true,
             transaction_hash: tx_hash,
             block_number,
+            block_hash,
+            log_index,
             current_block_number: head_block,
             pool: self.config.pool,
             application_id,
@@ -270,8 +319,12 @@ impl FujiLogPoller {
     }
 
     /// Update confirmations for all existing pending cases in the store.
-    pub async fn update_confirmations(&self, current_head: u64) {
-        let cases = self.store.list_cases(&self.config.application_id, &[]);
+    pub async fn update_confirmations(&self, current_head: u64) -> Result<(), DisclosureError> {
+        let cases = self
+            .store
+            .list_cases(&self.config.application_id, &[])
+            .await
+            .map_err(|_| DisclosureError::Unavailable)?;
         for case in cases {
             if case.status == "pending_finality" && case.block_number > 0 {
                 let confirmations = if current_head >= case.block_number {
@@ -281,48 +334,125 @@ impl FujiLogPoller {
                 };
                 if confirmations >= 12 {
                     self.store
-                        .update_case_status(&case.case_id, "ready", confirmations);
+                        .update_case_status(&case.case_id, "ready", confirmations)
+                        .await
+                        .map_err(|_| DisclosureError::Unavailable)?;
                 } else {
-                    self.store.update_case_status(
-                        &case.case_id,
-                        "pending_finality",
-                        confirmations,
-                    );
+                    self.store
+                        .update_case_status(&case.case_id, "pending_finality", confirmations)
+                        .await
+                        .map_err(|_| DisclosureError::Unavailable)?;
                 }
             }
         }
+        Ok(())
     }
 
     /// Run a single poll cycle: get head, scan delta from cursor, update confirmations.
     pub async fn poll_cycle(&self) -> Result<usize, DisclosureError> {
         let head = self.current_block_number().await?;
-        let cursor = self.store.get_cursor();
-
-        let (from_block, to_block) = if cursor == 0 {
-            (head.saturating_sub(200), head)
-        } else if head > cursor {
-            (cursor + 1, head)
-        } else {
-            (head, head)
-        };
+        let poller_id = format!(
+            "fuji:{}:0x{}",
+            self.config.chain_id,
+            hex::encode(self.config.pool)
+        );
+        let previous = self
+            .store
+            .get_checkpoint(
+                &poller_id,
+                self.config.chain_id,
+                self.config.pool,
+                self.config.application_id,
+            )
+            .await
+            .map_err(|_| DisclosureError::Unavailable)?;
+        let next_block = previous
+            .as_ref()
+            .map_or(self.deployment_block, |value| value.next_block);
+        let from_block = next_block
+            .saturating_sub(self.replay_window)
+            .max(self.deployment_block);
+        let to_block = head;
 
         let ingested = if from_block <= to_block {
-            let count = self.scan_range(from_block, to_block).await.unwrap_or(0);
-            self.store.set_cursor(to_block);
-            count
+            self.scan_range(from_block, to_block).await?
         } else {
             0
         };
 
-        self.update_confirmations(head).await;
+        self.update_confirmations(head).await?;
+        let block = self
+            .rpc(
+                "eth_getBlockByNumber",
+                json!([format!("0x{head:x}"), false]),
+            )
+            .await?;
+        let last_block_hash = block
+            .get("hash")
+            .and_then(Value::as_str)
+            .and_then(|value| hex::decode(value.trim_start_matches("0x")).ok())
+            .and_then(|value| value.try_into().ok());
+        self.store
+            .save_checkpoint(PollerCheckpoint {
+                poller_id,
+                chain_id: self.config.chain_id,
+                pool: self.config.pool,
+                application_id: self.config.application_id,
+                next_block: head.saturating_add(1),
+                last_block_hash,
+                healthy: true,
+                consecutive_failures: 0,
+                last_error: None,
+            })
+            .await
+            .map_err(|_| DisclosureError::Unavailable)?;
         Ok(ingested)
     }
 
     /// Spawn a background tokio task that runs poll_cycle periodically.
-    pub fn start_background_loop(self: Arc<Self>, interval: Duration) -> tokio::task::JoinHandle<()> {
+    pub fn start_background_loop(
+        self: Arc<Self>,
+        interval: Duration,
+    ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
-                let _ = self.poll_cycle().await;
+                if let Err(error) = self.poll_cycle().await {
+                    let poller_id = format!(
+                        "fuji:{}:0x{}",
+                        self.config.chain_id,
+                        hex::encode(self.config.pool)
+                    );
+                    let previous = self
+                        .store
+                        .get_checkpoint(
+                            &poller_id,
+                            self.config.chain_id,
+                            self.config.pool,
+                            self.config.application_id,
+                        )
+                        .await
+                        .ok()
+                        .flatten();
+                    let failures = previous
+                        .as_ref()
+                        .map_or(1, |value| value.consecutive_failures.saturating_add(1));
+                    let _ = self
+                        .store
+                        .save_checkpoint(PollerCheckpoint {
+                            poller_id,
+                            chain_id: self.config.chain_id,
+                            pool: self.config.pool,
+                            application_id: self.config.application_id,
+                            next_block: previous
+                                .as_ref()
+                                .map_or(self.deployment_block, |value| value.next_block),
+                            last_block_hash: previous.and_then(|value| value.last_block_hash),
+                            healthy: false,
+                            consecutive_failures: failures,
+                            last_error: Some(json!({"code":error.as_code(),"stage":"poll_cycle"})),
+                        })
+                        .await;
+                }
                 tokio::time::sleep(interval).await;
             }
         })

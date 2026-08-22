@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server.js";
-import { forwardToDisclosure } from "../../../_lib.ts";
+import { type NextRequest } from "next/server.js";
+import { forwardToDisclosure, sanitizedJsonResponse } from "../../../_lib.ts";
 
 export async function POST(
   req: NextRequest,
@@ -16,9 +16,5 @@ export async function POST(
     },
   );
 
-  const data = await resp.text();
-  return new NextResponse(data, {
-    status: resp.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return sanitizedJsonResponse(resp);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 
 const APPLICATION_ID = "0x0000000000000000000000000000000000000000000000000000000000000a11";
@@ -72,6 +72,7 @@ interface AccessLogItem {
 export function AuditBrowserClient() {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [session, setSession] = useState<AuditSessionData | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -88,6 +89,7 @@ export function AuditBrowserClient() {
 
   const modalRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const caseListRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setMount(document.getElementById("haze-audit-workstation-root"));
@@ -109,7 +111,7 @@ export function AuditBrowserClient() {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("case", caseId);
-      window.history.pushState(null, "", url.toString());
+      window.history.replaceState(null, "", url.toString());
     }
   };
 
@@ -120,9 +122,13 @@ export function AuditBrowserClient() {
       if (res.ok) {
         const data = await res.json();
         setSession(data);
+      } else if (res.status !== 401) {
+        setErrorMsg(res.status === 403 ? "This wallet is not authorized for the Fuji auditor grant." : "Your auditor session expired. Sign in again to continue.");
       }
     } catch {
-      // no session
+      setErrorMsg("The compliance service is unavailable. Check your connection and retry.");
+    } finally {
+      setSessionLoading(false);
     }
   }, []);
 
@@ -138,23 +144,28 @@ export function AuditBrowserClient() {
         fetch("/api/compliance/cases"),
         fetch("/api/compliance/access-log"),
       ]);
+      if (casesRes.status === 401) {
+        setSession(null);
+        setErrorMsg("Your auditor session expired. Sign in again to continue.");
+        return;
+      }
       if (casesRes.ok) {
         const casesJson = await casesRes.json();
         const loadedCases: ComplianceCaseSummary[] = casesJson.cases || [];
         setCases(loadedCases);
-        if (!selectedCaseId && loadedCases.length > 0) {
+        if (!selectedCaseId && loadedCases.length > 0 && window.matchMedia("(min-width: 721px)").matches) {
           const firstCase = loadedCases[0];
           if (firstCase) {
             setSelectedCaseId(firstCase.caseId);
           }
         }
-      }
+      } else throw new Error("Assigned cases could not be loaded.");
       if (logsRes.ok) {
         const logsJson = await logsRes.json();
         setAccessLogs(logsJson.entries || []);
       }
     } catch (e) {
-      console.error("Failed loading cases/logs", e);
+      setErrorMsg(e instanceof Error ? e.message : "Assigned cases could not be loaded.");
     }
   }, [session, selectedCaseId]);
 
@@ -167,10 +178,18 @@ export function AuditBrowserClient() {
   // Modal focus trap & Escape key handler
   useEffect(() => {
     if (!exportModalOpen) return;
+    const dialog = modalRef.current;
+    const focusable = dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])');
+    focusable?.[0]?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setExportModalOpen(false);
         triggerRef.current?.focus();
+      } else if (e.key === "Tab" && focusable?.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -236,6 +255,7 @@ export function AuditBrowserClient() {
 
       const sessionData = await verifyRes.json();
       setSession(sessionData);
+      setSessionLoading(false);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Authentication failed");
     } finally {
@@ -330,6 +350,18 @@ export function AuditBrowserClient() {
 
   const activeCase = cases.find((c) => c.caseId === selectedCaseId) || null;
 
+  const handleQueueKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+    const buttons = Array.from(caseListRef.current?.querySelectorAll<HTMLButtonElement>("[data-case-id]") ?? []);
+    if (!buttons.length) return;
+    event.preventDefault();
+    const current = Math.max(0, buttons.indexOf(document.activeElement as HTMLButtonElement));
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : event.key === "ArrowDown" ? (current + 1) % buttons.length : (current - 1 + buttons.length) % buttons.length;
+    buttons[next]?.focus();
+    const id = buttons[next]?.dataset.caseId;
+    if (id) selectCase(id);
+  };
+
   const filteredCases = cases.filter(
     (c) =>
       c.caseId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -350,7 +382,12 @@ export function AuditBrowserClient() {
         </div>
       ) : null}
 
-      {!session ? (
+      {sessionLoading ? (
+        <div className="haze-workstation-panel haze-session-loading" role="status" aria-live="polite" aria-busy="true">
+          <strong>Restoring auditor session…</strong>
+          <span className="haze-muted">Checking the secure session and assigned case queue.</span>
+        </div>
+      ) : !session ? (
         /* Sign-in Gate */
         <div className="haze-workstation-panel" style={{ maxWidth: "540px", margin: "32px auto", textAlign: "center" }}>
           <h2 style={{ fontSize: "18px", marginBottom: "8px" }}>Institutional Compliance Sign-In</h2>
@@ -392,7 +429,7 @@ export function AuditBrowserClient() {
         /* Authenticated 3-Column Workstation Layout */
         <div className="haze-workstation-grid">
           {/* Column 1: Case Queue */}
-          <nav className="haze-workstation-panel" aria-label="Assigned compliance cases">
+          <nav ref={caseListRef} className={`haze-workstation-panel haze-case-queue ${activeCase ? "haze-mobile-detail-active" : ""}`} aria-label="Assigned compliance cases" onKeyDown={handleQueueKeyDown}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h2>Assigned Cases</h2>
               <span className="haze-pill" data-count={cases.length}>{cases.length} cases</span>
@@ -458,9 +495,10 @@ export function AuditBrowserClient() {
           </nav>
 
           {/* Column 2: Selected Case Evidence */}
-          <main className="haze-workstation-panel" style={{ minWidth: 0 }}>
+          <main className={`haze-workstation-panel haze-case-detail ${activeCase ? "haze-mobile-detail-active" : ""}`} style={{ minWidth: 0 }}>
             {activeCase ? (
               <>
+                <button type="button" className="haze-button haze-button-secondary haze-mobile-back" onClick={() => { setSelectedCaseId(null); const url = new URL(window.location.href); url.searchParams.delete("case"); window.history.replaceState(null,"",url); }}>Back to assigned cases</button>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
                   <div>
                     <h2 style={{ fontSize: "16px", marginBottom: "4px" }}>{activeCase.title}</h2>
@@ -671,7 +709,7 @@ export function AuditBrowserClient() {
       {exportModalOpen && exportData ? (
         <div
           className="haze-modal-backdrop"
-          onClick={() => setExportModalOpen(false)}
+          onClick={() => { setExportModalOpen(false); triggerRef.current?.focus(); }}
           role="presentation"
         >
           <div
@@ -688,7 +726,7 @@ export function AuditBrowserClient() {
               </h2>
               <button
                 type="button"
-                onClick={() => setExportModalOpen(false)}
+                onClick={() => { setExportModalOpen(false); triggerRef.current?.focus(); }}
                 data-action="close-export-modal"
                 className="haze-button haze-button-secondary"
                 style={{ padding: "2px 8px", minHeight: "24px", fontSize: "12px" }}

@@ -50,9 +50,29 @@ export async function forwardToDisclosure(
     return new Response(
       JSON.stringify({
         code: "UNAVAILABLE",
-        message: error instanceof Error ? error.message : "Service Unavailable",
+        message: "Compliance service unavailable",
       }),
       { status: 503, headers: { "Content-Type": "application/json" } },
     );
   }
+}
+
+const DISCLOSURE_FIELDS = new Set(["tx_hash", "amount", "asset", "timestamp", "policy_version"]);
+
+export function sanitizeBrowserPayload(value: unknown, key = ""): unknown {
+  if (Array.isArray(value)) return value.map((item) => sanitizeBrowserPayload(item));
+  if (!value || typeof value !== "object") return value;
+  const output: Record<string, unknown> = {};
+  for (const [childKey, childValue] of Object.entries(value)) {
+    const normalized = childKey.toLowerCase();
+    if (normalized === "user" || normalized === "counterparty" || normalized === "authorizeduser") continue;
+    if (key === "fields" && !DISCLOSURE_FIELDS.has(childKey)) continue;
+    output[childKey] = sanitizeBrowserPayload(childValue, childKey);
+  }
+  return output;
+}
+
+export async function sanitizedJsonResponse(response: Response): Promise<NextResponse> {
+  const body = await response.json().catch(() => ({ code: "UNAVAILABLE", message: "Invalid upstream response" }));
+  return NextResponse.json(sanitizeBrowserPayload(body), { status: response.status });
 }

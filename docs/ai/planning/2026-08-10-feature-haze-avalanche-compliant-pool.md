@@ -687,11 +687,11 @@ filesystem notes, server-side proving, and `?live=1`.
   | Workstream | Status | Required exit |
   |---|---|---|
   | D8.0 initial design addendum | Complete | Retain as a draft baseline |
-  | D8.0b current-UI compatibility and product review | Complete locally | Approved responsive design using existing Haze tokens and shell |
+  | D8.0b current-UI compatibility and product review | In progress | Approved responsive design using existing Haze tokens and shell |
   | D8.1 local SIWE, session, grant, disclosure, export, and access-log logic | Complete locally | Keep existing Rust evidence |
-  | D8.2 durable Postgres runtime and automatic Fuji ingestion | Complete locally | No in-memory production state or seeded transaction case; dynamic poller |
+  | D8.2 durable Postgres runtime and automatic Fuji ingestion | Complete locally | No in-memory production state or seeded transaction case; dynamic poller; production acceptance remains open |
   | D8.3 same-origin BFF routes | Complete locally | Production deployment and upstream identity still open |
-  | D8.4 React workstation | Complete locally | Shell integration, privacy, accessibility, and responsive remediation verified |
+  | D8.4 React workstation | Complete locally | Actual-Next Chromium verifies shell integration, privacy, keyboard accessibility, and responsive behavior; production acceptance remains open |
   | D8.5 Dappwright deposit→withdraw→auditor SIWE journey | Open | Fresh production Fuji execution required |
   | D8.6 named playwright-cli portal investigation | Open | Real CLI transcript and production evidence required |
   | D8.7 product/UI quality gate | Open | Responsive UX review and remediation complete |

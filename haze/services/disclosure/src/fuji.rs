@@ -48,7 +48,7 @@ pub struct FujiDisclosureRequest {
 }
 
 /// Independently recovered receipt, event, and transaction-input evidence.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FujiWithdrawalEvidence {
     /// Receipt exists and has status 0x1.
     pub receipt_successful: bool,
@@ -56,6 +56,10 @@ pub struct FujiWithdrawalEvidence {
     pub transaction_hash: [u8; 32],
     /// Block number where receipt was mined.
     pub block_number: u64,
+    /// Canonical block hash observed with the event.
+    pub block_hash: [u8; 32],
+    /// Log position within the block.
+    pub log_index: u64,
     /// Current head block number when evidence was sampled.
     pub current_block_number: u64,
     /// Address that emitted `PrivateTransaction`.
@@ -345,7 +349,8 @@ pub fn verify_compliance_case_evidence(
             checks.push(VerificationCheck {
                 name: "Audit Commitment & Decryption".to_owned(),
                 status: "pass".to_owned(),
-                detail: "Poseidon commitment verified against on-chain auditDataCommitment".to_owned(),
+                detail: "Poseidon commitment verified against on-chain auditDataCommitment"
+                    .to_owned(),
             });
             fields
         }

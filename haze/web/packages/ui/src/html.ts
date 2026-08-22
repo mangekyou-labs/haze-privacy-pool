@@ -320,7 +320,7 @@ export function renderHazeFragment(site: Site, path: string, options: RenderOpti
       ? humanStatus(decision.code ?? "FORBIDDEN")
       : "Connect a wallet that is granted this workspace.";
   const banners = [
-    ...(!decision.ok
+    ...(!decision.ok && !(fujiBrowser && path === "/audit")
       ? [`<div class="haze-banner" role="alert" data-code="${decision.code}">${deniedCopy}</div>`]
       : []),
     ...(walletStatus === "wrong-chain"

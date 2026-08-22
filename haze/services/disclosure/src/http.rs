@@ -30,6 +30,7 @@ use crate::{
         FujiDisclosureConfig, FujiDisclosureRequest, FujiWithdrawalEvidence,
         verify_compliance_case_evidence, verify_fuji_withdrawal,
     },
+    repository::ComplianceRepository,
     store::{ComplianceStore, StoredChallenge},
 };
 
@@ -45,7 +46,7 @@ pub struct HttpState {
     /// SIWE configuration.
     pub siwe_config: SiweConfig,
     /// Compliance store.
-    pub store: Arc<ComplianceStore>,
+    pub store: Arc<ComplianceRepository>,
     client: reqwest::Client,
 }
 
@@ -64,7 +65,28 @@ impl HttpState {
             fixture_ikm,
             rpc_url,
             siwe_config,
-            store,
+            store: Arc::new(store.into()),
+            client: reqwest::Client::new(),
+        }
+    }
+}
+
+impl HttpState {
+    /// Create production state backed by PostgreSQL.
+    #[must_use]
+    pub fn with_repository(
+        config: FujiDisclosureConfig,
+        fixture_ikm: Option<[u8; 32]>,
+        rpc_url: String,
+        siwe_config: SiweConfig,
+        store: ComplianceRepository,
+    ) -> Self {
+        Self {
+            config,
+            fixture_ikm,
+            rpc_url,
+            siwe_config,
+            store: Arc::new(store),
             client: reqwest::Client::new(),
         }
     }
@@ -124,6 +146,7 @@ async fn readyz(State(state): State<Arc<HttpState>>) -> Response {
         && state.config.development_fixture_keys
         && state.fixture_ikm.is_some()
         && !state.rpc_url.is_empty()
+        && state.store.ready().await.unwrap_or(false)
     {
         Json(json!({"status":"ready"})).into_response()
     } else {
@@ -194,7 +217,12 @@ async fn evidence_candidates(
     state: &HttpState,
     hash: [u8; 32],
 ) -> Result<Vec<FujiWithdrawalEvidence>, DisclosureError> {
-    if let Some(mut cached) = state.store.get_evidence(&hash) {
+    let mut cached = state
+        .store
+        .get_evidence(&hash)
+        .await
+        .map_err(|_| DisclosureError::Unavailable)?;
+    if !cached.is_empty() {
         if let Ok(head_val) = rpc(state, "eth_blockNumber", json!([])).await
             && let Some(head_hex) = head_val.as_str()
             && let Ok(head_num) = u64::from_str_radix(head_hex.trim_start_matches("0x"), 16)
@@ -220,7 +248,6 @@ async fn evidence_candidates(
 
     let head_block_val = rpc(state, "eth_blockNumber", json!([])).await?;
     let current_block_number = head_block_val
-
         .as_str()
         .and_then(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).ok())
         .unwrap_or(block_number);
@@ -316,6 +343,14 @@ async fn evidence_candidates(
                 receipt_successful: true,
                 transaction_hash: hash,
                 block_number,
+                block_hash: fixed_hex(log.get("blockHash").and_then(Value::as_str).unwrap_or(
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                ))?,
+                log_index: log
+                    .get("logIndex")
+                    .and_then(Value::as_str)
+                    .and_then(|value| u64::from_str_radix(value.trim_start_matches("0x"), 16).ok())
+                    .unwrap_or(0),
                 current_block_number,
                 pool: address,
                 application_id,
@@ -378,22 +413,29 @@ async fn withdrawal(
 
 // --- Institutional Compliance Routes ---
 
-fn extract_session(headers: &HeaderMap, state: &HttpState) -> Result<StoredSession, DisclosureError> {
-    let token = if let Some(auth_header) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
-        auth_header.strip_prefix("Bearer ").unwrap_or(auth_header).trim()
-    } else if let Some(cookie_header) = headers.get("cookie").and_then(|v| v.to_str().ok()) {
-        let mut found = "";
-        for cookie in cookie_header.split(';') {
-            let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
-            if parts.len() == 2 && parts[0] == "haze_audit_session" {
-                found = parts[1];
-                break;
+async fn extract_session(
+    headers: &HeaderMap,
+    state: &HttpState,
+) -> Result<StoredSession, DisclosureError> {
+    let token =
+        if let Some(auth_header) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
+            auth_header
+                .strip_prefix("Bearer ")
+                .unwrap_or(auth_header)
+                .trim()
+        } else if let Some(cookie_header) = headers.get("cookie").and_then(|v| v.to_str().ok()) {
+            let mut found = "";
+            for cookie in cookie_header.split(';') {
+                let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
+                if parts.len() == 2 && parts[0] == "haze_audit_session" {
+                    found = parts[1];
+                    break;
+                }
             }
-        }
-        found
-    } else {
-        ""
-    };
+            found
+        } else {
+            ""
+        };
 
     if token.is_empty() {
         return Err(DisclosureError::Unauthorized);
@@ -403,6 +445,8 @@ fn extract_session(headers: &HeaderMap, state: &HttpState) -> Result<StoredSessi
     let session = state
         .store
         .get_session(&token_hash)
+        .await
+        .map_err(|_| DisclosureError::Unavailable)?
         .ok_or(DisclosureError::Unauthorized)?;
 
     let now = SystemTime::now()
@@ -438,17 +482,14 @@ async fn auth_challenge(
         .map_or(0, |d| d.as_secs());
     let expires_at = now + state.siwe_config.challenge_ttl_secs;
 
-    let challenge_id_bytes = state.store.next_id(b"siwe_challenge");
+    let challenge_id_bytes = match state.store.next_id(b"siwe_challenge").await {
+        Ok(value) => value,
+        Err(_) => return error_response(DisclosureError::Unavailable),
+    };
     let challenge_id = format!("0x{}", hex::encode(challenge_id_bytes));
     let nonce = hex::encode(&challenge_id_bytes[..8]);
 
-    let message = format_siwe_message(
-        &state.siwe_config,
-        &body.wallet,
-        &nonce,
-        now,
-        expires_at,
-    );
+    let message = format_siwe_message(&state.siwe_config, &body.wallet, &nonce, now, expires_at);
 
     let stored = StoredChallenge {
         challenge_id: challenge_id_bytes,
@@ -463,7 +504,9 @@ async fn auth_challenge(
         consumed: false,
         message: message.clone(),
     };
-    state.store.save_challenge(stored);
+    if state.store.save_challenge(stored).await.is_err() {
+        return error_response(DisclosureError::Unavailable);
+    }
 
     Json(SiweChallenge {
         challenge_id,
@@ -491,9 +534,10 @@ async fn auth_verify(
         Err(_) => return error_response(DisclosureError::InvalidBinding),
     };
 
-    let challenge = match state.store.consume_challenge(&challenge_id_bytes) {
-        Some(c) => c,
-        None => return error_response(DisclosureError::Rejected),
+    let challenge = match state.store.consume_challenge(&challenge_id_bytes).await {
+        Err(_) => return error_response(DisclosureError::Unavailable),
+        Ok(Some(c)) => c,
+        Ok(None) => return error_response(DisclosureError::Rejected),
     };
 
     let now = SystemTime::now()
@@ -508,50 +552,71 @@ async fn auth_verify(
     }
 
     if let Err(err) = verify_siwe_signature(&body.message, &signature_bytes, challenge.wallet) {
-        state.store.append_access_log(
-            "auth_denied",
-            &challenge.application_id,
-            None,
-            &challenge.wallet,
-            vec![],
-            false,
-            now,
-        );
+        let _ = state
+            .store
+            .append_access_log(
+                "auth_denied",
+                &challenge.application_id,
+                None,
+                &challenge.wallet,
+                vec![],
+                false,
+                now,
+            )
+            .await;
         return error_response(err);
     }
 
-    let grant = match state.store.get_grant(&challenge.wallet, &challenge.application_id) {
-        Some(g) if !g.revoked && g.expires_at >= now => g,
-        Some(_) => {
-            state.store.append_access_log(
-                "auth_denied",
-                &challenge.application_id,
-                None,
-                &challenge.wallet,
-                vec![],
-                false,
-                now,
-            );
+    let grant = match state
+        .store
+        .get_grant(&challenge.wallet, &challenge.application_id)
+        .await
+    {
+        Err(_) => return error_response(DisclosureError::Unavailable),
+        Ok(Some(g)) if !g.revoked && g.expires_at >= now => g,
+        Ok(Some(_)) => {
+            let _ = state
+                .store
+                .append_access_log(
+                    "auth_denied",
+                    &challenge.application_id,
+                    None,
+                    &challenge.wallet,
+                    vec![],
+                    false,
+                    now,
+                )
+                .await;
             return error_response(DisclosureError::GrantRevoked);
         }
-        None => {
-            state.store.append_access_log(
-                "auth_denied",
-                &challenge.application_id,
-                None,
-                &challenge.wallet,
-                vec![],
-                false,
-                now,
-            );
+        Ok(None) => {
+            let _ = state
+                .store
+                .append_access_log(
+                    "auth_denied",
+                    &challenge.application_id,
+                    None,
+                    &challenge.wallet,
+                    vec![],
+                    false,
+                    now,
+                )
+                .await;
             return error_response(DisclosureError::UserIneligible);
         }
     };
 
-    let session_token_bytes = state.store.next_id(b"session_secret");
+    let session_token_bytes = match state.store.next_id(b"session_secret").await {
+        Ok(value) => value,
+        Err(_) => return error_response(DisclosureError::Unavailable),
+    };
     let session_token = format!("0x{}", hex::encode(session_token_bytes));
     let session_hash = hash_session_token(&session_token);
-    let session_expiry = now + state.siwe_config.session_ttl_secs.min(grant.expires_at.saturating_sub(now));
+    let session_expiry = now
+        + state
+            .siwe_config
+            .session_ttl_secs
+            .min(grant.expires_at.saturating_sub(now));
 
     let session = StoredSession {
         session_hash,
@@ -561,17 +626,26 @@ async fn auth_verify(
         grant_id: grant.grant_id,
         expires_at: session_expiry,
     };
-    state.store.save_session(session);
+    if state.store.save_session(session).await.is_err() {
+        return error_response(DisclosureError::Unavailable);
+    }
 
-    state.store.append_access_log(
-        "auth",
-        &challenge.application_id,
-        None,
-        &challenge.wallet,
-        vec![],
-        true,
-        now,
-    );
+    if state
+        .store
+        .append_access_log(
+            "auth",
+            &challenge.application_id,
+            None,
+            &challenge.wallet,
+            vec![],
+            true,
+            now,
+        )
+        .await
+        .is_err()
+    {
+        return error_response(DisclosureError::Unavailable);
+    }
 
     Json(AuditSession {
         token: session_token,
@@ -583,11 +657,8 @@ async fn auth_verify(
     .into_response()
 }
 
-async fn get_session_info(
-    headers: HeaderMap,
-    State(state): State<Arc<HttpState>>,
-) -> Response {
-    let session = match extract_session(&headers, &state) {
+async fn get_session_info(headers: HeaderMap, State(state): State<Arc<HttpState>>) -> Response {
+    let session = match extract_session(&headers, &state).await {
         Ok(s) => s,
         Err(err) => return error_response(err),
     };
@@ -605,29 +676,36 @@ async fn delete_session_handler(
     headers: HeaderMap,
     State(state): State<Arc<HttpState>>,
 ) -> Response {
-    if let Ok(session) = extract_session(&headers, &state) {
-        state.store.delete_session(&session.session_hash);
+    if let Ok(session) = extract_session(&headers, &state).await {
+        let _ = state.store.delete_session(&session.session_hash).await;
     }
     Json(json!({"ok": true})).into_response()
 }
 
-async fn list_cases_handler(
-    headers: HeaderMap,
-    State(state): State<Arc<HttpState>>,
-) -> Response {
-    let session = match extract_session(&headers, &state) {
+async fn list_cases_handler(headers: HeaderMap, State(state): State<Arc<HttpState>>) -> Response {
+    let session = match extract_session(&headers, &state).await {
         Ok(s) => s,
         Err(err) => return error_response(err),
     };
 
-    let grant = match state.store.get_grant(&session.wallet, &session.application_id) {
-        Some(g) => g,
-        None => return error_response(DisclosureError::Forbidden),
+    let grant = match state
+        .store
+        .get_grant(&session.wallet, &session.application_id)
+        .await
+    {
+        Ok(Some(g)) => g,
+        Ok(None) => return error_response(DisclosureError::Forbidden),
+        Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
     let cases = state
         .store
-        .list_cases(&session.application_id, &grant.assigned_cases);
+        .list_cases(&session.application_id, &grant.assigned_cases)
+        .await;
+    let cases = match cases {
+        Ok(value) => value,
+        Err(_) => return error_response(DisclosureError::Unavailable),
+    };
 
     let summaries: Vec<AuditCaseSummary> = cases
         .into_iter()
@@ -654,7 +732,7 @@ async fn case_disclosure_handler(
     headers: HeaderMap,
     State(state): State<Arc<HttpState>>,
 ) -> Response {
-    let session = match extract_session(&headers, &state) {
+    let session = match extract_session(&headers, &state).await {
         Ok(s) => s,
         Err(err) => return error_response(err),
     };
@@ -663,30 +741,38 @@ async fn case_disclosure_handler(
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
 
-    let grant = match state.store.get_grant(&session.wallet, &session.application_id) {
-        Some(g) if !g.revoked && g.expires_at >= now => g,
-        Some(_) => return error_response(DisclosureError::GrantRevoked),
-        None => return error_response(DisclosureError::Forbidden),
+    let grant = match state
+        .store
+        .get_grant(&session.wallet, &session.application_id)
+        .await
+    {
+        Ok(Some(g)) if !g.revoked && g.expires_at >= now => g,
+        Ok(Some(_)) => return error_response(DisclosureError::GrantRevoked),
+        Ok(None) => return error_response(DisclosureError::Forbidden),
+        Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    let case = match state.store.get_case(&case_id) {
-        Some(c) => c,
-        None => return error_response(DisclosureError::CaseUnassigned),
+    let case = match state.store.get_case(&case_id).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return error_response(DisclosureError::CaseUnassigned),
+        Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
     if !grant.assigned_cases.is_empty() && !grant.assigned_cases.contains(&case.case_id) {
-        state.store.append_access_log(
-            "denied",
-            &session.application_id,
-            Some(&case_id),
-            &session.wallet,
-            vec![],
-            false,
-            now,
-        );
+        let _ = state
+            .store
+            .append_access_log(
+                "denied",
+                &session.application_id,
+                Some(&case_id),
+                &session.wallet,
+                vec![],
+                false,
+                now,
+            )
+            .await;
         return error_response(DisclosureError::CaseUnassigned);
     }
-
 
     let tx_hash_bytes: [u8; 32] = match fixed_hex(&case.transaction_hash) {
         Ok(h) => h,
@@ -696,15 +782,18 @@ async fn case_disclosure_handler(
     let candidates = match evidence_candidates(&state, tx_hash_bytes).await {
         Ok(c) => c,
         Err(err) => {
-            state.store.append_access_log(
-                "denied",
-                &session.application_id,
-                Some(&case_id),
-                &session.wallet,
-                case.granted_fields.clone(),
-                false,
-                now,
-            );
+            let _ = state
+                .store
+                .append_access_log(
+                    "denied",
+                    &session.application_id,
+                    Some(&case_id),
+                    &session.wallet,
+                    case.granted_fields.clone(),
+                    false,
+                    now,
+                )
+                .await;
             return error_response(err);
         }
     };
@@ -719,30 +808,36 @@ async fn case_disclosure_handler(
             state.fixture_ikm.as_ref(),
         ) {
             Ok(resp) => {
-                state.store.append_access_log(
-                    "query",
-                    &session.application_id,
-                    Some(&case_id),
-                    &session.wallet,
-                    case.granted_fields.clone(),
-                    true,
-                    now,
-                );
+                let _ = state
+                    .store
+                    .append_access_log(
+                        "query",
+                        &session.application_id,
+                        Some(&case_id),
+                        &session.wallet,
+                        case.granted_fields.clone(),
+                        true,
+                        now,
+                    )
+                    .await;
                 return Json(resp).into_response();
             }
             Err(err) => last_err = err,
         }
     }
 
-    state.store.append_access_log(
-        "denied",
-        &session.application_id,
-        Some(&case_id),
-        &session.wallet,
-        case.granted_fields,
-        false,
-        now,
-    );
+    let _ = state
+        .store
+        .append_access_log(
+            "denied",
+            &session.application_id,
+            Some(&case_id),
+            &session.wallet,
+            case.granted_fields,
+            false,
+            now,
+        )
+        .await;
     error_response(last_err)
 }
 
@@ -758,7 +853,7 @@ async fn case_export_handler(
     State(state): State<Arc<HttpState>>,
     body: Option<Json<ExportBody>>,
 ) -> Response {
-    let session = match extract_session(&headers, &state) {
+    let session = match extract_session(&headers, &state).await {
         Ok(s) => s,
         Err(err) => return error_response(err),
     };
@@ -767,27 +862,36 @@ async fn case_export_handler(
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
 
-    let grant = match state.store.get_grant(&session.wallet, &session.application_id) {
-        Some(g) if !g.revoked && g.expires_at >= now => g,
-        Some(_) => return error_response(DisclosureError::GrantRevoked),
-        None => return error_response(DisclosureError::Forbidden),
+    let grant = match state
+        .store
+        .get_grant(&session.wallet, &session.application_id)
+        .await
+    {
+        Ok(Some(g)) if !g.revoked && g.expires_at >= now => g,
+        Ok(Some(_)) => return error_response(DisclosureError::GrantRevoked),
+        Ok(None) => return error_response(DisclosureError::Forbidden),
+        Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    let case = match state.store.get_case(&case_id) {
-        Some(c) => c,
-        None => return error_response(DisclosureError::CaseUnassigned),
+    let case = match state.store.get_case(&case_id).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return error_response(DisclosureError::CaseUnassigned),
+        Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
     if !grant.assigned_cases.contains(&case.case_id) {
-        state.store.append_access_log(
-            "denied",
-            &session.application_id,
-            Some(&case_id),
-            &session.wallet,
-            vec![],
-            false,
-            now,
-        );
+        let _ = state
+            .store
+            .append_access_log(
+                "denied",
+                &session.application_id,
+                Some(&case_id),
+                &session.wallet,
+                vec![],
+                false,
+                now,
+            )
+            .await;
         return error_response(DisclosureError::CaseUnassigned);
     }
 
@@ -797,15 +901,18 @@ async fn case_export_handler(
 
     for field in &requested_fields {
         if !case.granted_fields.contains(field) || case.denied_fields.contains(field) {
-            state.store.append_access_log(
-                "denied",
-                &session.application_id,
-                Some(&case_id),
-                &session.wallet,
-                requested_fields.clone(),
-                false,
-                now,
-            );
+            let _ = state
+                .store
+                .append_access_log(
+                    "denied",
+                    &session.application_id,
+                    Some(&case_id),
+                    &session.wallet,
+                    requested_fields.clone(),
+                    false,
+                    now,
+                )
+                .await;
             return error_response(DisclosureError::UnauthorizedField);
         }
     }
@@ -846,7 +953,10 @@ async fn case_export_handler(
         None => return error_response(DisclosureError::IntegrityFailure),
     };
 
-    let export_id_bytes = state.store.next_id(b"export_id");
+    let export_id_bytes = match state.store.next_id(b"export_id").await {
+        Ok(value) => value,
+        Err(_) => return error_response(DisclosureError::Unavailable),
+    };
     let export_expiry = now + 600; // 10 minute export validity
 
     let bundle = create_signed_export(
@@ -860,16 +970,25 @@ async fn case_export_handler(
         export_expiry,
     );
 
-    state.store.save_export(bundle.clone());
-    state.store.append_access_log(
-        "export",
-        &session.application_id,
-        Some(&case_id),
-        &session.wallet,
-        requested_fields,
-        true,
-        now,
-    );
+    if state.store.save_export(bundle.clone()).await.is_err() {
+        return error_response(DisclosureError::Unavailable);
+    }
+    if state
+        .store
+        .append_access_log(
+            "export",
+            &session.application_id,
+            Some(&case_id),
+            &session.wallet,
+            requested_fields,
+            true,
+            now,
+        )
+        .await
+        .is_err()
+    {
+        return error_response(DisclosureError::Unavailable);
+    }
 
     Json(bundle).into_response()
 }
@@ -884,14 +1003,19 @@ async fn access_log_handler(
     headers: HeaderMap,
     State(state): State<Arc<HttpState>>,
 ) -> Response {
-    let session = match extract_session(&headers, &state) {
+    let session = match extract_session(&headers, &state).await {
         Ok(s) => s,
         Err(err) => return error_response(err),
     };
 
     let entries = state
         .store
-        .list_access_log(&session.application_id, params.case_id.as_deref());
+        .list_access_log(&session.application_id, params.case_id.as_deref())
+        .await;
+    let entries = match entries {
+        Ok(value) => value,
+        Err(_) => return error_response(DisclosureError::Unavailable),
+    };
 
     Json(json!({ "entries": entries })).into_response()
 }
@@ -917,9 +1041,15 @@ pub fn router(state: HttpState, allowed_origin: &str) -> Result<Router, Disclosu
         // Institutional Compliance API
         .route("/v1/auth/challenge", post(auth_challenge))
         .route("/v1/auth/verify", post(auth_verify))
-        .route("/v1/session", get(get_session_info).delete(delete_session_handler))
+        .route(
+            "/v1/session",
+            get(get_session_info).delete(delete_session_handler),
+        )
         .route("/v1/cases", get(list_cases_handler))
-        .route("/v1/cases/{case_id}/disclosure", post(case_disclosure_handler))
+        .route(
+            "/v1/cases/{case_id}/disclosure",
+            post(case_disclosure_handler),
+        )
         .route("/v1/cases/{case_id}/export", post(case_export_handler))
         .route("/v1/access-log", get(access_log_handler))
         .layer(cors)

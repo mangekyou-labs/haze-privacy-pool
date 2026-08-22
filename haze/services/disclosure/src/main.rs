@@ -7,7 +7,7 @@ use haze_disclosure::{
     fuji::FujiDisclosureConfig,
     http::{HttpState, router},
     poller::FujiLogPoller,
-    store::ComplianceStore,
+    repository::{ComplianceRepository, PostgresRepository},
 };
 
 fn fixed_hex<const N: usize>(name: &str) -> Result<[u8; N], String> {
@@ -43,7 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let origin = env::var("HAZE_VERCEL_ORIGIN").unwrap_or_else(|_| "http://127.0.0.1:3000".to_owned());
+    let origin =
+        env::var("HAZE_VERCEL_ORIGIN").unwrap_or_else(|_| "http://127.0.0.1:3000".to_owned());
     let domain = origin
         .trim_start_matches("https://")
         .trim_start_matches("http://")
@@ -58,29 +59,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_ttl_secs: 3600,
     };
 
-    let store = ComplianceStore::new();
-
-    // Production seeds ONLY the dedicated auditor grant (no hardcoded cases)
-    if let Ok(auditor_wallet) = fixed_hex::<20>("HAZE_AUDITOR_WALLET") {
-        store.seed_auditor_grant(application_id, auditor_wallet);
-    } else if development {
-        let dev_auditor = fixed_hex::<20>("HAZE_DEV_AUDITOR").unwrap_or([0xaa; 20]);
-        store.seed_auditor_grant(application_id, dev_auditor);
-    }
+    let database_url = env::var("DATABASE_URL").map_err(|_| "DATABASE_URL missing")?;
+    let store = PostgresRepository::connect(&database_url).await?;
+    store.migrate().await?;
+    let auditor_wallet = fixed_hex::<20>("HAZE_AUDITOR_WALLET")?;
+    store
+        .seed_auditor_grant(application_id, auditor_wallet)
+        .await?;
 
     let rpc_url = env::var("HAZE_FUJI_RPC_URL")?;
 
     // Start background internal Fuji log poller
-    let poller = Arc::new(FujiLogPoller::new(config.clone(), rpc_url.clone(), store.clone()));
+    let deployment_block = env::var("HAZE_DEPLOYMENT_BLOCK")
+        .map_err(|_| "HAZE_DEPLOYMENT_BLOCK missing")?
+        .parse()?;
+    let replay_window = env::var("HAZE_POLLER_REPLAY_WINDOW")
+        .unwrap_or_else(|_| "32".to_owned())
+        .parse()?;
+    let poller = Arc::new(FujiLogPoller::with_repository(
+        config.clone(),
+        rpc_url.clone(),
+        ComplianceRepository::from(store.clone()),
+        deployment_block,
+        replay_window,
+    ));
     poller.start_background_loop(Duration::from_secs(5));
 
-    let state = HttpState::new(
-        config,
-        fixture_ikm,
-        rpc_url,
-        siwe_config,
-        store,
-    );
+    let state = HttpState::with_repository(config, fixture_ikm, rpc_url, siwe_config, store.into());
 
     let app = router(state, &origin)?;
     let port = env::var("PORT")
@@ -90,4 +95,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
-

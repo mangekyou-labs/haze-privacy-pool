@@ -45,8 +45,7 @@ async function rpc(method, params) {
 
 export async function runAuditBootstrap(options = {}) {
   const origin = assertProductionOrigin(options.origin || DEPLOYED_ORIGIN);
-  const rawPrivateKey =
-    options.privateKey || process.env.HAZE_AUDITOR_PRIVATE_KEY || process.env.PRIVATE_KEY;
+  const rawPrivateKey = options.privateKey || process.env.HAZE_AUDITOR_PRIVATE_KEY;
   if (!rawPrivateKey || !/^(?:0x)?[0-9a-f]{64}$/i.test(rawPrivateKey)) {
     throw new Error("D8_AUDITOR_PRIVATE_KEY_REQUIRED");
   }
@@ -112,7 +111,7 @@ export async function runAuditBootstrap(options = {}) {
 
   // Query auditor wallet address from provider
   const accounts = await page.evaluate(() =>
-    (globalThis.ethereum?.request?.({ method: "eth_accounts" }) || Promise.resolve([])) as Promise<string[]>,
+    globalThis.ethereum?.request?.({ method: "eth_accounts" }) || Promise.resolve([]),
   );
   const auditorAddress = accounts[0];
 

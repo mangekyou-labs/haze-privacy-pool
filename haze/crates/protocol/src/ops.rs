@@ -15,8 +15,8 @@ use crate::{
     keccak::keccak256,
 };
 
-/// Durable database schema version applied by `0003_compliance_portal.sql`.
-pub const SCHEMA_VERSION: u32 = 3;
+/// Durable database schema version applied by `0004_compliance_runtime.sql`.
+pub const SCHEMA_VERSION: u32 = 4;
 /// Frozen HTTP/library API version used by compatibility pins.
 pub const API_VERSION: &str = "v1";
 /// Spend-circuit identifier bound into compatibility pins.
@@ -27,10 +27,11 @@ pub const CONTRACT_FAMILY: &str = crate::CHAIN_FAMILY;
 pub const SERVICE_P95_TARGET_MS: u64 = 500;
 
 /// Ordered SQL migrations committed under `haze/dev/postgres/migrations`.
-pub const MIGRATION_FILES: [&str; 3] = [
+pub const MIGRATION_FILES: [&str; 4] = [
     "0001_init.sql",
     "0002_ops.sql",
     "0003_compliance_portal.sql",
+    "0004_compliance_runtime.sql",
 ];
 
 /// Compatibility pin checked at process start.
@@ -181,7 +182,7 @@ impl MigrationCatalog {
 
     /// Known forward migrations.
     #[must_use]
-    pub fn files() -> [Migration; 3] {
+    pub fn files() -> [Migration; 4] {
         [
             Migration {
                 version: 1,
@@ -194,6 +195,10 @@ impl MigrationCatalog {
             Migration {
                 version: 3,
                 file: "0003_compliance_portal.sql",
+            },
+            Migration {
+                version: 4,
+                file: "0004_compliance_runtime.sql",
             },
         ]
     }
@@ -251,6 +256,13 @@ impl MigrationCatalog {
                 tables.insert("haze_compliance_exports".to_owned(), true);
                 tables.insert("haze_compliance_access_log".to_owned(), true);
             }
+            4 => {
+                tables.insert("haze_compliance_case_assignments".to_owned(), true);
+                tables.insert("haze_compliance_evidence".to_owned(), true);
+                tables.insert("haze_compliance_poller_checkpoints".to_owned(), true);
+                tables.insert("haze_compliance_access_log_heads".to_owned(), true);
+                tables.insert("haze_compliance_export_counters".to_owned(), true);
+            }
             _ => return Err(ProtocolError::VersionUnsupported),
         }
         self.applied
@@ -290,6 +302,13 @@ impl MigrationCatalog {
                 tables.remove("haze_compliance_cases");
                 tables.remove("haze_compliance_exports");
                 tables.remove("haze_compliance_access_log");
+            }
+            4 => {
+                tables.remove("haze_compliance_case_assignments");
+                tables.remove("haze_compliance_evidence");
+                tables.remove("haze_compliance_poller_checkpoints");
+                tables.remove("haze_compliance_access_log_heads");
+                tables.remove("haze_compliance_export_counters");
             }
             _ => return Err(ProtocolError::VersionUnsupported),
         }
