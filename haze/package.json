@@ -28,6 +28,8 @@
     "qa:wallet:setup": "node --experimental-strip-types dev/setup-metamask.mjs",
     "qa:wallet:validate": "node --experimental-strip-types dev/setup-metamask.mjs --validate-only",
     "qa:wallet:cleanup": "node --experimental-strip-types dev/cleanup-metamask.mjs",
+    "qa:audit:bootstrap": "node --experimental-strip-types dev/dappwright-audit-bootstrap.mjs",
+    "qa:audit:walk": "node --experimental-strip-types dev/playwright-audit-walk.mjs",
     "qa:cli": "playwright-cli",
     "e2e": "node --experimental-strip-types dev/e2e.mjs",
     "gates": "node --experimental-strip-types dev/gates.mjs",

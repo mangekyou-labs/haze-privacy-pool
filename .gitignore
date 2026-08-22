@@ -9,6 +9,7 @@ haze/dev/artifacts/ceremony-private/
 # Dependencies and build outputs
 node_modules/
 **/dist/
+*.tsbuildinfo
 haze/target/
 haze/.tools/
 haze/circuits/build/

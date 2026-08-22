@@ -1,9 +1,10 @@
-//! Stateless, wallet-scoped Fuji withdrawal disclosure verification.
+//! Stateless Fuji withdrawal disclosure and institutional compliance verification.
 
 use std::collections::BTreeMap;
 
 use haze_protocol::{action::WITHDRAW, keccak::keccak256};
 use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
+use serde::{Deserialize, Serialize};
 
 use crate::{DisclosureError, StoredAuditRecord, decrypt_and_redact};
 
@@ -13,6 +14,8 @@ pub const DOMAIN_NAME: &str = "Haze Fuji Disclosure";
 pub const DOMAIN_VERSION: &str = "1";
 /// Maximum request lifetime, in seconds.
 pub const MAX_EXPIRY_SECS: u64 = 300;
+/// Minimum confirmations required for compliance finality.
+pub const MIN_CONFIRMATIONS: u64 = 12;
 
 /// Immutable Fuji-development bindings.
 #[derive(Clone, Debug)]
@@ -51,6 +54,10 @@ pub struct FujiWithdrawalEvidence {
     pub receipt_successful: bool,
     /// Hash of the receipt transaction.
     pub transaction_hash: [u8; 32],
+    /// Block number where receipt was mined.
+    pub block_number: u64,
+    /// Current head block number when evidence was sampled.
+    pub current_block_number: u64,
     /// Address that emitted `PrivateTransaction`.
     pub pool: [u8; 20],
     /// Application indexed event topic.
@@ -72,12 +79,39 @@ pub struct FujiWithdrawalEvidence {
 }
 
 /// Successful wallet-scoped disclosure response.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FujiDisclosureResponse {
     /// Verified transaction hash.
     pub transaction_hash: [u8; 32],
     /// Only authorized requested fields.
     pub fields: BTreeMap<String, String>,
+}
+
+/// Single item in the integrity verification checklist.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerificationCheck {
+    /// Identifier or title of the check.
+    pub name: String,
+    /// Result status (`"pass"`, `"fail"`, `"warn"`).
+    pub status: String,
+    /// Detailed evidence message.
+    pub detail: String,
+}
+
+/// Response returned to the institutional auditor workstation upon verification & disclosure.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComplianceDisclosureResponse {
+    /// Verified transaction hash.
+    pub transaction_hash: String,
+    /// Disclosed granted fields.
+    pub fields: BTreeMap<String, String>,
+    /// Number of on-chain confirmations observed.
+    pub confirmations: u64,
+    /// Checklist of individual verification checks.
+    pub checks: Vec<VerificationCheck>,
 }
 
 fn word_address(address: [u8; 20]) -> [u8; 32] {
@@ -141,7 +175,7 @@ fn recover_wallet(digest: &[u8; 32], signature: &[u8; 65]) -> Result<[u8; 20], D
     Ok(address)
 }
 
-/// Verify all Fuji, event, envelope, commitment, scope, and wallet bindings.
+/// Verify all Fuji, event, envelope, commitment, scope, and wallet bindings for user withdrawal disclosure.
 pub fn verify_fuji_withdrawal(
     config: &FujiDisclosureConfig,
     request: &FujiDisclosureRequest,
@@ -201,5 +235,134 @@ pub fn verify_fuji_withdrawal(
     Ok(FujiDisclosureResponse {
         transaction_hash: request.transaction_hash,
         fields,
+    })
+}
+
+/// Verify Fuji on-chain evidence with at least 12 confirmations for an institutional compliance case.
+pub fn verify_compliance_case_evidence(
+    config: &FujiDisclosureConfig,
+    target_tx_hash: [u8; 32],
+    granted_fields: &[String],
+    evidence: &FujiWithdrawalEvidence,
+    fixture_ikm: Option<&[u8; 32]>,
+) -> Result<ComplianceDisclosureResponse, DisclosureError> {
+    if config.chain_id != 43_113 || !config.development_fixture_keys {
+        return Err(DisclosureError::KeysMissing);
+    }
+
+    let mut checks = Vec::new();
+
+    // 1. Confirmations check (>= 12 required)
+    let confirmations = if evidence.current_block_number >= evidence.block_number {
+        evidence.current_block_number - evidence.block_number + 1
+    } else {
+        0
+    };
+
+    if confirmations >= MIN_CONFIRMATIONS {
+        checks.push(VerificationCheck {
+            name: "Finality & Confirmations".to_owned(),
+            status: "pass".to_owned(),
+            detail: format!("{confirmations} confirmations (>= {MIN_CONFIRMATIONS} required)"),
+        });
+    } else {
+        checks.push(VerificationCheck {
+            name: "Finality & Confirmations".to_owned(),
+            status: "fail".to_owned(),
+            detail: format!("{confirmations} confirmations (< {MIN_CONFIRMATIONS} required)"),
+        });
+        return Err(DisclosureError::InsufficientFinality);
+    }
+
+    // 2. Canonical receipt
+    if evidence.receipt_successful {
+        checks.push(VerificationCheck {
+            name: "Canonical Receipt".to_owned(),
+            status: "pass".to_owned(),
+            detail: format!("Status 0x1 mined at block #{}", evidence.block_number),
+        });
+    } else {
+        checks.push(VerificationCheck {
+            name: "Canonical Receipt".to_owned(),
+            status: "fail".to_owned(),
+            detail: "Transaction receipt missing or status != 0x1".to_owned(),
+        });
+        return Err(DisclosureError::ReceiptNotSuccessful);
+    }
+
+    // 3. Pool event
+    if evidence.pool == config.pool && evidence.application_id == config.application_id {
+        checks.push(VerificationCheck {
+            name: "Pool Event Binding".to_owned(),
+            status: "pass".to_owned(),
+            detail: "PrivateTransaction event logged on configured HazePool".to_owned(),
+        });
+    } else {
+        checks.push(VerificationCheck {
+            name: "Pool Event Binding".to_owned(),
+            status: "fail".to_owned(),
+            detail: "Pool address or application ID mismatch on event".to_owned(),
+        });
+        return Err(DisclosureError::InvalidBinding);
+    }
+
+    // 4. Action binding
+    if evidence.action == WITHDRAW && evidence.record.action == WITHDRAW {
+        checks.push(VerificationCheck {
+            name: "Action Binding".to_owned(),
+            status: "pass".to_owned(),
+            detail: "Action 3 (Withdrawal) matches case record".to_owned(),
+        });
+    } else {
+        checks.push(VerificationCheck {
+            name: "Action Binding".to_owned(),
+            status: "fail".to_owned(),
+            detail: "Action mismatch".to_owned(),
+        });
+        return Err(DisclosureError::InvalidBinding);
+    }
+
+    // 5. Envelope hash
+    if evidence.record.audit_ciphertext_hash == evidence.audit_ciphertext_hash {
+        checks.push(VerificationCheck {
+            name: "Audit Envelope Hash".to_owned(),
+            status: "pass".to_owned(),
+            detail: "HPKE envelope matches on-chain auditCiphertextHash".to_owned(),
+        });
+    } else {
+        checks.push(VerificationCheck {
+            name: "Audit Envelope Hash".to_owned(),
+            status: "fail".to_owned(),
+            detail: "Envelope hash mismatch".to_owned(),
+        });
+        return Err(DisclosureError::IntegrityFailure);
+    }
+
+    // 6. Commitment & in-memory decryption
+    let ikm = fixture_ikm.ok_or(DisclosureError::KeysMissing)?;
+    let decrypted_fields = match decrypt_and_redact(&evidence.record, ikm, granted_fields) {
+        Ok(fields) => {
+            checks.push(VerificationCheck {
+                name: "Audit Commitment & Decryption".to_owned(),
+                status: "pass".to_owned(),
+                detail: "Poseidon commitment verified against on-chain auditDataCommitment".to_owned(),
+            });
+            fields
+        }
+        Err(err) => {
+            checks.push(VerificationCheck {
+                name: "Audit Commitment & Decryption".to_owned(),
+                status: "fail".to_owned(),
+                detail: format!("Decryption or commitment check failed: {err:?}"),
+            });
+            return Err(err);
+        }
+    };
+
+    Ok(ComplianceDisclosureResponse {
+        transaction_hash: format!("0x{}", hex::encode(target_tx_hash)),
+        fields: decrypted_fields,
+        confirmations,
+        checks,
     })
 }

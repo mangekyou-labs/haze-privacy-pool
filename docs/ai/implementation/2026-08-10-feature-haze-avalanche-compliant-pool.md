@@ -4,6 +4,17 @@ title: Implementation Guide
 description: Technical implementation notes, patterns, and code guidelines
 ---
 
+## D8 compliance portal reconciliation (2026-08-22 — In Progress)
+
+- Reopened D8 as in progress to reconcile local implementation vs. deployed acceptance evidence.
+- Preserved verified local Rust logic in `haze-disclosure` (EIP-4361 SIWE challenge/verification, opaque hashed sessions, 12-confirmation checking, envelope hashing, in-memory redaction, signed canonical export, hash-chained access logging).
+- Delivered local implementation items:
+  - **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion (Complete locally):** Implemented `FujiLogPoller` in `haze/services/disclosure/src/poller.rs` to scan `HazePool`, detect `PrivateTransaction` withdrawal events, store evidence idempotently, create `pending_finality` cases, and promote to `ready` at 12 confirmations. Updated production startup to seed ONLY the dedicated auditor grant with dynamic case assignment.
+  - **D8.0b / D8.4 React Workstation UX Remediation (Complete locally):** Embedded full-width audit workstation cleanly inside existing Haze shell (`data-card="compliance-audit"`) and `theme.css` tokens (`var(--haze-accent)` `#1f6b62`, IBM Plex font, existing surfaces/borders). Removed neon teal and duplicated headers. Implemented `?case=<id>` deep links, semantic accessible buttons/dialogs with focus trapping, genuine empty states, 5-field disclosure with strict user/counterparty redaction, and comprehensive error states.
+- Open production acceptance deliverables:
+  - **D8.5–D8.7 Production E2E & Product Quality Gate:** Execute fresh Fuji deposit→withdraw→auditor SIWE journey with real transaction hashes and separate auditor wallet. Run named `playwright-cli -s=haze-d8` session against production Vercel origin. Reclassify prior screenshots and manifests as local mocked fixtures.
+
+
 ## D6-D7 browser continuation (2026-08-21)
 
 - D6 deployment packaging fix: the first monorepo-root Vercel archive reached the remote builder

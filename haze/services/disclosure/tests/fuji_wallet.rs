@@ -132,6 +132,8 @@ fn evidence(config: &FujiDisclosureConfig, plaintext_suffix: &[u8]) -> FujiWithd
     FujiWithdrawalEvidence {
         receipt_successful: true,
         transaction_hash: [0x77; 32],
+        block_number: 100,
+        current_block_number: 120,
         pool: config.pool,
         application_id: config.application_id,
         action: WITHDRAW,

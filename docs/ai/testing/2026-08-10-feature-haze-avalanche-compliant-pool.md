@@ -6,6 +6,35 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
 
 # Haze Avalanche Compliant Pool Testing Strategy
 
+## D8 compliance portal reconciliation evidence (2026-08-22 — In Progress)
+
+- [x] **D8.1 Local Rust compliance runtime tests (`haze/services/disclosure/tests/compliance_auditor.rs`):**
+  - SIWE challenge issuance, EIP-4361 formatting, signature recovery, and replay rejection (`REJECTED`).
+  - Session hashing (`keccak256(token)`), expiry verification, and revocation (`DELETE /v1/session`).
+  - Grant isolation and case assignment (`GRANT_REVOKED`, `CASE_UNASSIGNED`).
+  - 12+ on-chain confirmation enforcement (`INSUFFICIENT_FINALITY` when < 12), canonical receipt status `0x1`,
+    `PrivateTransaction` event binding, envelope hash check, and Poseidon audit commitment verification.
+  - Strict field redaction (granted: `tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`; denied: `user`, `counterparty`).
+  - Signed canonical export bundle creation, timestamp expiry, and detached signature verification.
+  - Write-once hash-chained access log verification (`verify_access_log_chain`) and sequence/tamper detection.
+- [x] Durable schema migration `0003_compliance_portal.sql` and `SCHEMA_VERSION = 3` in `haze/crates/protocol/tests/ops.rs`.
+- [x] **D8.3 Local Next.js BFF unit tests (`haze/tests/fuji-compliance-auditor.test.mjs`):**
+  - Handler export validation, error forwarding (503 on service outage), and cookie issuance.
+- [x] **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion tests (`haze/services/disclosure/tests/compliance_auditor.rs`):**
+  - Poller log parsing, event extraction, confirmation tracking, pre-finality dynamic case creation, and promotion to `ready` at 12 confirmations.
+  - Production startup seeding only the dedicated auditor grant with dynamic unconstrained case matching.
+  - Sequential hash chain head retrieval (`get_access_log_head`).
+- [x] **D8.4 React Workstation UI & Accessibility tests (`haze/tests/fuji-compliance-auditor.test.mjs`):**
+  - Full-width shell mounting (`data-card="compliance-audit"`), `theme.css` tokens (`#1f6b62` accent, IBM Plex font), omission of pool tabs and DEX balances.
+  - 5-field disclosure output verification with strict redaction of `user` and `counterparty`.
+  - Focus trapping and keyboard accessibility in export review modal with `?case=<id>` deep link synchronization.
+- [ ] **D8.5–D8.7 Fresh Fuji Deposit→Withdrawal→Compliance Journey & Production E2E:**
+  - Real Fuji deposit and withdrawal transaction execution.
+  - Automatic poller ingestion and dynamic case promotion.
+  - Separate auditor wallet SIWE and named `playwright-cli -s=haze-d8` walkthrough against production origin.
+  - Production evidence manifest with genuine deployment IDs, transaction hashes, receipts, and access log head.
+
+
 ## Deployed Fuji continuation evidence (2026-08-21)
 
 - [x] D6 Vercel packaging TDD: `tests/vercel-deployment.test.mjs` first failed `ENOENT` while

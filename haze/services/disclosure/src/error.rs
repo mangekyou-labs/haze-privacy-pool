@@ -5,7 +5,13 @@ use thiserror::Error;
 /// Typed disclosure denial or fail-closed outage.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DisclosureError {
-    /// The wallet requested a field outside the wallet-scoped allowlist.
+    /// Unauthenticated caller (no valid session).
+    #[error("UNAUTHORIZED")]
+    Unauthorized,
+    /// Authenticated caller lacks permission.
+    #[error("FORBIDDEN")]
+    Forbidden,
+    /// The wallet requested a field outside the allowlist.
     #[error("UNAUTHORIZED_FIELD")]
     UnauthorizedField,
     /// Receipt, event, application, pool, version, or action binding differed.
@@ -23,6 +29,15 @@ pub enum DisclosureError {
     /// Token, case, or export is past its expiry.
     #[error("AUTHORIZATION_EXPIRED")]
     AuthorizationExpired,
+    /// The auditor grant was revoked.
+    #[error("GRANT_REVOKED")]
+    GrantRevoked,
+    /// The requested case is not assigned to this auditor.
+    #[error("CASE_UNASSIGNED")]
+    CaseUnassigned,
+    /// The transaction does not meet minimum finality confirmations (>= 12).
+    #[error("INSUFFICIENT_FINALITY")]
+    InsufficientFinality,
     /// Envelope, record, or export encoding is not canonical v1.
     #[error("ENCODING_INVALID")]
     EncodingInvalid,
@@ -48,12 +63,17 @@ impl DisclosureError {
     #[must_use]
     pub fn as_code(&self) -> &'static str {
         match self {
+            Self::Unauthorized => "UNAUTHORIZED",
+            Self::Forbidden => "FORBIDDEN",
             Self::UnauthorizedField => "UNAUTHORIZED_FIELD",
             Self::InvalidBinding => "INVALID_BINDING",
             Self::ReceiptNotSuccessful => "RECEIPT_NOT_SUCCESSFUL",
             Self::KeysMissing => "KEYS_MISSING",
             Self::UserIneligible => "USER_INELIGIBLE",
             Self::AuthorizationExpired => "AUTHORIZATION_EXPIRED",
+            Self::GrantRevoked => "GRANT_REVOKED",
+            Self::CaseUnassigned => "CASE_UNASSIGNED",
+            Self::InsufficientFinality => "INSUFFICIENT_FINALITY",
             Self::EncodingInvalid => "ENCODING_INVALID",
             Self::Unavailable => "UNAVAILABLE",
             Self::Rejected => "REJECTED",

@@ -3,8 +3,14 @@
 #![forbid(unsafe_code)]
 
 mod error;
+pub mod access_log;
+pub mod auth;
+pub mod cases;
+pub mod export;
 pub mod fuji;
 pub mod http;
+pub mod poller;
+pub mod store;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

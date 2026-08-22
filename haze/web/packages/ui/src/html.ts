@@ -237,7 +237,9 @@ function governanceWorkspace(options: RenderOptions) {
 }
 
 export function renderHazeFragment(site: Site, path: string, options: RenderOptions = {}) {
-  const fujiBrowser = options.mode === "fuji-browser" && (path === "/shield" || path === "/withdraw");
+  const fujiBrowser =
+    options.mode === "fuji-browser" &&
+    (path === "/shield" || path === "/withdraw" || path === "/audit");
   const decision = site.decide(path);
   const walletStatus = options.walletStatus ?? (options.address ? "connected" : "disconnected");
   const reviewed = Boolean(options.reviewed);
@@ -342,7 +344,9 @@ export function renderHazeFragment(site: Site, path: string, options: RenderOpti
   const warningsMarkup = fujiBrowser ? "" : reviewPanel(site, path, reviewed);
 
   const body = fujiBrowser
-    ? `<div id="fuji-browser-transaction-root"></div>`
+    ? path === "/audit"
+      ? `<div id="haze-audit-workstation-root"></div>`
+      : `<div id="fuji-browser-transaction-root"></div>`
     : !decision.ok
     ? `<p>${deniedCopy}</p>`
     : path === "/admin"
@@ -371,16 +375,16 @@ export function renderHazeFragment(site: Site, path: string, options: RenderOpti
       </div>
     </header>
     <main id="content" class="haze-stage">
-      <section class="haze-card" data-card="${chrome === "dex" ? "pool" : "compliance"}">
-        <nav class="haze-dex-tabs" aria-label="${chrome === "dex" ? "Pool" : "Compliance"}">${tabNav}</nav>
-        <h1 class="haze-title">${escapeHtml(title)}</h1>
+      <section class="haze-card" data-card="${path === "/audit" && fujiBrowser ? "compliance-audit" : chrome === "dex" ? "pool" : "compliance"}">
+        ${path === "/audit" && fujiBrowser ? "" : `<nav class="haze-dex-tabs" aria-label="${chrome === "dex" ? "Pool" : "Compliance"}">${tabNav}</nav>
+        <h1 class="haze-title">${escapeHtml(title)}</h1>`}
         ${chrome === "dex" && !fujiBrowser ? dexBalances(options) : ""}
         ${banners}
         ${!fujiBrowser && decision.ok && path !== "/history" && path !== "/admin" && path !== "/audit" && path !== "/governance" ? warningsMarkup : ""}
         ${body}
         ${fujiBrowser ? "" : `<p class="haze-mono haze-phase">Phase ${escapeHtml(options.phase ?? "idle")} · Notes ${options.notes ?? 0}</p>
         <p class="haze-mono" data-error>${escapeHtml(options.lastError ?? "")}</p>`}
-        <nav class="haze-more">${moreNav}</nav>
+        ${path === "/audit" && fujiBrowser ? "" : `<nav class="haze-more">${moreNav}</nav>`}
       </section>
     </main>
   </div>`;

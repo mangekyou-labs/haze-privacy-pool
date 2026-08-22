@@ -25,7 +25,8 @@ fn committed_sql_files_match_the_catalog() {
     let files = MigrationCatalog::files();
     assert_eq!(files[0].file, "0001_init.sql");
     assert_eq!(files[1].file, "0002_ops.sql");
-    assert_eq!(files[1].version, SCHEMA_VERSION);
+    assert_eq!(files[2].file, "0003_compliance_portal.sql");
+    assert_eq!(files[2].version, SCHEMA_VERSION);
 }
 
 #[test]
@@ -36,10 +37,15 @@ fn migrations_apply_forward_and_roll_back() {
     assert!(catalog.has_table("haze_access_log").expect("t1"));
     assert_eq!(catalog.apply_next().expect("0002"), 2);
     assert!(catalog.has_table("haze_idempotency").expect("t2"));
+    assert_eq!(catalog.apply_next().expect("0003"), 3);
+    assert!(catalog.has_table("haze_compliance_cases").expect("t3"));
     assert_eq!(
-        catalog.apply_next().expect_err("no 0003"),
+        catalog.apply_next().expect_err("no 0004"),
         ProtocolError::VersionUnsupported
     );
+    assert_eq!(catalog.rollback().expect("down 0003"), 3);
+    assert!(!catalog.has_table("haze_compliance_cases").expect("dropped"));
+    assert_eq!(catalog.current_version().expect("v2"), 2);
     assert_eq!(catalog.rollback().expect("down 0002"), 2);
     assert!(!catalog.has_table("haze_idempotency").expect("dropped"));
     assert_eq!(catalog.current_version().expect("v1"), 1);
