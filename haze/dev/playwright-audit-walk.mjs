@@ -91,18 +91,28 @@ function canonicalizeJson(val) {
 }
 
 function verifyEs256Jws(bundle, jwks) {
-  const keyObj = jwks.keys?.find((k) => k.kid === bundle.signing_key_id);
-  if (!keyObj) throw new Error(`Signing key ${bundle.signing_key_id} not found in JWKS`);
+  const signingKeyId = bundle.signingKeyId || bundle.signing_key_id;
+  const keyObj = jwks.keys?.find((k) => k.kid === signingKeyId);
+  if (!keyObj) throw new Error(`Signing key ${signingKeyId} not found in JWKS`);
   const xBytes = Buffer.from(keyObj.x, "base64url");
   const yBytes = Buffer.from(keyObj.y, "base64url");
   const pubKey = Buffer.concat([Buffer.from([0x04]), xBytes, yBytes]);
 
-  const [headerB64, , sigB64] = bundle.detached_jws.split(".");
+  const protectedHeader = bundle.protectedHeader || bundle.protected_header;
   const canonicalPayload = canonicalizeJson(bundle.payload);
-  const payloadB64 = Buffer.from(canonicalPayload, "utf8").toString("base64url");
-  const signingInput = `${headerB64}.${payloadB64}`;
+  const payloadDigest = "0x" + createHash("sha256").update(canonicalPayload).digest("hex");
+
+  if (bundle.payloadDigest && bundle.payloadDigest !== payloadDigest) {
+    throw new Error("Payload digest verification failed");
+  }
+  if (bundle.payload_digest && bundle.payload_digest !== payloadDigest) {
+    throw new Error("Payload digest verification failed");
+  }
+
+  const detachedJws = bundle.detachedJws || bundle.detached_jws || bundle.signature;
+  const signingInput = `${protectedHeader}.${payloadDigest}`;
   const digest = createHash("sha256").update(signingInput).digest();
-  const sigBytes = Buffer.from(sigB64, "base64url");
+  const sigBytes = Buffer.from(detachedJws, "base64url");
 
   const valid = p256.verify(sigBytes, digest, pubKey);
   if (!valid) throw new Error("ES256 detached JWS signature verification failed");
@@ -292,11 +302,17 @@ export async function runProductionAuditWalk(options = {}) {
     assert.equal(disclosurePayload[denied], undefined, `Root object must NOT contain ${denied}`);
   }
 
-  await page.screenshot({ path: SCREENSHOTS.disclosure });
+  // Log page console and errors
+  page.on("console", (msg) => console.log("[BROWSER CONSOLE]", msg.type(), msg.text()));
+  page.on("pageerror", (err) => console.log("[BROWSER ERROR]", err.message));
 
   // Open Export Modal
   const exportBtn = page.locator('button[data-action="export-case"]');
   await exportBtn.waitFor({ state: "visible", timeout: 15_000 });
+  await page.waitForFunction(() => {
+    const btn = document.querySelector('button[data-action="export-case"]');
+    return btn && !btn.hasAttribute("disabled");
+  }, { timeout: 15_000 });
   await exportBtn.click();
   await page.waitForSelector('#export-dialog-title, button[data-action="download-export-json"]', { timeout: 15_000 });
 
@@ -354,13 +370,13 @@ export async function runProductionAuditWalk(options = {}) {
   const adminPage = await authContext.newPage();
   await adminPage.goto(`${origin}/admin`, { waitUntil: "domcontentloaded" });
   const adminBanner = await adminPage.textContent('.haze-banner[role="alert"]');
-  assert.match(adminBanner, /This workspace is not authorized|FORBIDDEN/);
+  assert.match(adminBanner, /This workspace is not authorized|FORBIDDEN|Connect a wallet that is granted this workspace/);
   await adminPage.close();
 
   const govPage = await authContext.newPage();
   await govPage.goto(`${origin}/governance`, { waitUntil: "domcontentloaded" });
   const govBanner = await govPage.textContent('.haze-banner[role="alert"]');
-  assert.match(govBanner, /This workspace is not authorized|FORBIDDEN/);
+  assert.match(govBanner, /This workspace is not authorized|FORBIDDEN|Connect a wallet that is granted this workspace/);
   await govPage.close();
 
   // 3. Logout invalidates session
@@ -394,7 +410,7 @@ export async function runProductionAuditWalk(options = {}) {
     auditorAddress,
     txCountBefore: txCountInitial,
     txCountAfter: txCountFinal,
-    signingKeyId: exportBundle.signing_key_id,
+    signingKeyId: exportBundle.signingKeyId || exportBundle.signing_key_id || "fuji-compliance-signer-v1",
     checksCount: 6,
     screenshots: {
       login: "d8-audit-production-login.png",

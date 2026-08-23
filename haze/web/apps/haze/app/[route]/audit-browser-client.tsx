@@ -806,12 +806,15 @@ export function AuditBrowserClient() {
                 gap: "4px",
               }}
             >
-              <div><strong>Schema Version:</strong> {exportData.schema_version}</div>
-              <div><strong>Export ID:</strong> {exportData.export_id}</div>
-              <div><strong>Case ID:</strong> {exportData.case_id}</div>
-              <div><strong>Signing Key:</strong> {exportData.signing_key_id}</div>
-              <div><strong>Expires At:</strong> {new Date(exportData.expires_at * 1000).toISOString()}</div>
-              <div><strong>Detached JWS:</strong> {exportData.detached_jws.slice(0, 20)}...</div>
+              <div><strong>Schema Version:</strong> {String(exportData.schemaVersion || exportData.schema_version || (exportData.payload as Record<string, unknown>)?.schema_version || "—")}</div>
+              <div><strong>Export ID:</strong> {String(exportData.exportId || exportData.export_id || (exportData.payload as Record<string, unknown>)?.export_id || "—")}</div>
+              <div><strong>Case ID:</strong> {String(exportData.caseId || exportData.case_id || (exportData.payload as Record<string, unknown>)?.case_id || "—")}</div>
+              <div><strong>Signing Key:</strong> {String(exportData.signingKeyId || exportData.signing_key_id || "—")}</div>
+              <div><strong>Expires At:</strong> {(() => {
+                const exp = exportData.expiresAt || exportData.expires_at || (exportData.payload as Record<string, unknown>)?.expires_at;
+                return exp ? new Date(Number(exp) * 1000).toISOString() : "—";
+              })()}</div>
+              <div><strong>Detached JWS:</strong> {String(exportData.detachedJws || exportData.detached_jws || exportData.signature || "").slice(0, 20)}...</div>
             </div>
 
             <pre
