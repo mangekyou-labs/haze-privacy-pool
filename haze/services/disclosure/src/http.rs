@@ -241,21 +241,59 @@ async fn evidence_candidates(
     state: &HttpState,
     hash: [u8; 32],
 ) -> Result<Vec<FujiWithdrawalEvidence>, DisclosureError> {
-    let mut cached = state
+    let cached = state
         .store
         .get_evidence(&hash)
         .await
-        .map_err(|_| DisclosureError::Unavailable)?;
-    if !cached.is_empty() {
-        if let Ok(head_val) = rpc(state, "eth_blockNumber", json!([])).await
-            && let Some(head_hex) = head_val.as_str()
-            && let Ok(head_num) = u64::from_str_radix(head_hex.trim_start_matches("0x"), 16)
-        {
-            for item in &mut cached {
-                item.current_block_number = head_num;
+        .unwrap_or_default();
+
+    let hash_hex = format!("0x{}", hex::encode(hash));
+    let head_num = match rpc(state, "eth_blockNumber", json!([])).await {
+        Ok(head_val) => head_val
+            .as_str()
+            .and_then(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).ok()),
+        Err(_) => None,
+    };
+
+    // Extract action_reference words from transaction calldata
+    let action_refs = match rpc(state, "eth_getTransactionByHash", json!([hash_hex])).await {
+        Ok(tx) => {
+            if let Some(input) = tx.get("input").and_then(Value::as_str) {
+                if let Ok(input_bytes) = hex::decode(input.trim_start_matches("0x")) {
+                    input_bytes
+                        .get(4..)
+                        .unwrap_or_default()
+                        .chunks_exact(32)
+                        .map(|word| word.try_into().unwrap_or([0u8; 32]))
+                        .collect::<Vec<[u8; 32]>>()
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
             }
         }
-        return Ok(cached);
+        Err(_) => Vec::new(),
+    };
+
+    if !cached.is_empty() {
+        let mut expanded = Vec::new();
+        for item in cached {
+            let mut base = item.clone();
+            if let Some(num) = head_num {
+                base.current_block_number = num;
+            }
+            expanded.push(base.clone());
+            for action_ref in &action_refs {
+                if *action_ref != base.action_reference {
+                    let mut variant = base.clone();
+                    variant.action_reference = *action_ref;
+                    variant.record.action_reference = *action_ref;
+                    expanded.push(variant);
+                }
+            }
+        }
+        return Ok(expanded);
     }
 
     let hash_hex = format!("0x{}", hex::encode(hash));

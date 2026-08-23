@@ -79,7 +79,7 @@ function personalSign(message, privKeyHex) {
   const sig = secp256k1.sign(digest, priv, { prehash: false });
   const compact = sig.toCompactRawBytes();
   const recovery = sig.recovery;
-  const vHex = (recovery + 27).toString(16).padStart(2, "0");
+  const vHex = recovery.toString(16).padStart(2, "0");
   return `0x${Buffer.from(compact).toString("hex")}${vHex}`;
 }
 

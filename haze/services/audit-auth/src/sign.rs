@@ -56,7 +56,12 @@ fn sign_digest(signing_key: &[u8; 32], digest: &[u8; 32]) -> Result<[u8; 65]> {
 fn recover_signer(digest: &[u8; 32], signature: &[u8; 65]) -> Result<[u8; 20]> {
     let parsed =
         Signature::from_slice(&signature[..64]).map_err(|_| AuditAuthError::EncodingInvalid)?;
-    let recid = RecoveryId::from_byte(signature[64]).ok_or(AuditAuthError::EncodingInvalid)?;
+    let v = match signature[64] {
+        0 | 1 => signature[64],
+        27 | 28 => signature[64] - 27,
+        _ => return Err(AuditAuthError::EncodingInvalid),
+    };
+    let recid = RecoveryId::from_byte(v).ok_or(AuditAuthError::EncodingInvalid)?;
     let verifying = VerifyingKey::recover_from_prehash(digest, &parsed, recid)
         .map_err(|_| AuditAuthError::EncodingInvalid)?;
     address_from_verifying_key(&verifying)
