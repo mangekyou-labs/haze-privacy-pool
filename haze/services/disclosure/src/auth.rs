@@ -4,7 +4,39 @@ use haze_audit_auth::recover_personal;
 use haze_protocol::{field::to_hex, keccak::keccak256};
 use serde::{Deserialize, Serialize};
 
+use rand::RngCore;
+
 use crate::{DisclosureError, Result};
+
+/// Generate cryptographically secure random bytes using OS-CSPRNG.
+#[must_use]
+pub fn generate_csprng_bytes<const N: usize>() -> [u8; N] {
+    let mut bytes = [0u8; N];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    bytes
+}
+
+/// Generate a secure alphanumeric nonce for SIWE (at least 128-bit entropy).
+#[must_use]
+pub fn generate_siwe_nonce() -> String {
+    let bytes = generate_csprng_bytes::<16>();
+    hex::encode(bytes)
+}
+
+/// Generate a 256-bit random challenge ID.
+#[must_use]
+pub fn generate_challenge_id() -> [u8; 32] {
+    generate_csprng_bytes::<32>()
+}
+
+/// Generate a 256-bit random session bearer token and its storage digest.
+#[must_use]
+pub fn generate_session_token() -> (String, [u8; 32]) {
+    let bytes = generate_csprng_bytes::<32>();
+    let token = format!("0x{}", hex::encode(bytes));
+    let hash = hash_session_token(&token);
+    (token, hash)
+}
 
 /// SIWE configuration for the compliance portal.
 #[derive(Clone, Debug)]

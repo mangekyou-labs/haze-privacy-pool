@@ -96,12 +96,37 @@ pub struct FujiDisclosureResponse {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerificationCheck {
-    /// Identifier or title of the check.
+    /// Identifier of the check.
+    pub id: String,
+    /// Title of the check.
     pub name: String,
-    /// Result status (`"pass"`, `"fail"`, `"warn"`).
+    /// Result status (`"pending"`, `"passed"`, `"failed"`).
     pub status: String,
+    /// Observed value.
+    pub observed: String,
+    /// Expected value.
+    pub expected: String,
     /// Detailed evidence message.
     pub detail: String,
+}
+
+/// Compute a canonical digest of the on-chain evidence.
+#[must_use]
+pub fn canonical_evidence_digest(evidence: &FujiWithdrawalEvidence) -> [u8; 32] {
+    let mut material = Vec::new();
+    material.extend_from_slice(&evidence.transaction_hash);
+    material.extend_from_slice(&evidence.block_number.to_be_bytes());
+    material.extend_from_slice(&evidence.block_hash);
+    material.extend_from_slice(&evidence.log_index.to_be_bytes());
+    material.extend_from_slice(&evidence.pool);
+    material.extend_from_slice(&evidence.application_id);
+    material.push(evidence.action);
+    material.extend_from_slice(&evidence.authorized_user);
+    material.extend_from_slice(&evidence.pool_version);
+    material.extend_from_slice(&evidence.audit_data_commitment);
+    material.extend_from_slice(&evidence.audit_ciphertext_hash);
+    material.extend_from_slice(&evidence.action_reference);
+    keccak256(&material)
 }
 
 /// Response returned to the institutional auditor workstation upon verification & disclosure.
@@ -116,6 +141,8 @@ pub struct ComplianceDisclosureResponse {
     pub confirmations: u64,
     /// Checklist of individual verification checks.
     pub checks: Vec<VerificationCheck>,
+    /// Digest of the verified canonical evidence.
+    pub evidence_digest: String,
 }
 
 fn word_address(address: [u8; 20]) -> [u8; 32] {
@@ -265,14 +292,20 @@ pub fn verify_compliance_case_evidence(
 
     if confirmations >= MIN_CONFIRMATIONS {
         checks.push(VerificationCheck {
+            id: "finality_confirmations".to_owned(),
             name: "Finality & Confirmations".to_owned(),
-            status: "pass".to_owned(),
+            status: "passed".to_owned(),
+            observed: format!("{confirmations} confirmations"),
+            expected: format!(">= {MIN_CONFIRMATIONS} confirmations"),
             detail: format!("{confirmations} confirmations (>= {MIN_CONFIRMATIONS} required)"),
         });
     } else {
         checks.push(VerificationCheck {
+            id: "finality_confirmations".to_owned(),
             name: "Finality & Confirmations".to_owned(),
-            status: "fail".to_owned(),
+            status: "failed".to_owned(),
+            observed: format!("{confirmations} confirmations"),
+            expected: format!(">= {MIN_CONFIRMATIONS} confirmations"),
             detail: format!("{confirmations} confirmations (< {MIN_CONFIRMATIONS} required)"),
         });
         return Err(DisclosureError::InsufficientFinality);
@@ -281,14 +314,20 @@ pub fn verify_compliance_case_evidence(
     // 2. Canonical receipt
     if evidence.receipt_successful {
         checks.push(VerificationCheck {
+            id: "canonical_receipt".to_owned(),
             name: "Canonical Receipt".to_owned(),
-            status: "pass".to_owned(),
+            status: "passed".to_owned(),
+            observed: format!("status=0x1 block=#{}", evidence.block_number),
+            expected: "status=0x1 on Fuji".to_owned(),
             detail: format!("Status 0x1 mined at block #{}", evidence.block_number),
         });
     } else {
         checks.push(VerificationCheck {
+            id: "canonical_receipt".to_owned(),
             name: "Canonical Receipt".to_owned(),
-            status: "fail".to_owned(),
+            status: "failed".to_owned(),
+            observed: "status!=0x1 or missing".to_owned(),
+            expected: "status=0x1 on Fuji".to_owned(),
             detail: "Transaction receipt missing or status != 0x1".to_owned(),
         });
         return Err(DisclosureError::ReceiptNotSuccessful);
@@ -297,14 +336,36 @@ pub fn verify_compliance_case_evidence(
     // 3. Pool event
     if evidence.pool == config.pool && evidence.application_id == config.application_id {
         checks.push(VerificationCheck {
+            id: "pool_event".to_owned(),
             name: "Pool Event Binding".to_owned(),
-            status: "pass".to_owned(),
+            status: "passed".to_owned(),
+            observed: format!(
+                "pool=0x{} app=0x{}",
+                hex::encode(evidence.pool),
+                hex::encode(evidence.application_id)
+            ),
+            expected: format!(
+                "pool=0x{} app=0x{}",
+                hex::encode(config.pool),
+                hex::encode(config.application_id)
+            ),
             detail: "PrivateTransaction event logged on configured HazePool".to_owned(),
         });
     } else {
         checks.push(VerificationCheck {
+            id: "pool_event".to_owned(),
             name: "Pool Event Binding".to_owned(),
-            status: "fail".to_owned(),
+            status: "failed".to_owned(),
+            observed: format!(
+                "pool=0x{} app=0x{}",
+                hex::encode(evidence.pool),
+                hex::encode(evidence.application_id)
+            ),
+            expected: format!(
+                "pool=0x{} app=0x{}",
+                hex::encode(config.pool),
+                hex::encode(config.application_id)
+            ),
             detail: "Pool address or application ID mismatch on event".to_owned(),
         });
         return Err(DisclosureError::InvalidBinding);
@@ -313,14 +374,29 @@ pub fn verify_compliance_case_evidence(
     // 4. Action binding
     if evidence.action == WITHDRAW && evidence.record.action == WITHDRAW {
         checks.push(VerificationCheck {
+            id: "action_binding".to_owned(),
             name: "Action Binding".to_owned(),
-            status: "pass".to_owned(),
+            status: "passed".to_owned(),
+            observed: format!(
+                "action=3 reference=0x{}",
+                hex::encode(evidence.action_reference)
+            ),
+            expected: format!(
+                "action=3 reference=0x{}",
+                hex::encode(evidence.record.action_reference)
+            ),
             detail: "Action 3 (Withdrawal) matches case record".to_owned(),
         });
     } else {
         checks.push(VerificationCheck {
+            id: "action_binding".to_owned(),
             name: "Action Binding".to_owned(),
-            status: "fail".to_owned(),
+            status: "failed".to_owned(),
+            observed: format!(
+                "action={} record_action={}",
+                evidence.action, evidence.record.action
+            ),
+            expected: "action=3 (WITHDRAW)".to_owned(),
             detail: "Action mismatch".to_owned(),
         });
         return Err(DisclosureError::InvalidBinding);
@@ -329,14 +405,20 @@ pub fn verify_compliance_case_evidence(
     // 5. Envelope hash
     if evidence.record.audit_ciphertext_hash == evidence.audit_ciphertext_hash {
         checks.push(VerificationCheck {
+            id: "envelope_hash".to_owned(),
             name: "Audit Envelope Hash".to_owned(),
-            status: "pass".to_owned(),
+            status: "passed".to_owned(),
+            observed: format!("0x{}", hex::encode(evidence.record.audit_ciphertext_hash)),
+            expected: format!("0x{}", hex::encode(evidence.audit_ciphertext_hash)),
             detail: "HPKE envelope matches on-chain auditCiphertextHash".to_owned(),
         });
     } else {
         checks.push(VerificationCheck {
+            id: "envelope_hash".to_owned(),
             name: "Audit Envelope Hash".to_owned(),
-            status: "fail".to_owned(),
+            status: "failed".to_owned(),
+            observed: format!("0x{}", hex::encode(evidence.record.audit_ciphertext_hash)),
+            expected: format!("0x{}", hex::encode(evidence.audit_ciphertext_hash)),
             detail: "Envelope hash mismatch".to_owned(),
         });
         return Err(DisclosureError::IntegrityFailure);
@@ -347,8 +429,11 @@ pub fn verify_compliance_case_evidence(
     let decrypted_fields = match decrypt_and_redact(&evidence.record, ikm, granted_fields) {
         Ok(fields) => {
             checks.push(VerificationCheck {
+                id: "audit_commitment".to_owned(),
                 name: "Audit Commitment & Decryption".to_owned(),
-                status: "pass".to_owned(),
+                status: "passed".to_owned(),
+                observed: format!("0x{}", hex::encode(evidence.record.audit_data_commitment)),
+                expected: format!("0x{}", hex::encode(evidence.audit_data_commitment)),
                 detail: "Poseidon commitment verified against on-chain auditDataCommitment"
                     .to_owned(),
             });
@@ -356,18 +441,24 @@ pub fn verify_compliance_case_evidence(
         }
         Err(err) => {
             checks.push(VerificationCheck {
+                id: "audit_commitment".to_owned(),
                 name: "Audit Commitment & Decryption".to_owned(),
-                status: "fail".to_owned(),
+                status: "failed".to_owned(),
+                observed: "commitment/decryption mismatch".to_owned(),
+                expected: format!("0x{}", hex::encode(evidence.audit_data_commitment)),
                 detail: format!("Decryption or commitment check failed: {err:?}"),
             });
             return Err(err);
         }
     };
 
+    let digest = canonical_evidence_digest(evidence);
+
     Ok(ComplianceDisclosureResponse {
         transaction_hash: format!("0x{}", hex::encode(target_tx_hash)),
         fields: decrypted_fields,
         confirmations,
         checks,
+        evidence_digest: format!("0x{}", hex::encode(digest)),
     })
 }

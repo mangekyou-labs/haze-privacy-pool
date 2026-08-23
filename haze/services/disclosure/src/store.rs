@@ -1,22 +1,44 @@
 //! In-memory state and storage primitives for the compliance portal runtime.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
 };
 
 use haze_protocol::keccak::keccak256;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     access_log::{ComplianceAccessLogEntry, compute_entry_hash},
     auth::StoredSession,
     cases::{
-        AuditorGrant, ComplianceCase, DEFAULT_DENIED_FIELDS, DEFAULT_GRANTED_FIELDS,
+        AuditorGrant, CaseScope, ComplianceCase, DEFAULT_DENIED_FIELDS, DEFAULT_GRANTED_FIELDS,
         seed_default_fuji_case,
     },
     export::ComplianceExportBundle,
     fuji::FujiWithdrawalEvidence,
 };
+
+/// Stored disclosure-verification receipt.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StoredDisclosureReceipt {
+    /// Unique receipt identifier.
+    pub receipt_id: [u8; 32],
+    /// Hashed session token.
+    pub session_hash: [u8; 32],
+    /// Application identifier.
+    pub application_id: [u8; 32],
+    /// Case identifier.
+    pub case_id: String,
+    /// Verified canonical evidence digest.
+    pub evidence_digest: [u8; 32],
+    /// Disclosed facts.
+    pub disclosed_fields: BTreeMap<String, String>,
+    /// Creation timestamp.
+    pub created_at: u64,
+    /// Expiration timestamp.
+    pub expires_at: u64,
+}
 
 /// Stored one-time challenge.
 #[derive(Clone, Debug)]
@@ -52,6 +74,7 @@ struct InnerStore {
     grants: HashMap<([u8; 20], [u8; 32]), AuditorGrant>,
     cases: HashMap<String, ComplianceCase>,
     evidence: HashMap<[u8; 32], Vec<FujiWithdrawalEvidence>>,
+    disclosure_receipts: HashMap<([u8; 32], [u8; 32], String), StoredDisclosureReceipt>,
     exports: HashMap<String, ComplianceExportBundle>,
     access_log: Vec<ComplianceAccessLogEntry>,
     cursor: u64,
@@ -79,7 +102,8 @@ impl ComplianceStore {
             wallet: auditor_wallet,
             application_id,
             role: "application-auditor".to_owned(),
-            assigned_cases: Vec::new(), // empty assigns all cases dynamically
+            case_scope: CaseScope::AllApplicationCases,
+            assigned_cases: Vec::new(),
             granted_fields: DEFAULT_GRANTED_FIELDS
                 .iter()
                 .map(|&s| s.to_owned())
@@ -105,6 +129,9 @@ impl ComplianceStore {
             wallet: auditor_wallet,
             application_id,
             role: "application-auditor".to_owned(),
+            case_scope: CaseScope::ExplicitCases {
+                case_ids: vec![case.case_id.clone()],
+            },
             assigned_cases: vec![case.case_id],
             granted_fields: case.granted_fields,
             denied_fields: case.denied_fields,
@@ -222,10 +249,53 @@ impl ComplianceStore {
             .collect()
     }
 
+    /// Get a single case by ID bound to an application.
+    pub fn get_case_for_app(
+        &self,
+        application_id: &[u8; 32],
+        case_id: &str,
+    ) -> Option<ComplianceCase> {
+        let inner = self.inner.lock().expect("store mutex");
+        let app_hex = format!("0x{}", hex::encode(application_id));
+        let case = inner.cases.get(case_id)?;
+        if case.application_id.eq_ignore_ascii_case(&app_hex) {
+            Some(case.clone())
+        } else {
+            None
+        }
+    }
+
     /// Get a single case by ID.
     pub fn get_case(&self, case_id: &str) -> Option<ComplianceCase> {
         let inner = self.inner.lock().expect("store mutex");
         inner.cases.get(case_id).cloned()
+    }
+
+    /// Store a disclosure-verification receipt.
+    pub fn save_disclosure_receipt(&self, receipt: StoredDisclosureReceipt) {
+        let mut inner = self.inner.lock().expect("store mutex");
+        inner.disclosure_receipts.insert(
+            (
+                receipt.session_hash,
+                receipt.application_id,
+                receipt.case_id.clone(),
+            ),
+            receipt,
+        );
+    }
+
+    /// Retrieve a disclosure-verification receipt.
+    pub fn get_disclosure_receipt(
+        &self,
+        session_hash: &[u8; 32],
+        application_id: &[u8; 32],
+        case_id: &str,
+    ) -> Option<StoredDisclosureReceipt> {
+        let inner = self.inner.lock().expect("store mutex");
+        inner
+            .disclosure_receipts
+            .get(&(*session_hash, *application_id, case_id.to_owned()))
+            .cloned()
     }
 
     /// Save a compliance export bundle.

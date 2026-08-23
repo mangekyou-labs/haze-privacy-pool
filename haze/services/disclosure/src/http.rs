@@ -20,18 +20,20 @@ use tower_http::cors::CorsLayer;
 
 use crate::{
     DisclosureError, StoredAuditRecord,
+    access_log::ComplianceAccessLogEntry,
     auth::{
         AuditSession, ChallengeRequest, SiweChallenge, SiweConfig, StoredSession, VerifyRequest,
-        format_siwe_message, hash_session_token, verify_siwe_signature,
+        format_siwe_message, generate_challenge_id, generate_csprng_bytes, generate_session_token,
+        generate_siwe_nonce, hash_session_token, verify_siwe_signature,
     },
-    cases::AuditCaseSummary,
-    export::{DEFAULT_SIGNING_KEY_ID, create_signed_export},
+    cases::{AuditCaseSummary, ComplianceCase},
+    export::{ExportSigner, create_signed_export},
     fuji::{
         FujiDisclosureConfig, FujiDisclosureRequest, FujiWithdrawalEvidence,
         verify_compliance_case_evidence, verify_fuji_withdrawal,
     },
     repository::ComplianceRepository,
-    store::{ComplianceStore, StoredChallenge},
+    store::{ComplianceStore, StoredChallenge, StoredDisclosureReceipt},
 };
 
 /// Immutable HTTP application state.
@@ -47,11 +49,13 @@ pub struct HttpState {
     pub siwe_config: SiweConfig,
     /// Compliance store.
     pub store: Arc<ComplianceRepository>,
+    /// Export signer for ES256 JWS exports.
+    pub export_signer: Option<ExportSigner>,
     client: reqwest::Client,
 }
 
 impl HttpState {
-    /// Create state without making a network request.
+    /// Create state without making a network request (uses test signer if none provided).
     #[must_use]
     pub fn new(
         config: FujiDisclosureConfig,
@@ -66,13 +70,12 @@ impl HttpState {
             rpc_url,
             siwe_config,
             store: Arc::new(store.into()),
+            export_signer: Some(ExportSigner::generate_test_signer()),
             client: reqwest::Client::new(),
         }
     }
-}
 
-impl HttpState {
-    /// Create production state backed by PostgreSQL.
+    /// Create production state backed by PostgreSQL and optional export signer.
     #[must_use]
     pub fn with_repository(
         config: FujiDisclosureConfig,
@@ -87,8 +90,16 @@ impl HttpState {
             rpc_url,
             siwe_config,
             store: Arc::new(store),
+            export_signer: Some(ExportSigner::generate_test_signer()),
             client: reqwest::Client::new(),
         }
+    }
+
+    /// Attach a specific export signer.
+    #[must_use]
+    pub fn with_export_signer(mut self, signer: ExportSigner) -> Self {
+        self.export_signer = Some(signer);
+        self
     }
 }
 
@@ -114,14 +125,17 @@ fn fixed_hex<const N: usize>(value: &str) -> Result<[u8; N], DisclosureError> {
 
 fn error_response(error: DisclosureError) -> Response {
     let status = match error {
-        DisclosureError::Unauthorized => StatusCode::UNAUTHORIZED,
+        DisclosureError::Unauthorized | DisclosureError::SessionExpired => StatusCode::UNAUTHORIZED,
         DisclosureError::Forbidden
         | DisclosureError::UserIneligible
         | DisclosureError::GrantRevoked
+        | DisclosureError::GrantDenied
+        | DisclosureError::CaseScopeDenied
         | DisclosureError::CaseUnassigned => StatusCode::FORBIDDEN,
-        DisclosureError::Unavailable | DisclosureError::KeysMissing => {
-            StatusCode::SERVICE_UNAVAILABLE
-        }
+        DisclosureError::Unavailable
+        | DisclosureError::KeysMissing
+        | DisclosureError::RpcUnavailable
+        | DisclosureError::AuditLogUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         DisclosureError::ReceiptNotSuccessful | DisclosureError::InsufficientFinality => {
             StatusCode::UNPROCESSABLE_ENTITY
         }
@@ -141,11 +155,21 @@ async fn healthz() -> impl IntoResponse {
     Json(json!({"status":"ok"}))
 }
 
+async fn jwks_handler(State(state): State<Arc<HttpState>>) -> impl IntoResponse {
+    let jwks = state
+        .export_signer
+        .as_ref()
+        .map(|s| s.public_jwks())
+        .unwrap_or_else(|| json!({ "keys": [] }));
+    Json(jwks)
+}
+
 async fn readyz(State(state): State<Arc<HttpState>>) -> Response {
     if state.config.chain_id == 43_113
         && state.config.development_fixture_keys
         && state.fixture_ikm.is_some()
         && !state.rpc_url.is_empty()
+        && state.export_signer.is_some()
         && state.store.ready().await.unwrap_or(false)
     {
         Json(json!({"status":"ready"})).into_response()
@@ -454,7 +478,22 @@ async fn extract_session(
         .map_or(0, |d| d.as_secs());
 
     if session.expires_at < now {
-        return Err(DisclosureError::AuthorizationExpired);
+        return Err(DisclosureError::SessionExpired);
+    }
+
+    if session.application_id != state.config.application_id {
+        return Err(DisclosureError::ApplicationMismatch);
+    }
+
+    let grant = state
+        .store
+        .get_grant(&session.wallet, &session.application_id)
+        .await
+        .map_err(|_| DisclosureError::Unavailable)?
+        .ok_or(DisclosureError::Forbidden)?;
+
+    if grant.revoked || grant.expires_at < now {
+        return Err(DisclosureError::GrantDenied);
     }
 
     Ok(session)
@@ -482,12 +521,9 @@ async fn auth_challenge(
         .map_or(0, |d| d.as_secs());
     let expires_at = now + state.siwe_config.challenge_ttl_secs;
 
-    let challenge_id_bytes = match state.store.next_id(b"siwe_challenge").await {
-        Ok(value) => value,
-        Err(_) => return error_response(DisclosureError::Unavailable),
-    };
+    let challenge_id_bytes = generate_challenge_id();
     let challenge_id = format!("0x{}", hex::encode(challenge_id_bytes));
-    let nonce = hex::encode(&challenge_id_bytes[..8]);
+    let nonce = generate_siwe_nonce();
 
     let message = format_siwe_message(&state.siwe_config, &body.wallet, &nonce, now, expires_at);
 
@@ -606,12 +642,7 @@ async fn auth_verify(
         }
     };
 
-    let session_token_bytes = match state.store.next_id(b"session_secret").await {
-        Ok(value) => value,
-        Err(_) => return error_response(DisclosureError::Unavailable),
-    };
-    let session_token = format!("0x{}", hex::encode(session_token_bytes));
-    let session_hash = hash_session_token(&session_token);
+    let (session_token, session_hash) = generate_session_token();
     let session_expiry = now
         + state
             .siwe_config
@@ -707,7 +738,12 @@ async fn list_cases_handler(headers: HeaderMap, State(state): State<Arc<HttpStat
         Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    let summaries: Vec<AuditCaseSummary> = cases
+    let filtered: Vec<ComplianceCase> = cases
+        .into_iter()
+        .filter(|c| grant.case_scope.allows_case(&c.case_id))
+        .collect();
+
+    let summaries: Vec<AuditCaseSummary> = filtered
         .into_iter()
         .map(|c| AuditCaseSummary {
             case_id: c.case_id,
@@ -752,13 +788,17 @@ async fn case_disclosure_handler(
         Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    let case = match state.store.get_case(&case_id).await {
+    let case = match state
+        .store
+        .get_case_for_app(&session.application_id, &case_id)
+        .await
+    {
         Ok(Some(c)) => c,
-        Ok(None) => return error_response(DisclosureError::CaseUnassigned),
+        Ok(None) => return error_response(DisclosureError::CaseScopeDenied),
         Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    if !grant.assigned_cases.is_empty() && !grant.assigned_cases.contains(&case.case_id) {
+    if !grant.case_scope.allows_case(&case.case_id) {
         let _ = state
             .store
             .append_access_log(
@@ -771,7 +811,7 @@ async fn case_disclosure_handler(
                 now,
             )
             .await;
-        return error_response(DisclosureError::CaseUnassigned);
+        return error_response(DisclosureError::CaseScopeDenied);
     }
 
     let tx_hash_bytes: [u8; 32] = match fixed_hex(&case.transaction_hash) {
@@ -808,7 +848,22 @@ async fn case_disclosure_handler(
             state.fixture_ikm.as_ref(),
         ) {
             Ok(resp) => {
-                let _ = state
+                let receipt_id = generate_csprng_bytes::<32>();
+                let evidence_digest_bytes: [u8; 32] =
+                    fixed_hex(&resp.evidence_digest).unwrap_or([0u8; 32]);
+                let receipt = StoredDisclosureReceipt {
+                    receipt_id,
+                    session_hash: session.session_hash,
+                    application_id: session.application_id,
+                    case_id: case_id.clone(),
+                    evidence_digest: evidence_digest_bytes,
+                    disclosed_fields: resp.fields.clone(),
+                    created_at: now,
+                    expires_at: now + 600,
+                };
+                let _ = state.store.save_disclosure_receipt(receipt).await;
+
+                if state
                     .store
                     .append_access_log(
                         "query",
@@ -819,7 +874,11 @@ async fn case_disclosure_handler(
                         true,
                         now,
                     )
-                    .await;
+                    .await
+                    .is_err()
+                {
+                    return error_response(DisclosureError::Unavailable);
+                }
                 return Json(resp).into_response();
             }
             Err(err) => last_err = err,
@@ -873,13 +932,17 @@ async fn case_export_handler(
         Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    let case = match state.store.get_case(&case_id).await {
+    let case = match state
+        .store
+        .get_case_for_app(&session.application_id, &case_id)
+        .await
+    {
         Ok(Some(c)) => c,
-        Ok(None) => return error_response(DisclosureError::CaseUnassigned),
+        Ok(None) => return error_response(DisclosureError::CaseScopeDenied),
         Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    if !grant.assigned_cases.contains(&case.case_id) {
+    if !grant.case_scope.allows_case(&case.case_id) {
         let _ = state
             .store
             .append_access_log(
@@ -892,8 +955,19 @@ async fn case_export_handler(
                 now,
             )
             .await;
-        return error_response(DisclosureError::CaseUnassigned);
+        return error_response(DisclosureError::CaseScopeDenied);
     }
+
+    // Require active disclosure receipt from the same live session
+    let _receipt = match state
+        .store
+        .get_disclosure_receipt(&session.session_hash, &session.application_id, &case_id)
+        .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => return error_response(DisclosureError::Forbidden),
+        Err(_) => return error_response(DisclosureError::Unavailable),
+    };
 
     let requested_fields = body
         .and_then(|b| b.fields.clone())
@@ -953,22 +1027,28 @@ async fn case_export_handler(
         None => return error_response(DisclosureError::IntegrityFailure),
     };
 
-    let export_id_bytes = match state.store.next_id(b"export_id").await {
-        Ok(value) => value,
-        Err(_) => return error_response(DisclosureError::Unavailable),
+    let signer = match state.export_signer.as_ref() {
+        Some(s) => s,
+        None => return error_response(DisclosureError::KeysMissing),
     };
+
+    let export_id_bytes = generate_csprng_bytes::<32>();
     let export_expiry = now + 600; // 10 minute export validity
 
-    let bundle = create_signed_export(
+    let bundle = match create_signed_export(
         export_id_bytes,
         &case_id,
         &case.transaction_hash,
         &format!("0x{}", hex::encode(session.wallet)),
-        DEFAULT_SIGNING_KEY_ID,
+        signer.key_id(),
         fields,
         provenance,
         export_expiry,
-    );
+        signer,
+    ) {
+        Ok(b) => b,
+        Err(err) => return error_response(err),
+    };
 
     if state.store.save_export(bundle.clone()).await.is_err() {
         return error_response(DisclosureError::Unavailable);
@@ -1017,7 +1097,14 @@ async fn access_log_handler(
         Err(_) => return error_response(DisclosureError::Unavailable),
     };
 
-    Json(json!({ "entries": entries })).into_response()
+    // Filter by ordinary auditor wallet
+    let wallet_hex = format!("0x{}", hex::encode(session.wallet));
+    let filtered_entries: Vec<ComplianceAccessLogEntry> = entries
+        .into_iter()
+        .filter(|e| e.wallet.eq_ignore_ascii_case(&wallet_hex))
+        .collect();
+
+    Json(json!({ "entries": filtered_entries })).into_response()
 }
 
 /// Build the Axum router with exact-origin CORS and all routes.
@@ -1036,6 +1123,8 @@ pub fn router(state: HttpState, allowed_origin: &str) -> Result<Router, Disclosu
     Ok(Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .route("/.well-known/jwks.json", get(jwks_handler))
+        .route("/api/compliance/jwks", get(jwks_handler))
         // Legacy D7 wallet disclosure
         .route("/v1/fuji/disclosures/withdrawal", post(withdrawal))
         // Institutional Compliance API

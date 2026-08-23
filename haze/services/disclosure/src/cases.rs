@@ -85,6 +85,39 @@ pub struct AuditCaseSummary {
     pub grant_expires_at: u64,
 }
 
+/// Explicit scope of accessible cases for an auditor grant.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CaseScope {
+    /// Grant permits access to all cases bound to the specified application.
+    #[default]
+    AllApplicationCases,
+    /// Grant permits access only to an explicitly assigned list of cases.
+    ExplicitCases {
+        /// Non-empty list of permitted case IDs.
+        case_ids: Vec<String>,
+    },
+}
+
+impl CaseScope {
+    /// Construct an explicit case scope, failing if the list of cases is empty.
+    pub fn new_explicit(case_ids: Vec<String>) -> crate::error::Result<Self> {
+        if case_ids.is_empty() {
+            return Err(crate::error::DisclosureError::CaseScopeDenied);
+        }
+        Ok(Self::ExplicitCases { case_ids })
+    }
+
+    /// Check whether a given case ID is permitted under this scope.
+    #[must_use]
+    pub fn allows_case(&self, case_id: &str) -> bool {
+        match self {
+            Self::AllApplicationCases => true,
+            Self::ExplicitCases { case_ids } => case_ids.iter().any(|c| c == case_id),
+        }
+    }
+}
+
 /// Auditor grant record.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,7 +130,11 @@ pub struct AuditorGrant {
     pub application_id: [u8; 32],
     /// Role.
     pub role: String,
-    /// Assigned case IDs (empty means all cases for this application).
+    /// Case authorization scope.
+    #[serde(default)]
+    pub case_scope: CaseScope,
+    /// Assigned case IDs (retained for compatibility).
+    #[serde(default)]
     pub assigned_cases: Vec<String>,
     /// Allowed fields.
     pub granted_fields: Vec<String>,

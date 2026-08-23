@@ -27,7 +27,8 @@ fn committed_sql_files_match_the_catalog() {
     assert_eq!(files[1].file, "0002_ops.sql");
     assert_eq!(files[2].file, "0003_compliance_portal.sql");
     assert_eq!(files[3].file, "0004_compliance_runtime.sql");
-    assert_eq!(files[3].version, SCHEMA_VERSION);
+    assert_eq!(files[4].file, "0005_fuji_compliance_remediation.sql");
+    assert_eq!(files[4].version, SCHEMA_VERSION);
 }
 
 #[test]
@@ -42,9 +43,21 @@ fn migrations_apply_forward_and_roll_back() {
     assert!(catalog.has_table("haze_compliance_cases").expect("t3"));
     assert_eq!(catalog.apply_next().expect("0004"), 4);
     assert!(catalog.has_table("haze_compliance_evidence").expect("t4"));
+    assert_eq!(catalog.apply_next().expect("0005"), 5);
+    assert!(
+        catalog
+            .has_table("haze_compliance_disclosure_receipts")
+            .expect("t5")
+    );
     assert_eq!(
-        catalog.apply_next().expect_err("no 0005"),
+        catalog.apply_next().expect_err("no 0006"),
         ProtocolError::VersionUnsupported
+    );
+    assert_eq!(catalog.rollback().expect("down 0005"), 5);
+    assert!(
+        !catalog
+            .has_table("haze_compliance_disclosure_receipts")
+            .expect("dropped")
     );
     assert_eq!(catalog.rollback().expect("down 0004"), 4);
     assert!(

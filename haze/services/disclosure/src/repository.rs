@@ -1,16 +1,18 @@
 //! Async PostgreSQL persistence for the production compliance runtime.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};
 
 use crate::{
     access_log::{ComplianceAccessLogEntry, compute_entry_hash},
     auth::StoredSession,
-    cases::{AuditorGrant, ComplianceCase, DEFAULT_DENIED_FIELDS, DEFAULT_GRANTED_FIELDS},
+    cases::{
+        AuditorGrant, CaseScope, ComplianceCase, DEFAULT_DENIED_FIELDS, DEFAULT_GRANTED_FIELDS,
+    },
     export::ComplianceExportBundle,
     fuji::FujiWithdrawalEvidence,
-    store::{ComplianceStore, StoredChallenge},
+    store::{ComplianceStore, StoredChallenge, StoredDisclosureReceipt},
 };
 
 /// Runtime persistence. Memory is intentionally available only to tests and local fixtures.
@@ -128,11 +130,50 @@ impl ComplianceRepository {
             Self::Postgres(repo) => repo.list_cases(app, assigned).await,
         }
     }
+    /// Load one case for a specific application.
+    pub async fn get_case_for_app(
+        &self,
+        app: &[u8; 32],
+        id: &str,
+    ) -> Result<Option<ComplianceCase>, sqlx::Error> {
+        match self {
+            Self::Memory(store) => Ok(store.get_case_for_app(app, id)),
+            Self::Postgres(repo) => repo.get_case_for_app(app, id).await,
+        }
+    }
     /// Load one case.
     pub async fn get_case(&self, id: &str) -> Result<Option<ComplianceCase>, sqlx::Error> {
         match self {
             Self::Memory(store) => Ok(store.get_case(id)),
             Self::Postgres(repo) => repo.get_case(id).await,
+        }
+    }
+    /// Save a disclosure receipt.
+    pub async fn save_disclosure_receipt(
+        &self,
+        value: StoredDisclosureReceipt,
+    ) -> Result<(), sqlx::Error> {
+        match self {
+            Self::Memory(store) => {
+                store.save_disclosure_receipt(value);
+                Ok(())
+            }
+            Self::Postgres(repo) => repo.save_disclosure_receipt(value).await,
+        }
+    }
+    /// Load a disclosure receipt.
+    pub async fn get_disclosure_receipt(
+        &self,
+        session_hash: &[u8; 32],
+        app: &[u8; 32],
+        case_id: &str,
+    ) -> Result<Option<StoredDisclosureReceipt>, sqlx::Error> {
+        match self {
+            Self::Memory(store) => Ok(store.get_disclosure_receipt(session_hash, app, case_id)),
+            Self::Postgres(repo) => {
+                repo.get_disclosure_receipt(session_hash, app, case_id)
+                    .await
+            }
         }
     }
     /// Update case finality.
@@ -333,10 +374,11 @@ impl PostgresRepository {
             include_str!("../../../dev/postgres/migrations/0002_ops.sql"),
             include_str!("../../../dev/postgres/migrations/0003_compliance_portal.sql"),
             include_str!("../../../dev/postgres/migrations/0004_compliance_runtime.sql"),
+            include_str!("../../../dev/postgres/migrations/0005_fuji_compliance_remediation.sql"),
         ] {
             sqlx::raw_sql(sql).execute(&self.pool).await?;
         }
-        for version in ["0001", "0002", "0003", "0004"] {
+        for version in ["0001", "0002", "0003", "0004", "0005"] {
             sqlx::query(
                 "insert into haze_schema_migrations(version) values ($1) on conflict do nothing",
             )
@@ -351,7 +393,7 @@ impl PostgresRepository {
     #[doc(hidden)]
     pub async fn reset_for_test(&self) -> Result<(), sqlx::Error> {
         sqlx::raw_sql(
-            "drop table if exists haze_compliance_case_assignments, haze_compliance_evidence, haze_compliance_poller_checkpoints, haze_compliance_access_log_heads, haze_compliance_export_counters, haze_compliance_access_log, haze_compliance_exports, haze_compliance_cases, haze_compliance_sessions, haze_compliance_grants, haze_compliance_challenges cascade",
+            "drop table if exists haze_compliance_disclosure_receipts, haze_compliance_case_assignments, haze_compliance_evidence, haze_compliance_poller_checkpoints, haze_compliance_access_log_heads, haze_compliance_export_counters, haze_compliance_access_log, haze_compliance_exports, haze_compliance_cases, haze_compliance_sessions, haze_compliance_grants, haze_compliance_challenges cascade",
         )
         .execute(&self.pool)
         .await?;
@@ -476,11 +518,61 @@ impl PostgresRepository {
         rows.into_iter().map(case_from_row).collect()
     }
 
+    /// Retrieve one non-orphaned case for a specific application.
+    pub async fn get_case_for_app(
+        &self,
+        application_id: &[u8; 32],
+        case_id: &str,
+    ) -> Result<Option<ComplianceCase>, sqlx::Error> {
+        let row = sqlx::query("select case_id,title,application_id,transaction_hash,granted_fields,denied_fields,status,block_number,confirmations,sync_status,integrity_status from haze_compliance_cases where application_id=$1 and case_id=$2 and orphaned=false")
+            .bind(application_id.as_slice())
+            .bind(case_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(case_from_row).transpose()
+    }
+
     /// Retrieve one non-orphaned case.
     pub async fn get_case(&self, case_id: &str) -> Result<Option<ComplianceCase>, sqlx::Error> {
         let row = sqlx::query("select case_id,title,application_id,transaction_hash,granted_fields,denied_fields,status,block_number,confirmations,sync_status,integrity_status from haze_compliance_cases where case_id=$1 and orphaned=false")
             .bind(case_id).fetch_optional(&self.pool).await?;
         row.map(case_from_row).transpose()
+    }
+
+    /// Save a disclosure receipt.
+    pub async fn save_disclosure_receipt(
+        &self,
+        value: StoredDisclosureReceipt,
+    ) -> Result<(), sqlx::Error> {
+        let fields_json = serde_json::to_value(&value.disclosed_fields).map_err(json_error)?;
+        sqlx::query("insert into haze_compliance_disclosure_receipts (receipt_id,session_hash,application_id,case_id,evidence_digest,disclosed_fields,created_at,expires_at) values ($1,$2,$3,$4,$5,$6,to_timestamp($7),to_timestamp($8)) on conflict (session_hash,application_id,case_id,evidence_digest) do update set expires_at=excluded.expires_at")
+            .bind(value.receipt_id.as_slice())
+            .bind(value.session_hash.as_slice())
+            .bind(value.application_id.as_slice())
+            .bind(&value.case_id)
+            .bind(value.evidence_digest.as_slice())
+            .bind(fields_json)
+            .bind(as_i64(value.created_at)?)
+            .bind(as_i64(value.expires_at)?)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Load a disclosure receipt.
+    pub async fn get_disclosure_receipt(
+        &self,
+        session_hash: &[u8; 32],
+        application_id: &[u8; 32],
+        case_id: &str,
+    ) -> Result<Option<StoredDisclosureReceipt>, sqlx::Error> {
+        let row = sqlx::query("select receipt_id,session_hash,application_id,case_id,evidence_digest,disclosed_fields,extract(epoch from created_at)::bigint as created_at,extract(epoch from expires_at)::bigint as expires_at from haze_compliance_disclosure_receipts where session_hash=$1 and application_id=$2 and case_id=$3 and expires_at > now()")
+            .bind(session_hash.as_slice())
+            .bind(application_id.as_slice())
+            .bind(case_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(receipt_from_row).transpose()
     }
 
     /// Update finality for an existing case without allowing confirmation regression.
@@ -732,17 +824,52 @@ fn fixed_from_row<const N: usize>(
 }
 
 fn grant_from_row(row: sqlx::postgres::PgRow) -> Result<AuditorGrant, sqlx::Error> {
+    let scope_kind: Option<String> = row.try_get("scope_kind").ok();
+    let assigned_cases: Vec<String> = row.try_get("assigned_cases").unwrap_or_default();
+    let case_scope = match scope_kind.as_deref() {
+        Some("explicit_cases") => CaseScope::ExplicitCases {
+            case_ids: assigned_cases.clone(),
+        },
+        Some("all_application_cases") => CaseScope::AllApplicationCases,
+        _ => {
+            if assigned_cases.is_empty() {
+                CaseScope::AllApplicationCases
+            } else {
+                CaseScope::ExplicitCases {
+                    case_ids: assigned_cases.clone(),
+                }
+            }
+        }
+    };
+
     Ok(AuditorGrant {
         grant_id: fixed_from_row(&row, "grant_id")?,
         wallet: fixed_from_row(&row, "wallet")?,
         application_id: fixed_from_row(&row, "application_id")?,
         role: row.try_get("role")?,
-        assigned_cases: row.try_get("assigned_cases")?,
+        case_scope,
+        assigned_cases,
         granted_fields: row.try_get("granted_fields")?,
         denied_fields: row.try_get("denied_fields")?,
         expires_at: u64::try_from(row.try_get::<i64, _>("expires_at")?)
             .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
         revoked: row.try_get("revoked")?,
+    })
+}
+
+fn receipt_from_row(row: sqlx::postgres::PgRow) -> Result<StoredDisclosureReceipt, sqlx::Error> {
+    let fields_value: serde_json::Value = row.try_get("disclosed_fields")?;
+    let disclosed_fields: BTreeMap<String, String> =
+        serde_json::from_value(fields_value).map_err(json_error)?;
+    Ok(StoredDisclosureReceipt {
+        receipt_id: fixed_from_row(&row, "receipt_id")?,
+        session_hash: fixed_from_row(&row, "session_hash")?,
+        application_id: fixed_from_row(&row, "application_id")?,
+        case_id: row.try_get("case_id")?,
+        evidence_digest: fixed_from_row(&row, "evidence_digest")?,
+        disclosed_fields,
+        created_at: u64::try_from(row.try_get::<i64, _>("created_at")?).map_err(decode_error)?,
+        expires_at: u64::try_from(row.try_get::<i64, _>("expires_at")?).map_err(decode_error)?,
     })
 }
 

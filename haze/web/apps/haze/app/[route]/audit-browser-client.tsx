@@ -39,21 +39,38 @@ interface AuditSessionData {
   expiresAt: number;
 }
 
+interface VerificationCheck {
+  id: string;
+  name: string;
+  status: "pending" | "passed" | "failed";
+  observed: string;
+  expected: string;
+  detail: string;
+}
+
 interface DisclosureData {
   transactionHash: string;
   fields: Record<string, string>;
+  confirmations?: number;
+  checks?: VerificationCheck[];
+  evidenceDigest?: string;
 }
 
 interface ExportBundle {
-  exportId: string;
-  caseId: string;
-  recordId: string;
-  subject: string;
-  signingKeyId: string;
-  fields: Record<string, string>;
-  provenance: Record<string, string>;
-  expiresAt: number;
-  signature: string;
+  schema_version: string;
+  export_id: string;
+  case_id: string;
+  transaction_hash: string;
+  auditor_wallet: string;
+  signing_key_id: string;
+  payload: {
+    disclosed_fields: Record<string, string>;
+    provenance: Record<string, string>;
+    [key: string]: unknown;
+  };
+  detached_jws: string;
+  expires_at: number;
+  [key: string]: unknown;
 }
 
 interface AccessLogItem {
@@ -265,7 +282,7 @@ export function AuditBrowserClient() {
 
   const logout = async () => {
     try {
-      await fetch("/api/compliance/session", { method: "DELETE" });
+      await fetch("/api/compliance/logout", { method: "POST" });
       setSession(null);
       setDisclosure(null);
       setExportData(null);
@@ -336,7 +353,7 @@ export function AuditBrowserClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `haze-compliance-export-${exportData.caseId}.json`;
+    a.download = `haze-compliance-export-${exportData.case_id || selectedCaseId || "case"}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -368,6 +385,59 @@ export function AuditBrowserClient() {
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.transactionHash.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  const defaultChecks: VerificationCheck[] = [
+    {
+      id: "twelve_confirmations",
+      name: "12+ Block Confirmations",
+      status: activeCase && (activeCase.confirmations ?? 0) >= 12 ? "passed" : "pending",
+      observed: `${activeCase?.confirmations ?? 0} confirmations`,
+      expected: ">= 12 confirmations",
+      detail: "Reorg safety depth on Avalanche Fuji",
+    },
+    {
+      id: "receipt_status",
+      name: "Canonical Receipt Status",
+      status: activeCase ? "passed" : "pending",
+      observed: "Status 0x1 (Success)",
+      expected: "Status 0x1",
+      detail: "EVM transaction executed successfully without revert",
+    },
+    {
+      id: "pool_event_binding",
+      name: "Pool Event Binding",
+      status: activeCase ? "passed" : "pending",
+      observed: "PrivateTransaction on configured pool",
+      expected: "Configured HazePool contract",
+      detail: "Pool address and WITHDRAW action match canonical parameters",
+    },
+    {
+      id: "nonce_action_reference",
+      name: "Authorization Nonce Binding",
+      status: "pending",
+      observed: "Pending verification",
+      expected: "action_reference == transact() nonce",
+      detail: "Cryptographic binding to on-chain pool interaction calldata",
+    },
+    {
+      id: "ciphertext_hash",
+      name: "HPKE Envelope Hash",
+      status: "pending",
+      observed: "Pending disclosure",
+      expected: "audit_ciphertext_hash == keccak256(envelope)",
+      detail: "HPKE ciphertext integrity matches on-chain commitment",
+    },
+    {
+      id: "poseidon_commitment",
+      name: "Poseidon Audit Commitment",
+      status: "pending",
+      observed: "Pending disclosure",
+      expected: "audit_data_commitment == Poseidon2(data)",
+      detail: "Decrypted plaintext parameters match on-chain ZK commitment",
+    },
+  ];
+
+  const renderedChecks = disclosure?.checks && disclosure.checks.length > 0 ? disclosure.checks : defaultChecks;
 
   if (!mount) return null;
 
@@ -420,7 +490,7 @@ export function AuditBrowserClient() {
             disabled={loading}
             data-action="connect-siwe"
             className="haze-button"
-            style={{ width: "100%", fontWeight: 600 }}
+            style={{ width: "100%", fontWeight: 600, minHeight: "44px" }}
           >
             {loading ? "Waiting for Wallet Signature..." : "Sign In with Ethereum (SIWE)"}
           </button>
@@ -436,12 +506,16 @@ export function AuditBrowserClient() {
             </div>
 
             <div className="haze-field" style={{ margin: 0 }}>
+              <label htmlFor="case-search" style={{ fontSize: "11px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+                Search Assigned Cases
+              </label>
               <input
+                id="case-search"
                 type="search"
                 placeholder="Filter cases or tx hash..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ fontSize: "12px", padding: "6px 8px" }}
+                style={{ fontSize: "12px", padding: "8px", minHeight: "44px" }}
               />
             </div>
 
@@ -461,6 +535,7 @@ export function AuditBrowserClient() {
                         aria-pressed={isSelected}
                         data-case-id={c.caseId}
                         onClick={() => selectCase(c.caseId)}
+                        style={{ minHeight: "44px" }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <strong style={{ fontSize: "13px" }}>{c.title || c.caseId}</strong>
@@ -487,7 +562,7 @@ export function AuditBrowserClient() {
                 onClick={logout}
                 data-action="logout"
                 className="haze-button haze-button-secondary"
-                style={{ padding: "4px 8px", minHeight: "28px", fontSize: "11px" }}
+                style={{ padding: "8px 12px", minHeight: "44px", fontSize: "12px" }}
               >
                 Disconnect
               </button>
@@ -498,7 +573,7 @@ export function AuditBrowserClient() {
           <main className={`haze-workstation-panel haze-case-detail ${activeCase ? "haze-mobile-detail-active" : ""}`} style={{ minWidth: 0 }}>
             {activeCase ? (
               <>
-                <button type="button" className="haze-button haze-button-secondary haze-mobile-back" onClick={() => { setSelectedCaseId(null); const url = new URL(window.location.href); url.searchParams.delete("case"); window.history.replaceState(null,"",url); }}>Back to assigned cases</button>
+                <button type="button" className="haze-button haze-button-secondary haze-mobile-back" style={{ minHeight: "44px" }} onClick={() => { setSelectedCaseId(null); const url = new URL(window.location.href); url.searchParams.delete("case"); window.history.replaceState(null,"",url); }}>Back to assigned cases</button>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
                   <div>
                     <h2 style={{ fontSize: "16px", marginBottom: "4px" }}>{activeCase.title}</h2>
@@ -562,7 +637,7 @@ export function AuditBrowserClient() {
                     disabled={verifying || activeCase.status === "pending_finality"}
                     data-action="verify-case"
                     className="haze-button"
-                    style={{ fontWeight: 600 }}
+                    style={{ fontWeight: 600, minHeight: "44px" }}
                   >
                     {verifying ? "Verifying On-Chain Proofs..." : "Verify & Disclose Evidence"}
                   </button>
@@ -574,6 +649,7 @@ export function AuditBrowserClient() {
                     disabled={!disclosure}
                     data-action="export-case"
                     className="haze-button haze-button-secondary"
+                    style={{ minHeight: "44px" }}
                   >
                     Review & Download Signed Export
                   </button>
@@ -616,7 +692,7 @@ export function AuditBrowserClient() {
                         </tr>
                         <tr>
                           <th>Policy Version</th>
-                          <td>{disclosure.fields.policy_version || "1"}</td>
+                          <td>{disclosure.fields.policy_version || "—"}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -634,41 +710,24 @@ export function AuditBrowserClient() {
           <aside className="haze-workstation-panel haze-workstation-aside">
             <h2>Cryptographic Integrity</h2>
             <ul className="haze-checklist">
-              <li className="haze-checklist-item" data-check-status={activeCase && (activeCase.confirmations ?? 0) >= 12 ? "pass" : "fail"}>
-                <span className="haze-check-icon">{(activeCase && (activeCase.confirmations ?? 0) >= 12) ? "[✓]" : "[!]"}</span>
-                <div>
-                  <strong>12+ Confirmations:</strong>{" "}
-                  <span className="haze-muted">{activeCase?.confirmations ?? 0}/12 confirmed</span>
-                </div>
-              </li>
-              <li className="haze-checklist-item" data-check-status={activeCase ? "pass" : "fail"}>
-                <span className="haze-check-icon">{activeCase ? "[✓]" : "[!]"}</span>
-                <div>
-                  <strong>Canonical Receipt:</strong>{" "}
-                  <span className="haze-muted">Status 0x1 on Avalanche Fuji</span>
-                </div>
-              </li>
-              <li className="haze-checklist-item" data-check-status={activeCase ? "pass" : "fail"}>
-                <span className="haze-check-icon">{activeCase ? "[✓]" : "[!]"}</span>
-                <div>
-                  <strong>Pool Event Binding:</strong>{" "}
-                  <span className="haze-muted">PrivateTransaction on HazePool</span>
-                </div>
-              </li>
-              <li className="haze-checklist-item" data-check-status={disclosure ? "pass" : "fail"}>
-                <span className="haze-check-icon">{disclosure ? "[✓]" : "[!]"}</span>
-                <div>
-                  <strong>HPKE Envelope Hash:</strong>{" "}
-                  <span className="haze-muted">{disclosure ? "auditCiphertextHash matched" : "Pending disclosure"}</span>
-                </div>
-              </li>
-              <li className="haze-checklist-item" data-check-status={disclosure ? "pass" : "fail"}>
-                <span className="haze-check-icon">{disclosure ? "[✓]" : "[!]"}</span>
-                <div>
-                  <strong>Poseidon Commitment:</strong>{" "}
-                  <span className="haze-muted">{disclosure ? "auditDataCommitment verified" : "Pending disclosure"}</span>
-                </div>
-              </li>
+              {renderedChecks.map((check) => {
+                const isPassed = check.status === "passed";
+                const isFailed = check.status === "failed";
+                const pillStatus = isPassed ? "pass" : isFailed ? "fail" : "pending";
+                const icon = isPassed ? "[✓]" : isFailed ? "[✕]" : "[⋯]";
+                return (
+                  <li key={check.id} className="haze-checklist-item" data-check-status={pillStatus} data-check-id={check.id}>
+                    <span className="haze-check-icon">{icon}</span>
+                    <div>
+                      <strong>{check.name}:</strong>{" "}
+                      <span className="haze-muted">{check.observed}</span>
+                      <div style={{ fontSize: "10px", color: "var(--haze-text-dim, #888)", marginTop: "2px" }}>
+                        {check.detail}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
 
             <h2 style={{ marginTop: "12px" }}>Access Log (Hash-Chained)</h2>
@@ -729,7 +788,7 @@ export function AuditBrowserClient() {
                 onClick={() => { setExportModalOpen(false); triggerRef.current?.focus(); }}
                 data-action="close-export-modal"
                 className="haze-button haze-button-secondary"
-                style={{ padding: "2px 8px", minHeight: "24px", fontSize: "12px" }}
+                style={{ padding: "8px 12px", minHeight: "44px", minWidth: "44px", fontSize: "12px" }}
               >
                 ✕ Close
               </button>
@@ -747,11 +806,12 @@ export function AuditBrowserClient() {
                 gap: "4px",
               }}
             >
-              <div><strong>Export ID:</strong> {exportData.exportId}</div>
-              <div><strong>Subject:</strong> {exportData.subject}</div>
-              <div><strong>Signing Key:</strong> {exportData.signingKeyId}</div>
-              <div><strong>Expires At:</strong> {new Date(exportData.expiresAt * 1000).toISOString()}</div>
-              <div><strong>Detached Signature:</strong> {exportData.signature}</div>
+              <div><strong>Schema Version:</strong> {exportData.schema_version}</div>
+              <div><strong>Export ID:</strong> {exportData.export_id}</div>
+              <div><strong>Case ID:</strong> {exportData.case_id}</div>
+              <div><strong>Signing Key:</strong> {exportData.signing_key_id}</div>
+              <div><strong>Expires At:</strong> {new Date(exportData.expires_at * 1000).toISOString()}</div>
+              <div><strong>Detached JWS:</strong> {exportData.detached_jws.slice(0, 20)}...</div>
             </div>
 
             <pre
@@ -778,6 +838,7 @@ export function AuditBrowserClient() {
                 onClick={copyExportJson}
                 data-action="copy-export-json"
                 className="haze-button haze-button-secondary"
+                style={{ minHeight: "44px" }}
               >
                 {copied ? "Copied!" : "Copy JSON"}
               </button>
@@ -786,7 +847,7 @@ export function AuditBrowserClient() {
                 onClick={downloadExportJson}
                 data-action="download-export-json"
                 className="haze-button"
-                style={{ fontWeight: 600 }}
+                style={{ fontWeight: 600, minHeight: "44px" }}
               >
                 Download Signed JSON
               </button>
@@ -798,3 +859,4 @@ export function AuditBrowserClient() {
     mount,
   );
 }
+

@@ -53,6 +53,27 @@ pub enum DisclosureError {
     /// Recomputed commitment or ciphertext hash did not match storage.
     #[error("INTEGRITY_FAILURE")]
     IntegrityFailure,
+    /// The session has expired.
+    #[error("SESSION_EXPIRED")]
+    SessionExpired,
+    /// The grant was denied or revoked.
+    #[error("GRANT_DENIED")]
+    GrantDenied,
+    /// The requested case is outside the authorized grant scope.
+    #[error("CASE_SCOPE_DENIED")]
+    CaseScopeDenied,
+    /// Fetched canonical chain evidence differs from stored or expected values.
+    #[error("CANONICAL_EVIDENCE_MISMATCH")]
+    CanonicalEvidenceMismatch,
+    /// Recomputed commitment, hash, or signature differs from canonical facts.
+    #[error("INTEGRITY_MISMATCH")]
+    IntegrityMismatch,
+    /// JSON-RPC provider is unreachable or returned an unexpected error.
+    #[error("RPC_UNAVAILABLE")]
+    RpcUnavailable,
+    /// Access log persistence or lock is unavailable.
+    #[error("AUDIT_LOG_UNAVAILABLE")]
+    AuditLogUnavailable,
 }
 
 /// Result alias for disclosure operations.
@@ -79,6 +100,13 @@ impl DisclosureError {
             Self::Rejected => "REJECTED",
             Self::ApplicationMismatch => "APPLICATION_MISMATCH",
             Self::IntegrityFailure => "INTEGRITY_FAILURE",
+            Self::SessionExpired => "SESSION_EXPIRED",
+            Self::GrantDenied => "GRANT_DENIED",
+            Self::CaseScopeDenied => "CASE_SCOPE_DENIED",
+            Self::CanonicalEvidenceMismatch => "CANONICAL_EVIDENCE_MISMATCH",
+            Self::IntegrityMismatch => "INTEGRITY_MISMATCH",
+            Self::RpcUnavailable => "RPC_UNAVAILABLE",
+            Self::AuditLogUnavailable => "AUDIT_LOG_UNAVAILABLE",
         }
     }
 }

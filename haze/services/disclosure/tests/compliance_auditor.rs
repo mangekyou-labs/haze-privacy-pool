@@ -9,10 +9,11 @@ use haze_disclosure::{
     DisclosureError, StoredAuditRecord,
     access_log::verify_access_log_chain,
     auth::{
-        SiweConfig, StoredSession, format_siwe_message, hash_session_token, verify_siwe_signature,
+        SiweConfig, StoredSession, format_siwe_message, generate_csprng_bytes, hash_session_token,
+        verify_siwe_signature,
     },
-    cases::{DEFAULT_FUJI_CASE_ID, DEFAULT_FUJI_TX_HASH, DEFAULT_GRANTED_FIELDS},
-    export::{DEFAULT_SIGNING_KEY_ID, create_signed_export, verify_export_bundle},
+    cases::{CaseScope, DEFAULT_FUJI_CASE_ID, DEFAULT_FUJI_TX_HASH, DEFAULT_GRANTED_FIELDS},
+    export::{DEFAULT_SIGNING_KEY_ID, ExportSigner, create_signed_export, verify_export_bundle},
     fuji::{FujiDisclosureConfig, FujiWithdrawalEvidence, verify_compliance_case_evidence},
     store::ComplianceStore,
 };
@@ -285,7 +286,7 @@ fn twelve_confirmations_required_for_disclosure() {
 
     assert_eq!(resp.confirmations, 12);
     assert_eq!(resp.checks.len(), 6);
-    assert!(resp.checks.iter().all(|c| c.status == "pass"));
+    assert!(resp.checks.iter().all(|c| c.status == "passed"));
     assert_eq!(
         resp.fields.get("amount").map(String::as_str),
         Some("1000000")
@@ -384,6 +385,7 @@ fn receipt_pool_and_integrity_failures_fail_closed() {
 
 #[test]
 fn canonical_export_and_detached_signature_verification() {
+    let signer = ExportSigner::generate_test_signer();
     let export_id = [0x33; 32];
     let mut fields = BTreeMap::new();
     fields.insert("tx_hash".into(), DEFAULT_FUJI_TX_HASH.into());
@@ -406,22 +408,29 @@ fn canonical_export_and_detached_signature_verification() {
         fields.clone(),
         provenance.clone(),
         NOW + 600,
-    );
+        &signer,
+    )
+    .expect("export creation");
+
+    let jwks = signer.public_jwks();
 
     // Verifies successfully
-    verify_export_bundle(&bundle, NOW).expect("valid export");
+    verify_export_bundle(&bundle, &jwks, NOW).expect("valid export");
 
     // Tampered field values fail signature check
     let mut tampered = bundle.clone();
-    tampered.fields.insert("amount".into(), "9999999".into());
+    tampered
+        .payload
+        .disclosed_fields
+        .insert("amount".into(), "9999999".into());
     assert_eq!(
-        verify_export_bundle(&tampered, NOW),
+        verify_export_bundle(&tampered, &jwks, NOW),
         Err(DisclosureError::IntegrityFailure)
     );
 
     // Expired export fails
     assert_eq!(
-        verify_export_bundle(&bundle, NOW + 601),
+        verify_export_bundle(&bundle, &jwks, NOW + 601),
         Err(DisclosureError::AuthorizationExpired)
     );
 }
@@ -517,4 +526,181 @@ fn dynamic_case_ingestion_and_twelve_confirmation_promotion() {
     let updated_cases = store.list_cases(&app_id, &[]);
     assert_eq!(updated_cases[0].status, "ready");
     assert_eq!(updated_cases[0].confirmations, 13);
+}
+
+#[test]
+fn csprng_auth_secrets_are_unpredictable_and_atomically_consumed() {
+    let bytes1 = generate_csprng_bytes::<32>();
+    let bytes2 = generate_csprng_bytes::<32>();
+    assert_ne!(bytes1, bytes2, "CSPRNG values must be distinct");
+
+    // Atomic consumption test
+    let store = ComplianceStore::new();
+    let challenge = haze_disclosure::store::StoredChallenge {
+        challenge_id: bytes1,
+        nonce: "a1b2c3d4e5f6g7h8".into(),
+        domain: "haze-mu-flax.vercel.app".into(),
+        uri: "https://haze-mu-flax.vercel.app/audit".into(),
+        statement: "Sign in to Haze Compliance Portal (Fuji)".into(),
+        wallet: auditor_wallet(),
+        application_id: APP_ID,
+        issued_at: NOW,
+        expires_at: NOW + 300,
+        consumed: false,
+        message: "test message".into(),
+    };
+    store.save_challenge(challenge);
+
+    // First consumption succeeds
+    let consumed = store.consume_challenge(&bytes1);
+    assert!(consumed.is_some());
+    assert!(consumed.expect("consumed challenge").consumed);
+
+    // Second consumption fails (atomic single-use)
+    assert!(store.consume_challenge(&bytes1).is_none());
+}
+
+#[test]
+fn case_scope_semantics_enforce_explicit_and_all_cases_and_reject_empty() {
+    // AllApplicationCases accepts any case in the application
+    let all_scope = CaseScope::AllApplicationCases;
+    assert!(all_scope.allows_case("case-1"));
+    assert!(all_scope.allows_case("case-2"));
+
+    // ExplicitCases requires non-empty list
+    let explicit =
+        CaseScope::new_explicit(vec!["case-1".to_string()]).expect("valid explicit scope");
+    assert!(explicit.allows_case("case-1"));
+    assert!(!explicit.allows_case("case-2"));
+
+    // Empty list is rejected
+    assert_eq!(
+        CaseScope::new_explicit(vec![]),
+        Err(DisclosureError::CaseScopeDenied)
+    );
+}
+
+#[test]
+fn application_isolation_denies_cross_app_access_even_with_known_case_id() {
+    let store = ComplianceStore::new();
+    let auditor = auditor_wallet();
+
+    // Grant for APP_ID
+    store.seed_auditor_grant(APP_ID, auditor);
+
+    // Case belonging to OTHER_APP_ID
+    let foreign_case = haze_disclosure::cases::ComplianceCase {
+        case_id: "foreign-case-1".into(),
+        title: "Foreign Case".into(),
+        application_id: format!("0x{}", hex::encode(OTHER_APP_ID)),
+        transaction_hash: format!("0x{}", hex::encode([0x88; 32])),
+        granted_fields: DEFAULT_GRANTED_FIELDS.iter().map(|&s| s.into()).collect(),
+        denied_fields: vec!["user".into(), "counterparty".into()],
+        status: "ready".into(),
+        block_number: 100,
+        confirmations: 50,
+        sync_status: "synced".into(),
+        integrity_status: "pending".into(),
+    };
+    store.save_case(foreign_case);
+
+    // Listing cases for APP_ID returns 0 cases (foreign case isolated)
+    let cases = store.list_cases(&APP_ID, &[]);
+    assert_eq!(cases.len(), 0);
+
+    // Direct lookup of foreign case for APP_ID returns None
+    assert!(store.get_case_for_app(&APP_ID, "foreign-case-1").is_none());
+}
+
+#[test]
+fn export_bundle_requires_es256_jws_and_rejects_tampering_and_forgery() {
+    let signer = ExportSigner::generate_test_signer();
+    let key_id = DEFAULT_SIGNING_KEY_ID;
+
+    let mut fields = BTreeMap::new();
+    fields.insert("tx_hash".into(), DEFAULT_FUJI_TX_HASH.into());
+    fields.insert("amount".into(), "1000000".into());
+    fields.insert(
+        "asset".into(),
+        "0x5425890298aed601595a70AB815c96711a31Bc65".into(),
+    );
+    fields.insert("timestamp".into(), "1700000000".into());
+    fields.insert("policy_version".into(), "1".into());
+
+    let mut provenance = BTreeMap::new();
+    provenance.insert("chainId".into(), "43113".into());
+    provenance.insert("confirmations".into(), "58".into());
+
+    let bundle = create_signed_export(
+        [0x33; 32],
+        DEFAULT_FUJI_CASE_ID,
+        DEFAULT_FUJI_TX_HASH,
+        "0xAuditorAddress",
+        key_id,
+        fields.clone(),
+        provenance.clone(),
+        NOW + 600,
+        &signer,
+    )
+    .expect("export creation");
+
+    assert_eq!(bundle.schema_version, "haze-compliance-export-v1");
+    assert_eq!(bundle.signing_key_id, key_id);
+    assert!(!bundle.detached_jws.is_empty());
+    assert!(!bundle.payload_digest.is_empty());
+
+    // Independent JWKS verification passes
+    let jwks = signer.public_jwks();
+    verify_export_bundle(&bundle, &jwks, NOW).expect("valid ES256 export");
+
+    // Tampered payload fails verification
+    let mut tampered_payload = bundle.clone();
+    tampered_payload
+        .payload
+        .disclosed_fields
+        .insert("amount".into(), "9999999".into());
+    assert_eq!(
+        verify_export_bundle(&tampered_payload, &jwks, NOW),
+        Err(DisclosureError::IntegrityFailure)
+    );
+
+    // Tampered signature fails verification
+    let mut tampered_sig = bundle.clone();
+    tampered_sig.detached_jws = "bad_signature".into();
+    assert_eq!(
+        verify_export_bundle(&tampered_sig, &jwks, NOW),
+        Err(DisclosureError::IntegrityFailure)
+    );
+
+    // Expired export fails verification
+    assert_eq!(
+        verify_export_bundle(&bundle, &jwks, NOW + 601),
+        Err(DisclosureError::AuthorizationExpired)
+    );
+}
+
+#[test]
+fn canonical_evidence_verification_checks_six_structured_checks() {
+    let cfg = config();
+    let fields: Vec<String> = DEFAULT_GRANTED_FIELDS.iter().map(|&s| s.into()).collect();
+    let (evidence, tx_hash) = mock_evidence(&cfg, 100, 115, true);
+
+    let resp =
+        verify_compliance_case_evidence(&cfg, tx_hash, &fields, &evidence, Some(&TEST_AUDIT_IKM))
+            .expect("valid evidence");
+
+    assert_eq!(resp.checks.len(), 6);
+    let check_ids: Vec<&str> = resp.checks.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(
+        check_ids,
+        vec![
+            "finality_confirmations",
+            "canonical_receipt",
+            "pool_event",
+            "action_binding",
+            "envelope_hash",
+            "audit_commitment"
+        ]
+    );
+    assert!(resp.checks.iter().all(|c| c.status == "passed"));
 }

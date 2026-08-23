@@ -4,15 +4,21 @@ title: Implementation Guide
 description: Technical implementation notes, patterns, and code guidelines
 ---
 
-## D8 compliance portal reconciliation (2026-08-22 — In Progress)
+## D8 compliance portal reconciliation (2026-08-23 — Blocked by implementation check)
 
 - Reopened D8 as in progress to reconcile local implementation vs. deployed acceptance evidence.
-- Preserved verified local Rust logic in `haze-disclosure` (EIP-4361 SIWE challenge/verification, opaque hashed sessions, 12-confirmation checking, envelope hashing, in-memory redaction, signed canonical export, hash-chained access logging).
-- Delivered local implementation items:
-  - **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion (Complete locally):** Production now uses the async PostgreSQL repository and additive `0004` migration for grants, cases, evidence, export counters, access-log heads, and poller checkpoints. Bounded reorg replay and replacement are transactional, RPC/database errors remain visible in checkpoint health, and production startup seeds only the dedicated auditor grant. Real-PostgreSQL restart, idempotency, and concurrent-chain tests pass. Production acceptance remains part of D8.5–D8.7.
-  - **D8.0b / D8.4 React Workstation UX Remediation (Complete locally):** Real Chromium verification covers the actual Next.js client, mobile list-to-detail Back navigation, 390px overflow, hash wrapping, 44px targets, queue arrow navigation, modal Tab trapping/Escape/focus restoration, SIWE session refresh, and deliberate session/error states. Browser payload sanitization restricts disclosure/export data to the five-field contract. Production acceptance remains part of D8.5–D8.7.
+- Preserved verified local Rust foundations in `haze-disclosure` (EIP-4361 SIWE signature checking,
+  hashed session persistence, confirmation counting, envelope hashing, in-memory redaction,
+  canonical export payload hashing, and hash-chained access logging). Phase 7 limits these claims to
+  the behaviors directly covered by tests; it does not treat the session secret as unpredictable or
+  the public export hash as a cryptographic signature.
+- Delivered local implementation foundations, now reopened for remediation:
+  - **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion (Reopened):** Production uses the async PostgreSQL repository and additive `0004` migration for grants, cases, evidence, export counters, access-log heads, and poller checkpoints. Real-PostgreSQL restart, idempotency, and concurrent-chain tests pass. The Phase 7 check found that the poller synthesizes receipt/finality/binding facts instead of independently fetching and validating them, so D8.2 is not complete.
+  - **D8.0b / D8.4 React Workstation UX Remediation (Reopened):** The actual Next.js client passes the local Chromium flow, mobile overflow, keyboard navigation, modal focus, and response-redaction checks. The Phase 7 check found pre-verification success claims, a fabricated policy-version fallback, an unlabeled search input, and desktop controls below the 44px target, so D8.0b and D8.4 are not complete.
 - Open production acceptance deliverables:
   - **D8.5–D8.7 Production E2E & Product Quality Gate:** Execute fresh Fuji deposit→withdraw→auditor SIWE journey with real transaction hashes and separate auditor wallet. Run named `playwright-cli -s=haze-d8` session against production Vercel origin. Reclassify prior screenshots and manifests as local mocked fixtures.
+
+- **Phase routing:** Critical/high findings below block D8. Return to Phase 5 (`dev-implementation` Execute Plan), add failing regressions, remediate, and rerun this Phase 7 check before D8.5–D8.7.
 
 
 ## D6-D7 browser continuation (2026-08-21)
@@ -1481,3 +1487,73 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 - Began the async PostgreSQL repository with idempotent grant/case/checkpoint persistence,
   restart-safe IDs, one-time challenge consumption, sessions, exports, and transaction-serialized
   access-log chaining. Production wiring and poller integration remain open.
+
+This restart note is a historical checkpoint. Production wiring and poller integration were added in
+the subsequent D8 delta; the Phase 7 implementation check below supersedes its open-work statement.
+
+## Check Implementation (Phase 7, 2026-08-23 — Blocked)
+
+### Review scope and decision
+
+- Compared requirements, design, planning, implementation, testing, and the D8 addendum against the
+  complete implementation delta from D7 closure `f84c292` through `9e837c3`, plus the preserved local
+  benchmark edit.
+- Reviewed the PostgreSQL repository/migrations, Rust auth/disclosure/export/poller paths, Next BFF,
+  React auditor workstation, acceptance runners, Render/deployment wiring, configuration, and tests.
+- No production source was changed during this check. The local durable-store foundations, BFF cookie
+  isolation, five-field browser sanitization, access-log-head serialization, readiness behavior,
+  responsive shell integration, URL case state, and modal keyboard behavior align with the D8 design.
+- Decision: **BLOCKED**. The findings below invalidate the prior local-complete claims for D8.0b,
+  D8.1, D8.2, and D8.4. D8.3 routes exist locally but inherit the blocked backend authorization model.
+
+### Blocking findings
+
+| ID | Severity | Evidence | Requirement impact | Required remediation |
+|---|---|---|---|---|
+| D8-P7-01 | Critical | `haze/services/disclosure/src/repository.rs:594-601` derives IDs as `keccak256(label || nextval)`; `haze/services/disclosure/src/http.rs:609-614` returns that value as the bearer session secret. The in-memory adapter uses the same deterministic pattern at `store.rs:323-329`. | FR-08, FR-09, SC-08 | Generate challenge/session bearer secrets with a CSPRNG. Store only token hashes, retain one-time challenge consumption, and add prediction/replay regressions. Keep deterministic IDs only where they are non-secret and explicitly modeled as such. |
+| D8-P7-02 | Critical | `repository.rs:479-483` and `store.rs:225-229` load a case by `case_id` alone. `http.rs:755-775` checks assignment but never checks `case.application_id == session.application_id`; an empty assignment means all cases. | FR-07, FR-08, FR-09, SC-04, SC-08 | Make case/evidence lookup application-scoped, enforce application equality before disclosure/export, and add cross-application HTTP tests for both explicit and all-case grants. |
+| D8-P7-03 | High | The production grant is seeded with `assigned_cases=[]` (`repository.rs:361-380`), list/disclosure interpret empty as all (`repository.rs:465-476`, `http.rs:761`), but export rejects every empty-assignment grant (`http.rs:882-895`). | FR-09, SC-03 | Define one all-cases semantic and apply it consistently to list, disclose, and export; cover the seeded production grant with an HTTP export regression. |
+| D8-P7-04 | High | `export.rs:81-117` calls a public hash a detached signature, and `verify_export_bundle` at `export.rs:120-143` only recomputes that public hash. Anyone can alter a bundle and recompute a valid value. | FR-09, SC-03, SC-08 | Sign the canonical payload with an application-controlled private/KMS key, publish a verifiable key identity, verify cryptographically, and add forgery/key-rotation/expiry tests plus an independent verifier in acceptance. |
+| D8-P7-05 | High | `fuji.rs:245-372` never compares `target_tx_hash` to `evidence.transaction_hash`. `poller.rs:281-315` constructs evidence from log data while setting `receipt_successful=true`, `finalized=true`, `action_reference=tx_hash`, and configured pool version without fetching the canonical transaction/receipt/block bindings. | FR-03, FR-06, FR-07, FR-09, SC-08 | Fetch and validate canonical receipt, transaction input, block hash, log identity, action reference, pool version, and target transaction binding before marking integrity/finality verified. Add mismatch, reorg, reverted-receipt, and forged-record regressions. |
+| D8-P7-06 | High | `cases.rs:112-146` marks newly ingested cases `integrity_status="verified"`. `audit-browser-client.tsx:637-656` renders receipt and pool-event checks as passed whenever a case exists instead of using disclosure `checks`. | FR-06, FR-09, SC-10 | Use unknown/pending integrity until server verification succeeds; render the returned named checks exactly and fail closed on absent/failed checks. |
+| D8-P7-07 | High | `dev/playwright-audit-walk.mjs:114-118` computes but does not assert authentication; verification and export are conditionally skipped at lines 161-206; line 266 writes `status: "PASS"` unconditionally. It does not independently verify export cryptography or exact disclosed fields. | SC-03, SC-04, SC-08 | Make authentication, dynamic case selection, disclosure, exact five-field comparison, export, independent signature verification, access-log evidence, and logout mandatory. Any missing/disabled step must fail before a PASS manifest is written. |
+
+### Required follow-ups
+
+- Revalidate grant revocation/expiry for every session-backed route. `extract_session` validates only
+  token and session expiry; case listing, session info, and access-log reads can continue after grant
+  revocation.
+- Replace `policy_version || "1"` in the audit client with an explicit unavailable/error state.
+- Add an accessible label to case search and raise desktop disconnect/modal-close targets to at least
+  44x44 CSS pixels as required by the D8 addendum.
+- Add composite indexes for current grant lookup, transaction-hash evidence lookup, and bounded
+  chain/pool/block replay. Update `dev/stack.mjs` to include migrations `0003` and `0004` so the local
+  stack matches the durable runtime schema.
+- `npm audit --omit=dev` reports three high advisories through `next@15.5.23` using
+  `postcss@8.4.31` and `sharp@0.34.5`. No production-reachable exploit was demonstrated in this
+  check, but the framework/dependency upgrade and reachability assessment remain required before the
+  affected production milestone exits; do not apply a forced breaking upgrade without regression
+  coverage.
+
+### Fresh verification evidence
+
+- Final post-documentation AI DevKit base and feature lint passed; `git diff --check` exited 0.
+- `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
+- Isolated PostgreSQL integration (`HAZE_TEST_DATABASE_URL=postgresql://127.0.0.1:55438/haze_phase7
+  cargo test -p haze-disclosure --test postgres_repository -- --nocapture`): 3 passed, 0 skipped.
+- `cargo test -p haze-disclosure --test compliance_auditor -- --nocapture`: 8 passed.
+- `HAZE_TEST_DATABASE_URL=... cargo test --workspace --all-targets`: exit 0; all executed tests
+  passed, with only the two explicitly ignored fixture-writer tests ignored.
+- `npm test`: 343 total, 342 passed, 1 environment-gated actual-Next test skipped; Circom vector
+  harness passed. The separately enabled built-Next Chromium suite passed 3/3 with 0 skipped.
+- `npm run build`: exit 0 for all workspaces, including SDK syntax and the Next 15.5.23 production
+  build. `forge test --offline`: 113 passed, 0 failed. Secret scan, gates, and security-review fixture
+  verification passed.
+- `npm audit --omit=dev`: exit 1 with 3 high advisories and 0 reported critical advisories.
+- D8.5–D8.7 were not run: no deploy, broadcast, wallet transaction, or live Fuji state mutation was
+  authorized by this local implementation check.
+
+### Next phase
+
+Return to Phase 5, implement D8-P7-01 through D8-P7-07 and the follow-ups with failing regressions,
+then rerun Phase 7 before any D8 production acceptance work.

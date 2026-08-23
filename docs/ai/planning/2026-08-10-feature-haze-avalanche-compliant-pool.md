@@ -90,18 +90,21 @@ Commercial one-origin host (2026-08-18 Phase 5 C0–C7): wallet-from-address gra
 hydrated pool + compliance workspaces, IBM Plex, playwright-cli walk on 3010. dappwright package
 not installed — MetaMask headed bootstrap is operator-owned. SC-09 and fuji-v1 stay closed.
 
-## Progress Update — 2026-08-22 (D8 Reconciliation — Fresh Fuji Deposit-to-Compliance Production E2E)
+## Progress Update — 2026-08-23 (D8 Reconciliation — UX-First Fuji Auditor MVP)
 
-D8 is reopened as in progress. Verified local implementation is preserved while unsupported production-complete claims are removed:
-1. **Design Baseline & Compatibility (`D8.0` & `D8.0b`):** Draft baseline in `docs/ai/design/2026-08-22-fuji-compliance-auditor-workstation.md` is retained (`D8.0`); responsive compatibility using existing Haze tokens (`#1f6b62`), shell integration, and product review remains open (`D8.0b`).
-2. **Local Cryptography & Auth (`D8.1`):** Rust local SIWE, session, grant, 12-confirmation check, disclosure redaction, signed export, and hash-chained access logging are complete locally with existing Rust evidence.
-3. **Durable Runtime & Automatic Ingestion (`D8.2`):** Open. Postgres-backed state and automatic Fuji log poller required (no in-memory production state or hardcoded seeded case).
-4. **BFF Routes (`D8.3`):** Same-origin Next.js BFF routes are complete locally; production deployment and upstream identity are open.
-5. **React Workstation Client (`D8.4`):** In progress. Full-width shell integration, accessible dialogs/focus trapping, `?case=<id>` deep links, genuine empty states, privacy hygiene, and responsive layout remediation required.
-6. **Fresh Production E2E & Walkthrough (`D8.5` & `D8.6`):** Open. Fresh Fuji deposit→withdraw→auditor SIWE journey and named `playwright-cli` session investigation with real production evidence required.
+D8 is in progress against the approved UX-first Fuji MVP boundary. Preserve the working local
+foundations while fixing the Phase 7 security/truthfulness defects; provider-heavy production controls
+are named post-MVP work.
+
+1. **Design Baseline & Compatibility (`D8.0` & `D8.0b`):** The reviewed MVP design in `docs/ai/design/2026-08-22-fuji-compliance-auditor-workstation.md` is approved. D8.0b remains open for truthful states, missing-data handling, labels, and 44px targets.
+2. **Local Cryptography & Auth (`D8.1`):** Reopened. Replace predictable bearer secrets, enforce application/case lookup, use explicit all-application case scope, and replace public hashes with deployment-key ES256 signatures. SIWE-only is accepted for the Fuji MVP.
+3. **Durable Runtime & Automatic Ingestion (`D8.2`):** Reopened. Preserve Postgres and the automatic poller, but bind real transaction/receipt/block/action evidence before verification.
+4. **BFF Routes (`D8.3`):** Present locally and blocked only by the remediated auth/disclosure contract; OIDC/SAML is deferred.
+5. **React Workstation Client (`D8.4`):** Reopened. Consume server checks truthfully and close the focused desktop/mobile UX gaps.
+6. **Known-Evidence Fuji Walkthrough (`D8.5` & `D8.6`):** Open. Backfill the known D7 withdrawal from Fuji, complete auditor SIWE, and record one visible deployed-site investigation. A fresh deposit/withdrawal and dual Dappwright setup are deferred.
 7. **Product / UI Quality Gate (`D8.7`):** Open. Responsive WCAG AA review and visual hierarchy remediation.
 
-Next three tasks: (1) durable automatic Fuji ingestion (`D8.2`), (2) workstation UX remediation (`D8.4`), and (3) composed production E2E and product review (`D8.5`–`D8.7`).
+Next: return to Phase 5 for D8.R1–D8.R9 below. Rerun Phase 7 only after the critical/high regressions pass; D8.5–D8.7 remain downstream and open.
 
 ## Task Breakdown
 
@@ -669,70 +672,106 @@ filesystem notes, server-side proving, and `?live=1`.
   - [x] **D7.2 Candidate deployment:** Run all pre-deployment gates, commit/push candidate SHA `323f15a2982c7f41f59a94a2118ec3f2ddb6196e`, deploy exact SHA to Vercel production (`dpl_F2iERWy5qjMEzULXPDg85HJ3Xj6f` / `https://haze-mu-flax.vercel.app`), and verify live CSP + hydration.
   - [x] **D7.3 Headed acceptance:** Execute production-only Fuji workflow (`/shield`, reload recovery, `/withdraw`, disclosure) under the two-attempt policy. Verified deposit `0xb9184be1be1a3e4713cd015200d95edcb30aebeb567b1e73672a375607ec2e69` (Block 57897909), note recovery, withdrawal `0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03` (Block 57897923), and Render withdrawal disclosure HTTP 200 response with evidence captured in `haze/output/playwright/d7-deployed-fuji-acceptance.json`.
   - [x] **D7.4 Release closeout:** Record evidence, deploy final release SHA, and prepare draft PR.
-- [ ] **D8 — Fuji Compliance Portal with Production Playwright Verification (In Progress)**
+- [ ] **D8 — UX-First Fuji Compliance Auditor MVP (In Progress)**
 
   ### Summary
 
-  - Reopened D8 as in progress. Distinguish local implementation from deployed acceptance.
-  - Deliver the designed `/audit` master-detail workstation on the production Vercel origin, backed by the production Render service and real Fuji evidence.
+  - Deliver the designed `/audit` master-detail workstation on the deployed Vercel origin, backed by the Render service, durable Postgres, and real Fuji evidence.
+  - Limit MVP identity to SIWE for one configured auditor and one configured application.
   - Replace in-memory mock compliance store with durable Postgres runtime and automatic internal Fuji log poller.
-  - Remove transaction-specific case seeding from production startup; production seeds only the dedicated auditor grant.
+  - Remove synthetic transaction case seeding; allow the poller to backfill the known canonical D7
+    withdrawal for the deployed walkthrough.
   - Fix workstation UX to use existing Haze shell, `theme.css` tokens (`var(--haze-accent)` `#1f6b62`), IBM Plex typography, semantic accessible controls, and `?case=<id>` deep links.
-  - Use Dappwright for deposit→withdraw on Fuji and separate auditor MetaMask/SIWE bootstrap; use named `playwright-cli` session for visible production-site investigation and evidence capture.
-  - Reclassify previous D8 screenshots/manifest as local mocked fixtures (`local-fixtures`); fresh production run required.
-  - Keep D7's prior transaction evidence as historical regression data only.
+  - Use an authorized auditor wallet and one visible browser walkthrough for deployed acceptance.
+  - Defer OIDC/SAML, cloud KMS, WORM storage, PostgreSQL RLS, rotation, multi-organization,
+    super-auditor, fresh deposit/withdrawal choreography, and the extensive production manifest.
 
   ### Workstream Statuses
 
   | Workstream | Status | Required exit |
   |---|---|---|
-  | D8.0 initial design addendum | Complete | Retain as a draft baseline |
-  | D8.0b current-UI compatibility and product review | In progress | Approved responsive design using existing Haze tokens and shell |
-  | D8.1 local SIWE, session, grant, disclosure, export, and access-log logic | Complete locally | Keep existing Rust evidence |
-  | D8.2 durable Postgres runtime and automatic Fuji ingestion | Complete locally | No in-memory production state or seeded transaction case; dynamic poller; production acceptance remains open |
-  | D8.3 same-origin BFF routes | Complete locally | Production deployment and upstream identity still open |
-  | D8.4 React workstation | Complete locally | Actual-Next Chromium verifies shell integration, privacy, keyboard accessibility, and responsive behavior; production acceptance remains open |
-  | D8.5 Dappwright deposit→withdraw→auditor SIWE journey | Open | Fresh production Fuji execution required |
-  | D8.6 named playwright-cli portal investigation | Open | Real CLI transcript and production evidence required |
+  | D8.0 reviewed MVP design addendum | Complete | Approved MVP boundary and named production deferrals |
+  | D8.0b current-UI compatibility and product review | Reopened / blocked | Truthful server-backed integrity states, missing-data behavior, labels, and 44px targets |
+  | D8.1 local SIWE, session, grant, disclosure, export, and access-log logic | Reopened / blocked | Unpredictable bearer secrets, application isolation, consistent grant semantics, and keyed export signatures |
+  | D8.2 durable Postgres runtime and automatic Fuji ingestion | Reopened / blocked | Preserve persistence, but independently establish canonical receipt/transaction/block/action bindings before verification |
+  | D8.3 same-origin BFF routes | Present locally / blocked upstream | Revalidate against remediated auth/disclosure service |
+  | D8.4 React workstation | Reopened / blocked | Consume server checks truthfully and close desktop accessibility/missing-data gaps |
+  | D8.5 known-evidence Fuji backfill and auditor SIWE | Open | Poller ingests and verifies canonical D7 withdrawal; real auditor session succeeds |
+  | D8.6 visible deployed portal investigation | Open | Browser transcript and compact MVP evidence required |
   | D8.7 product/UI quality gate | Open | Responsive UX review and remediation complete |
-  | D8 overall | In progress | All production gates pass |
+  | D8 overall | In progress | Approved MVP gates pass without production-readiness claims |
+
+  ### Phase 7 remediation backlog (2026-08-23)
+
+  - [x] **D8.R1 — CSPRNG auth secrets:** replace sequence-derived challenges/session tokens with
+    unpredictable random values, persist only required hashes, and test prediction/replay failure.
+  - [x] **D8.R2 — Application-scoped authorization:** bind case and evidence lookups to the session
+    application, reject empty case-scope wildcards, and test the explicit `all_application_cases`
+    mode against a second fixture application.
+  - [x] **D8.R3 — Export authorization and authenticity:** make empty assignments behave consistently
+    across list/disclose/export and replace public payload hashes with RFC 8785 + ES256 signatures
+    using a distinct deployment-secret key and configured public JWK. Cloud KMS and rotation defer.
+  - [x] **D8.R4 — Canonical evidence:** fetch and bind receipt status, transaction input/action
+    reference, log, block hash, pool version, and target transaction before marking a case verified.
+  - [x] **D8.R5 — Truthful workstation state:** keep integrity pending until verification, render the
+    returned checks, never invent policy version, and fail closed on absent/failed checks.
+  - [x] **D8.R6 — Fail-hard acceptance:** require authentication, verification, exact field set,
+    export, independent signature verification, access history, and logout before writing PASS.
+  - [x] **D8.R7 — Grant lifecycle:** enforce revocation and expiry consistently on every session-backed
+    route, including list, session info, and access-log reads.
+  - [x] **D8.R8 — Durable runtime parity:** add query/replay indexes and include migrations `0003`,
+    `0004`, and `0005` in the local stack bootstrap. PostgreSQL RLS defers until production hardening.
+  - [x] **D8.R9 — Release hygiene:** close search labeling and 44px desktop target gaps; assess and
+    upgrade the current Next/PostCSS/sharp advisory chain only if it affects the shipped runtime or
+    blocks the MVP build.
+
+  ### Named post-MVP hardening
+
+  - [ ] Organizational OIDC/SAML identity bound to SIWE.
+  - [ ] Cloud KMS custody, key rotation, and historical verification keys.
+  - [ ] Write-once access-log retention and signed checkpoints.
+  - [ ] PostgreSQL RLS and production multi-tenant/super-auditor paths.
+  - [ ] Fresh dual-wallet deposit→withdraw→audit acceptance and full release manifest.
 
 
   ### Implementation and Interfaces
 
   - Replace `ComplianceStore` with Postgres-backed storage for challenges, hashed sessions, grants, cases, encrypted envelopes, exports, access logs, and a serialized hash-chain head.
-  - Add an internal Fuji log poller (no public ingestion endpoint) that scans the configured HazePool, stores withdrawal events idempotently, dynamically creates `pending_finality` cases within 10s of observing events, and promotes to `ready` at 12 confirmations.
+  - Add an internal Fuji log poller (no public ingestion endpoint) that scans the configured HazePool,
+    stores real transaction/receipt/block/event evidence idempotently, creates `pending_finality`
+    cases, and promotes to `finality_ready` at 12 confirmations without claiming integrity success.
   - Remove transaction-specific case seeding from production startup; seed only the dedicated auditor grant.
   - Keep same-origin BFF endpoints, but return dynamically ingested cases from `GET /api/compliance/cases`.
+  - Use separate deployment secrets behind the existing provider boundaries for application
+    decryption and ES256 export signing; do not claim cloud KMS custody in the MVP.
   - Disclosure and export responses contain only `tx_hash`, `amount`, `asset`, `timestamp`, and `policy_version`. `user` and `counterparty` are absent from browser responses, DOM, downloads, and logs.
 
   ### Workstation UX
 
   - Render `/audit` as a full-width audit workspace inside the existing Haze shell (not in a centered pool card, no duplicated headers).
   - Use `theme.css` variables (`var(--haze-accent)` `#1f6b62`, IBM Plex, standard surfaces/borders/spacing). Remove hardcoded neon teal, emoji status icons, and one-off inline styling.
-  - Flow: auditor sign-in → assigned cases → pending/ready status → Verify & Disclose → five-field evidence record → signed export review → access history.
+  - Flow: auditor sign-in → assigned cases → syncing/finality-ready status → Verify & Disclose → five-field evidence record → signed export review → access history.
   - Use semantic buttons for cases, `?case=<id>` for selection, accessible dialog/bottom sheet with focus trapping, and genuine empty state.
   - Disable export until disclosure succeeds. Hide pool warnings, transaction balances, role query controls, admin/governance nav, and local-network labels from auditor experience.
   - Cover loading, empty, wrong network, rejected signature, unauthorized wallet, expired/revoked grant, pending finality, integrity failure, service outage, session expiry, export, and logout.
 
-  ### Production E2E and Acceptance Gates
+  ### Fuji MVP Acceptance Gates
 
   1. Deploy candidate Git SHA to production Render service and Vercel alias; verify both deployment IDs and readiness metadata.
-  2. With transaction wallet in headed Dappwright on Fuji:
-     - Preflight AVAX, USDC, membership, allowance.
-     - Approve only if required.
-     - Deposit exactly 1.000000 USDC through production `/shield`.
-     - Hard reload and prove IndexedDB recovery of the newly created note.
-     - Withdraw that exact note through production `/withdraw`.
-     - Require successful receipts and matching pool events; do not reuse D7 hashes or filesystem notes.
-  3. Wait for Render to ingest the new withdrawal automatically, expose dynamic case, and promote after 12 confirmations.
-  4. With separate auditor wallet in separate Dappwright profile:
-     - Confirm Fuji 43113, complete real SIWE, save HttpOnly-cookie storage state.
-     - Prove auditor transaction count is unchanged.
-  5. Use named CLI session (`playwright-cli -s=haze-d8 ...`) to navigate to production `/audit`, select dynamic case, verify integrity checks, disclose exactly five fields, review/download signed export, verify signature independently, verify access history, and test logout / negative security checks.
-  6. Record production manifest containing real Git/Render/Vercel IDs, CLI session transcript, fresh deposit/withdrawal hashes, note-recovery proof, dynamic case ID, ingestion timing, confirmations, origins, export hash/signature result, access-log head, and auditor transaction counts before/after.
-  7. Fresh Cargo tests/clippy, Node tests, typecheck, Next production build, migration tests, privacy-copy checks, and accessibility checks pass.
-  8. `fuji-v1.json`, `SC-09` approvals, production ceremony state, and mainnet authorization are byte-for-byte unchanged.
+  2. Configure the poller to backfill the canonical D7 withdrawal from Fuji; require the real
+     transaction, successful receipt, canonical block, matching pool event, and 12 confirmations.
+  3. With the configured auditor wallet, confirm Fuji 43113 and complete real SIWE without sending a
+     transaction.
+  4. In one visible browser session, open `/audit`, select the dynamic case, render every server
+     integrity check, disclose exactly five fields, download the signed export, verify ES256
+     independently, inspect access history, and log out.
+  5. Record a compact evidence artifact with Git/Render/Vercel IDs, transaction hash, case ID,
+     confirmations, integrity checks, exact field names, export hash/signature result, access-log
+     head, and logout result.
+  6. Fresh focused Cargo tests/clippy, Node tests, typecheck, Next production build, migration tests,
+     privacy-copy checks, and accessibility checks pass.
+  7. `fuji-v1.json`, `SC-09` approvals, production ceremony state, and mainnet authorization are
+     byte-for-byte unchanged.
 
 1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
 2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and

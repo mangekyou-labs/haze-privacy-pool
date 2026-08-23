@@ -8,28 +8,35 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
 
 ## D8 compliance portal reconciliation evidence (2026-08-22 — In Progress)
 
-- [x] **D8.1 Local Rust compliance runtime tests (`haze/services/disclosure/tests/compliance_auditor.rs`):**
+- [ ] **D8.1 Local Rust compliance runtime tests (`haze/services/disclosure/tests/compliance_auditor.rs`; reopened):**
   - SIWE challenge issuance, EIP-4361 formatting, signature recovery, and replay rejection (`REJECTED`).
   - Session hashing (`keccak256(token)`), expiry verification, and revocation (`DELETE /v1/session`).
   - Grant isolation and case assignment (`GRANT_REVOKED`, `CASE_UNASSIGNED`).
   - 12+ on-chain confirmation enforcement (`INSUFFICIENT_FINALITY` when < 12), canonical receipt status `0x1`,
     `PrivateTransaction` event binding, envelope hash check, and Poseidon audit commitment verification.
   - Strict field redaction (granted: `tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`; denied: `user`, `counterparty`).
-  - Signed canonical export bundle creation, timestamp expiry, and detached signature verification.
+  - Canonical export bundle hashing, timestamp expiry, and recomputation checks (not a keyed
+    signature; D8.R3 must replace this behavior).
   - Write-once hash-chained access log verification (`verify_access_log_chain`) and sequence/tamper detection.
+  - Existing tests pass, but they do not reject predictable bearer tokens, cross-application direct
+    case lookup, all-case export inconsistency, or a forged/recomputed export hash.
 - [x] Additive durable runtime migration `0004` and real-PostgreSQL repository tests. Preserved deployed `0003`; verified restart, idempotent replay/checkpoint recovery, independent per-application sequences, and 16 concurrent access-log writers against PostgreSQL.
 - [x] **D8.3 Local Next.js BFF unit tests (`haze/tests/fuji-compliance-auditor.test.mjs`):**
   - Handler export validation, error forwarding (503 on service outage), and cookie issuance.
-- [x] **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion tests (`haze/services/disclosure/tests/compliance_auditor.rs` plus PostgreSQL integration coverage; complete locally):**
+- [ ] **D8.2 Automatic Fuji Log Poller & Dynamic Ingestion tests (`haze/services/disclosure/tests/compliance_auditor.rs` plus PostgreSQL integration coverage; reopened):**
   - Poller log parsing, event extraction, confirmation tracking, pre-finality dynamic case creation, and promotion to `ready` at 12 confirmations.
   - Production startup seeding only the dedicated auditor grant with dynamic unconstrained case matching.
   - Sequential hash chain head retrieval (`get_access_log_head`).
-- [x] **D8.4 React Workstation UI & Accessibility tests (`haze/tests/fuji-compliance-auditor.test.mjs` plus real-browser coverage; complete locally):**
+  - Missing: canonical RPC receipt/transaction/block/action-reference binding and mismatched target
+    transaction, reverted receipt, forged record, and reorg regressions.
+- [ ] **D8.4 React Workstation UI & Accessibility tests (`haze/tests/fuji-compliance-auditor.test.mjs` plus real-browser coverage; reopened):**
   - Full-width shell mounting (`data-card="compliance-audit"`), `theme.css` tokens (`#1f6b62` accent, IBM Plex font), omission of pool tabs and DEX balances.
   - 5-field disclosure output verification with strict redaction of `user` and `counterparty`.
   - Focus trapping and keyboard accessibility in export review modal with `?case=<id>` deep link synchronization.
   - Fresh actual-Next Chromium run: `HAZE_NEXT_TEST_ORIGIN=http://127.0.0.1:3010 node --test tests/playwright-audit-e2e.test.mjs` — 3 passed, 0 failed. Captures and manifest are explicitly classified `local-fixtures`.
   - Fresh release gates: `cargo test -p haze-disclosure`, clippy with warnings denied, 343 Node tests (342 pass, one environment-gated browser test skipped in the aggregate run), TypeScript, Next production build, formatting, and `git diff --check` all pass. The separately enabled actual-Next browser test passes.
+  - Missing: server-check-driven integrity states, absent policy-version handling, an accessible search
+    name, 44px desktop targets, and acceptance-runner assertions that cannot conditionally skip core steps.
 - [ ] **D8.5–D8.7 Fresh Fuji Deposit→Withdrawal→Compliance Journey & Production E2E:**
   - Real Fuji deposit and withdrawal transaction execution.
   - Automatic poller ingestion and dynamic case promotion.
@@ -1178,3 +1185,58 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
   and poller checkpoint, plus a valid immutable hash chain under 16 concurrent access-log writers.
 - This evidence is partial and does not complete D8.0b, D8.2, or D8.4; HTTP production wiring,
   evidence/reorg ingestion, failure health, and end-to-end restart tests remain required.
+
+This is a historical checkpoint. The subsequent D8 delta added production wiring, poller integration,
+and a third PostgreSQL integration case. The 2026-08-23 Phase 7 result below is the current status.
+
+## Check Implementation (Phase 7, 2026-08-23 — Blocked)
+
+The implementation delta is not ready for D8.5–D8.7. Phase 7 found release-blocking security and
+integrity gaps that the current green tests do not exercise. Production code was not changed in this
+phase; the remediation backlog is tracked as D8.R1–D8.R9 in the planning document.
+
+### Required regression coverage before rerunning Phase 7
+
+- [ ] A future bearer token cannot be derived from observed challenge, session, export IDs, labels,
+  or PostgreSQL sequence state; challenge replay still fails and only token hashes are stored.
+- [ ] An application auditor cannot list, disclose, export, or retrieve evidence for another
+  application, including when `assigned_cases` is empty and a foreign case ID is known.
+- [ ] The seeded all-cases production grant can export an authorized dynamic case, while explicit
+  assignments still deny unassigned cases.
+- [ ] Export verification requires a real application-controlled signing key and rejects payload,
+  signature, key-ID, key-rotation, and expiry tampering. The production runner verifies independently.
+- [ ] Poller/disclosure tests reject a mismatched target transaction, reverted/missing receipt,
+  non-canonical block/log, action-reference mismatch, configured-vs-on-chain pool-version mismatch,
+  forged finality, and reorg replacement.
+- [ ] The workstation does not show verified receipt/event/commitment state before successful server
+  checks, does not fabricate policy version, and fails closed when checks are absent or failed.
+- [ ] The production acceptance runner fails if authentication, case selection, disclosure, exact
+  five-field output, export, independent signature verification, access history, or logout is absent
+  or disabled; it cannot write `status: "PASS"` after a skipped core step.
+- [ ] Revoked/expired grants are rejected by list, session-info, disclosure/export, and access-log
+  routes. Query plans use indexes for current grants, transaction evidence, and replay ranges.
+- [ ] Browser accessibility covers a named search control and at least 44x44 desktop action targets.
+  Local stack tests prove migrations `0001` through `0004` are included.
+
+### Fresh command evidence
+
+- `cargo fmt --all -- --check`: exit 0.
+- `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
+- Isolated PostgreSQL repository integration: 3 passed, 0 failed, 0 skipped.
+- `cargo test -p haze-disclosure --test compliance_auditor -- --nocapture`: 8 passed, 0 failed.
+- `cargo test --workspace --all-targets` with the isolated database: exit 0; every executed test
+  passed and only two fixture-writing tests were explicitly ignored.
+- Targeted D8 Node suites: 13 total, 12 passed, 1 environment-gated actual-Next test skipped.
+- `npm test`: 343 total, 342 passed, 1 environment-gated actual-Next test skipped; Circom vectors
+  passed.
+- `npm run build`: all workspace builds passed, including the SDK and Next production build.
+- Built-app browser run with `HAZE_NEXT_TEST_ORIGIN=http://127.0.0.1:3010`: 3 passed, 0 failed,
+  0 skipped.
+- `forge test --offline`: 113 passed, 0 failed. Secret scan, gates verification, security-review
+  fixture verification, and final post-documentation AI DevKit base/feature lint passed;
+  `git diff --check` exited 0.
+- `npm audit --omit=dev`: exit 1 with three high advisories in the Next dependency chain
+  (`next@15.5.23`, `postcss@8.4.31`, `sharp@0.34.5`) and no reported critical advisory. No reachable
+  exploit was demonstrated; upgrade/reachability work remains required before the production milestone.
+- No D8.5–D8.7 production acceptance was run and no deployment, broadcast, wallet transaction, or
+  live Fuji state was changed.
