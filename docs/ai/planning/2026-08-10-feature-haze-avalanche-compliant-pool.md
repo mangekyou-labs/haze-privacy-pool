@@ -672,7 +672,7 @@ filesystem notes, server-side proving, and `?live=1`.
   - [x] **D7.2 Candidate deployment:** Run all pre-deployment gates, commit/push candidate SHA `323f15a2982c7f41f59a94a2118ec3f2ddb6196e`, deploy exact SHA to Vercel production (`dpl_F2iERWy5qjMEzULXPDg85HJ3Xj6f` / `https://haze-mu-flax.vercel.app`), and verify live CSP + hydration.
   - [x] **D7.3 Headed acceptance:** Execute production-only Fuji workflow (`/shield`, reload recovery, `/withdraw`, disclosure) under the two-attempt policy. Verified deposit `0xb9184be1be1a3e4713cd015200d95edcb30aebeb567b1e73672a375607ec2e69` (Block 57897909), note recovery, withdrawal `0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03` (Block 57897923), and Render withdrawal disclosure HTTP 200 response with evidence captured in `haze/output/playwright/d7-deployed-fuji-acceptance.json`.
   - [x] **D7.4 Release closeout:** Record evidence, deploy final release SHA, and prepare draft PR.
-- [ ] **D8 — UX-First Fuji Compliance Auditor MVP (In Progress)**
+- [x] **D8 — UX-First Fuji Compliance Auditor MVP (Complete)**
 
   ### Summary
 
@@ -691,15 +691,15 @@ filesystem notes, server-side proving, and `?live=1`.
   | Workstream | Status | Required exit |
   |---|---|---|
   | D8.0 reviewed MVP design addendum | Complete | Approved MVP boundary and named production deferrals |
-  | D8.0b current-UI compatibility and product review | Reopened / blocked | Truthful server-backed integrity states, missing-data behavior, labels, and 44px targets |
-  | D8.1 local SIWE, session, grant, disclosure, export, and access-log logic | Reopened / blocked | Unpredictable bearer secrets, application isolation, consistent grant semantics, and keyed export signatures |
-  | D8.2 durable Postgres runtime and automatic Fuji ingestion | Reopened / blocked | Preserve persistence, but independently establish canonical receipt/transaction/block/action bindings before verification |
-  | D8.3 same-origin BFF routes | Present locally / blocked upstream | Revalidate against remediated auth/disclosure service |
-  | D8.4 React workstation | Reopened / blocked | Consume server checks truthfully and close desktop accessibility/missing-data gaps |
-  | D8.5 known-evidence Fuji backfill and auditor SIWE | Open | Poller ingests and verifies canonical D7 withdrawal; real auditor session succeeds |
-  | D8.6 visible deployed portal investigation | Open | Browser transcript and compact MVP evidence required |
-  | D8.7 product/UI quality gate | Open | Responsive UX review and remediation complete |
-  | D8 overall | In progress | Approved MVP gates pass without production-readiness claims |
+  | D8.0b current-UI compatibility and product review | Complete | Truthful server-backed integrity states, missing-data behavior, labels, and 44px targets |
+  | D8.1 local SIWE, session, grant, disclosure, export, and access-log logic | Complete | Unpredictable bearer secrets, application isolation, consistent grant semantics, and keyed export signatures |
+  | D8.2 durable Postgres runtime and automatic Fuji ingestion | Complete | Preserve persistence, but independently establish canonical receipt/transaction/block/action bindings before verification |
+  | D8.3 same-origin BFF routes | Complete | Revalidate against remediated auth/disclosure service |
+  | D8.4 React workstation | Complete | Consume server checks truthfully and close desktop accessibility/missing-data gaps |
+  | D8.5 known-evidence Fuji backfill and auditor SIWE | Complete | Poller ingests and verifies canonical D7 withdrawal; real auditor session succeeds |
+  | D8.6 visible deployed portal investigation | Complete | Browser transcript and compact MVP evidence recorded |
+  | D8.7 product/UI quality gate | Complete | Responsive UX review and remediation complete |
+  | D8 overall | Complete | Approved MVP gates pass with production evidence captured in `output/playwright/d8-production-audit-acceptance.json` |
 
   ### Phase 7 remediation backlog (2026-08-23)
 
