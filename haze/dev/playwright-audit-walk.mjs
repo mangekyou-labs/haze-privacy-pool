@@ -239,10 +239,13 @@ export async function runProductionAuditWalk(options = {}) {
   const casesList = casesJson.cases || [];
   assert.ok(casesList.length > 0, "At least one compliance case must be present in queue");
 
-  const targetCase = casesList[0];
+  const canonicalTx = "0x8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03";
+  const targetCase =
+    casesList.find((c) => c.transactionHash?.toLowerCase() === canonicalTx.toLowerCase()) ||
+    casesList[0];
   const caseId = targetCase.caseId;
   const transactionHash = targetCase.transactionHash;
-  console.log(`[D8 WALK] Discovered Case ID: ${caseId} Tx: ${transactionHash}`);
+  console.log(`[D8 WALK] Selected Case ID: ${caseId} Tx: ${transactionHash}`);
 
   // Verify Fuji On-Chain Finality
   const receipt = await rpc("eth_getTransactionReceipt", [transactionHash]);

@@ -261,7 +261,7 @@ impl FujiLogPoller {
             u64::from_be_bytes(offset_word[24..32].try_into().unwrap_or_default()) as usize;
         let envelope = if data_bytes.len() >= offset + 32 {
             let len = u64::from_be_bytes(
-                data_bytes[offset..offset + 32]
+                data_bytes[offset + 24..offset + 32]
                     .try_into()
                     .unwrap_or_default(),
             ) as usize;

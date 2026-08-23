@@ -253,3 +253,85 @@ fn all_event_and_cryptographic_bindings_are_verified() {
         Err(DisclosureError::EncodingInvalid)
     );
 }
+
+#[tokio::test]
+async fn test_real_fuji_tx_decryption() {
+    let envelope_hex = "485a48500102002000010003000000000000000100208ffc5f6c95a423c4d0e3f9f23e0541404b589541c4cce790e752a2b2053ea96a000003151eb38c902e30de8625715a14513c702fa340d289685913dce58c2c82691dd2f97cefd02fb68effa681a80c4d1fd4e729c96d3ad3e1c706b639d225384d451dba057ac9aac310a0426df240cb7b2012961457b2033c56e8befaaed9001bb8d0690febed0e65ff8787af9887c4e14f294dcc6df4911fb2bd8c26f4209520a77a6550b6c4398d179f83b4c67beb7992e02da2e07fb7de8dd9f1026349a706cbb8ba5aa7e70f977bf8b07c666073f3cb54081ef5c0fe67826af5ca10cddbce4750124c9a2085443d23decad69422e6ae68ca75cfde210d6f655cd3ced2279c20414e9c1ce82cbb7d41afe0a191a765148f68a9f9601c678c34f684baf4ec39126205e42d2b2ef0f83b13f17bdac1d006cf8ab494fb0c7e05cf7e08cfbf47f1c74f8da45c0ef9f022bc1a31d6c957eca6a6beb5aaf3ddaaef39229e2ef3b1fb4a40054436291ebb54b49e1c613871021ef6b5117ff2def021dd5b8ff059c44315cc319bf46efa6d2de19e9baa1d8966b69cafc1b5365893eab7dd052caa5a18968f373fad2f33110a47c77729736544766aa91de11eef836ffd88c0a00704bd1dd8713b00ed6e6167a107e00d153b22a9f097a57918dd7564dcf0534bcdfd3ccaf079cca5e0b0cf41366f6de22f3b65bf2c3985d80093ab3ed3010369348c752c3c0230a5c947bd3f17d6eff01aff5b30a34abf13e7bc50db52c8cc73c3d961158266cb2f63ceee48fdedbed23358b457dbfc8fec13224a03823a781e793e6d8f283854563ceb4d722ab3371fa95e965125f9b0315c9389f2e6f3f89736f196d59cf85ada7ecc8989cfd24c1a4ef5b96d1c60d658a5117474ea397687786ee77a77f524766aa4abe88c619c790d97d15f9347cdd1477f50333f293dd4f98a4fb16887136ab5d24024989668295e79ecbfd1cc8f907d1cb1cee335fafb6f56814e3a38208e402cc4628705715dd323242c7ff9ded937e4b4708640692dc1d6816a7297b262ada32a468a9391c881383c3c8313477b009e0942a993ddd2105f97566d4fc599607da2b9ad9956c53386d5a59731604bf4cccb2aef03d3712c20872d3333d9b187d99f2a4eda85f27def3a546f6d6285f8766d";
+    let envelope_bytes = hex::decode(envelope_hex).expect("hex");
+    let envelope = Envelope::from_bytes(&envelope_bytes).expect("envelope");
+
+    let pool_bytes = hex::decode("00beb0a5d709d0f093952fd374dbbf3d0d21d550").expect("hex");
+    let pool: [u8; 20] = pool_bytes.try_into().expect("slice");
+    let pool_ver_bytes = hex::decode("000000000000000000000000000000000000000000000000000000000000b001").expect("hex");
+    let pool_version: [u8; 32] = pool_ver_bytes.try_into().expect("slice");
+    let app_id_bytes = hex::decode("0000000000000000000000000000000000000000000000000000000000000a11").expect("hex");
+    let application_id: [u8; 32] = app_id_bytes.try_into().expect("slice");
+
+    let config = FujiDisclosureConfig {
+        chain_id: 43113,
+        pool,
+        pool_version,
+        application_id,
+        development_fixture_keys: true,
+    };
+    let tx_bytes = hex::decode("8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03").expect("hex");
+    let tx_hash: [u8; 32] = tx_bytes.try_into().expect("slice");
+    let commit_bytes = hex::decode("215d44f00640f78d8699220e1cae5f84686fc37c9463bc52c09cc49ee8d9893e").expect("hex");
+    let commitment: [u8; 32] = commit_bytes.try_into().expect("slice");
+    let cipher_bytes = hex::decode("3afde679ba9da14013dffab7aabdd34356aa2935a8ff0c9b66241c2ad59b29dc").expect("hex");
+    let ciphertext_hash: [u8; 32] = cipher_bytes.try_into().expect("slice");
+    let action_bytes = hex::decode("a31a6bef7ba4ee3593cbf15fe5ccc221159a0733982d1a5cef3b58b675e399bc").expect("hex");
+    let action_ref: [u8; 32] = action_bytes.try_into().expect("slice");
+    let user_bytes = hex::decode("ed37fd0d6f0f69236e7472b36796e133d20ecc32").expect("hex");
+    let authorized_user: [u8; 20] = user_bytes.try_into().expect("slice");
+
+    let record = StoredAuditRecord {
+        record_id: tx_hash,
+        application_id: config.application_id,
+        recorded_at: 1700000000,
+        chain_id: config.chain_id,
+        pool: config.pool,
+        pool_version: config.pool_version,
+        key_version: envelope.key_version,
+        action: WITHDRAW,
+        action_reference: action_ref,
+        audit_data_commitment: commitment,
+        audit_ciphertext_hash: ciphertext_hash,
+        envelope: envelope_bytes,
+        key_ref: "fuji-fixture".to_owned(),
+        wrapped_key: Vec::new(),
+        finalized: true,
+        reorged: false,
+    };
+
+    let evidence = FujiWithdrawalEvidence {
+        receipt_successful: true,
+        transaction_hash: tx_hash,
+        block_number: 48900000,
+        block_hash: [0u8; 32],
+        log_index: 1,
+        current_block_number: 48900050,
+        pool: config.pool,
+        application_id: config.application_id,
+        action: WITHDRAW,
+        authorized_user,
+        pool_version: config.pool_version,
+        audit_data_commitment: commitment,
+        audit_ciphertext_hash: ciphertext_hash,
+        action_reference: action_ref,
+        record,
+    };
+
+    let fields = vec!["tx_hash".into(), "amount".into(), "asset".into(), "timestamp".into(), "policy_version".into()];
+    let res = haze_disclosure::fuji::verify_compliance_case_evidence(
+        &config,
+        tx_hash,
+        &fields,
+        &evidence,
+        Some(&TEST_AUDIT_IKM),
+    );
+
+    assert!(res.is_ok());
+    let resp = res.expect("response");
+    assert_eq!(resp.fields.len(), 5);
+}
