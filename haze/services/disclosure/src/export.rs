@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use p256::SecretKey;
 use p256::ecdsa::{
     Signature as P256Signature, SigningKey, VerifyingKey,
     signature::{Signer, Verifier},
@@ -30,11 +31,11 @@ pub struct ComplianceExportPayload {
     pub application_id: String,
     /// Case identifier.
     pub case_id: String,
-    /// Auditor wallet address.
+    /// Auditor wallet subject.
     pub auditor_wallet: String,
-    /// Permitted disclosed facts.
+    /// Disclosed field key-value pairs.
     pub disclosed_fields: BTreeMap<String, String>,
-    /// Cryptographic provenance and chain evidence facts.
+    /// Cryptographic and chain provenance metadata.
     pub canonical_provenance: BTreeMap<String, String>,
     /// Inclusive issuance timestamp.
     pub issued_at: u64,
@@ -86,12 +87,17 @@ pub struct ExportSigner {
 impl ExportSigner {
     /// Load an export signer from a PKCS#8 DER base64 string.
     pub fn from_pkcs8_b64(b64: &str, key_id: &str) -> Result<Self> {
-        let der = URL_SAFE_NO_PAD
-            .decode(b64.trim())
-            .or_else(|_| base64::engine::general_purpose::STANDARD.decode(b64.trim()))
+        let clean = b64.trim();
+        let der = base64::engine::general_purpose::STANDARD
+            .decode(clean)
+            .or_else(|_| URL_SAFE_NO_PAD.decode(clean))
+            .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(clean))
             .map_err(|_| DisclosureError::KeysMissing)?;
-        let signing_key =
-            SigningKey::from_pkcs8_der(&der).map_err(|_| DisclosureError::KeysMissing)?;
+        let secret_key = SecretKey::from_pkcs8_der(&der)
+            .or_else(|_| SecretKey::from_sec1_der(&der))
+            .or_else(|_| SecretKey::from_slice(&der))
+            .map_err(|_| DisclosureError::KeysMissing)?;
+        let signing_key = SigningKey::from(&secret_key);
         Ok(Self {
             signing_key,
             key_id: key_id.to_owned(),
