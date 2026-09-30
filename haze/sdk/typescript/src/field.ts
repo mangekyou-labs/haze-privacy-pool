@@ -74,7 +74,8 @@ export function u64be(value: number | bigint): Buffer {
     throw new SdkError("FIELD_OUT_OF_RANGE");
   }
   const out = Buffer.alloc(8);
-  out.writeBigUInt64BE(n);
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+  view.setBigUint64(0, n, false);
   return out;
 }
 

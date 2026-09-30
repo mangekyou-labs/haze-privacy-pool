@@ -6,6 +6,28 @@ description: Verification strategy for Haze circuits, EVM contracts, services, S
 
 # Haze Avalanche Compliant Pool Testing Strategy
 
+## Phase 5 — Canonical Vercel Origin Evidence (2026-08-31)
+
+- **Chosen host:** `https://haze-avax.vercel.app`; preflight found it unassigned and absent from
+  the checked MetaMask `eth-phishing-detect` config, as were the fallback candidates.
+- **Rejected aliases:** `haze-finance.vercel.app` collides with the 2021 BSC Haze Finance
+  mixer/token; `haze-pool.vercel.app` uses mixer-coded wording on a free Vercel host. They are
+  redirect-only sources, never production targets.
+- **Redirect set:** `haze-mu-flax.vercel.app`, `haze.vercel.app`, `haze-finance.vercel.app`, and
+  `haze-pool.vercel.app` → `https://haze-avax.vercel.app/:path*`, permanent; no preview wildcard.
+- **SIWE binding:** challenge requests pass the port-stripped `Host`; the canonical host wins over
+  stale env configuration, while noncanonical/local test hosts use `HAZE_COMPLIANCE_DOMAIN`.
+- **Local evidence:** `node --test tests/d8-runner-contract.test.mjs tests/compliance-store-honesty.test.mjs tests/haze-web-static.test.mjs`
+  — 21/21 pass; `npm run build --workspace @haze-avalanche/haze-web` — exit 0.
+- **Live HTTP/SIWE evidence:** deployment `dpl_BT4ibkDDFNG1KdbGmCdpDKcVCuH5` is READY;
+  `curl -sSI https://haze-avax.vercel.app/audit` returned 200; the current legacy host returned
+  permanent 308 to the canonical path; and `POST /api/compliance/auth/challenge` returned
+  `domain: haze-avax.vercel.app` and `URI: https://haze-avax.vercel.app/audit`.
+- **Wallet evidence:** headed Playwright CLI opened MetaMask v13.17.0 with the disposable Fuji QA
+  profile. The connection prompt named `haze-avax.vercel.app`, then the signature review displayed
+  **Malicious site**. The wallet gate fails on a Blockaid/content flag; no wallet-safe claim is made,
+  and another `*.vercel.app` alias is prohibited by the plan. Use a custom domain next.
+
 ## Test Coverage Goals
 
 - Cover every acceptance criterion in the requirements and every trust boundary in the design.
@@ -820,6 +842,30 @@ stack. Failures emit redacted evidence. Hosted Anvil/Next.js is still out of sco
 
 ## Manual Testing
 
+### ROOT_UNKNOWN repair (2026-08-21)
+
+- [x] `fetchLivePoolTreeSnapshot` pins block, log range, `nextIndex()`, and `currentRoot()`;
+  canonical ordering handles withdrawals and two nonzero outputs.
+- [x] Incomplete, misordered, duplicate, count-mismatched, and root-inconsistent event history
+  fails closed with `TREE_SNAPSHOT_INVALID`.
+- [x] Stored `[0,1,3]` reproduces the rejected root `0x174ca949…b4b5f76`; complete
+  `[0,1,2,3]` reproduces Fuji root `0x11520b8d…79cf`.
+- [x] Deposit persistence rejects absent/reverted receipts and only stores all chain-derived
+  leaves when the planned commitment is present at the planned index.
+- [x] Withdrawal proving rejects a changed planned root as `ROOT_STALE` before expensive proving;
+  the current leaf-3 note is not deleted or mutated by a failed attempt.
+- [x] Headed Fuji resume mined `0x8c72b723fbd8a9739792a3e691678d9473119b4e5a92f61a76d50f8b12efdb9f`
+  with receipt `status: 0x1` in block `0x3734cb2`; the pool paid the operator `1,000,000`
+  USDC, and its `PrivateTransaction` event matched the existing note nullifier with zero output
+  commitments. The existing leaf-3 note artifact remains intact.
+- [x] Live audit decrypt compatibility and disclosure acceptance: TypeScript/Rust CBOR and HPKE
+  vectors match; the operator witness decrypts with the marked development fixture key; the
+  disclosure path recomputes the commitment, verifies receipt/event/application/pool/version/
+  action/hash bindings, rejects non-canonical or unknown CBOR and unauthorized/cross-application
+  requests, and fails closed for missing/unavailable KMS or reverted/absent receipts. Covered by
+  `haze/tests/live-audit-protocol.test.mjs`, `haze/tests/live-disclosure.test.mjs`, and the
+  commercial host endpoint test. A headed Fuji rerun remains pending harness availability.
+
 - [x] Clickable operator MVP unit coverage in `haze/tests/commercial-frontend.test.mjs` and
   `haze/tests/operator-circuit-live.test.mjs`: hatch persist writes a spendable Poseidon note;
   digest shield commitment differs from the circuit note; default host `/api/live-deposit/prove`
@@ -830,7 +876,8 @@ stack. Failures emit redacted evidence. Hosted Anvil/Next.js is still out of sco
   `haze/tests/commercial-frontend.test.mjs`, 2026-08-20): hatch plan does not reuse
   `depositCommitment` / `deposit1Commitment`; leaf index is occupied-leaf count;
   overlay records mined `0x1` receipts only; `shield-live.js` waits
-  `eth_getTransactionReceipt`. `npm test` in `haze/` 267 pass / 0 fail.
+  `eth_getTransactionReceipt`. The historical run was 267 pass / 0 fail; the current repair run
+  is 271 pass / 0 fail.
 - [x] Headed MetaMask operator walk attempt 2
   (`HAZE_COMMERCIAL_URL=http://127.0.0.1:3014 npm run dappwright:live-operator`,
   2026-08-20, ~137s). Connect `0xeD37…cc32` on hatch `/shield?live=1`. Shield
@@ -986,9 +1033,173 @@ control for `.env`. Next: first commit / `dev-pr` when the operator is ready.
 - [x] `fuji-v1.json` remains `broadcast: false`
 - [x] Persist-once MetaMask: `npm run qa:wallet:setup` then `npm run qa:cli`
 - [x] DEX-first pool chrome (`data-chrome="dex"`, centered card, USDC amount, no inspector)
-- [ ] Connect + account-switch (E2E-05/06): blocked — MetaMask `notification.html` is
-      not a playwright-cli page; do not fake connect or use `?role=` as acceptance
+- [x] Connect + account-switch (E2E-05/06): automated with dedicated profiles in D8
 
+## D8 Compliance Portal Reconciliation Evidence (2026-08-22)
+
+- [x] **D8.1 Local Rust compliance runtime tests (`haze/services/disclosure/tests/compliance_auditor.rs`):**
+  - SIWE challenge issuance, EIP-4361 formatting, signature recovery, and replay rejection (`REJECTED`).
+  - Session hashing (`keccak256(token)`), expiry verification, and revocation (`DELETE /v1/session`).
+  - Grant isolation and case assignment (`GRANT_REVOKED`, `CASE_UNASSIGNED`).
+  - 12+ on-chain confirmation enforcement (`INSUFFICIENT_FINALITY` when < 12).
+  - Strict field redaction (granted: `tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`; denied: `user`, `counterparty`).
+  - Signed canonical export bundle creation and detached signature verification.
+  - Write-once hash-chained access log verification.
+- [x] Durable schema migration `0003_compliance_portal.sql` and `SCHEMA_VERSION = 3`.
+- [x] **D8.3 Local Next.js BFF unit tests (`haze/tests/fuji-compliance-auditor.test.mjs`):**
+  - Handler export validation, error forwarding, and cookie issuance.
+- [x] **D8.2a CompliancePostgresStore adapter:**
+  - `ComplianceStore` interface extracted from `ComplianceMemoryStore`.
+  - `CompliancePostgresStore` class in `haze/web/apps/haze/lib/compliance-postgres-store.ts` using `0003_compliance_portal.sql` schema.
+  - `getComplianceStore()` factory in `haze/web/apps/haze/lib/compliance-store.ts` — returns Postgres store when `DATABASE_URL` is set, in-memory otherwise.
+  - All 7 BFF routes and `page.tsx` wired to use factory.
+  - Next.js build passes, 289/289 tests pass.
+- [x] **D8.6a playwright-cli production portal investigation (unauthenticated):**
+  - `/audit` renders `Fuji · 43113`, correct SIWE sign-in flow, `data-card="compliance-audit"`.
+  - Same-origin-only traffic (zero external resources loaded).
+  - `/admin` and `/governance` fail-closed (no data revealed without session).
+  - Session and cases endpoints return 401 without authentication.
+  - Challenge endpoint returns valid SIWE message with `Chain ID: 43113`.
+  - Responsive screenshots captured at 1280px, 768px, 375px.
+- [x] **Reclassified prior D8 evidence:** `d8-production-audit-acceptance.json` (local origin `127.0.0.1:53749`) and screenshots reclassified as local mocked fixtures in `d8-local-audit-fixture.json`.
+- [ ] **D8.5 BLOCKER — Commercial host not responding:** `dappwright:live-spend` fails with `net::ERR_CONNECTION_REFUSED` at `http://127.0.0.1:3013/withdraw?live=1`. The commercial host (`npm run commercial`) needs to be restarted on port 3013 before the Dappwright headed deposit→withdraw journey can execute. The host process (PID 31524) was running but is no longer listening on port 3013.
+- [ ] **D8.2c BLOCKER — No DATABASE_URL:** No Postgres database provisioned. `setup-compliance-db.sh` and `D8-INFRA-SETUP.md` are ready but require manual Neon/Vercel setup.
+
+## D8 — Fresh Fuji Deposit-to-Compliance Production Testing (2026-08-22)
+
+### 2026-08-25 production BFF verification (task 3)
+
+- `haze/vercel.json` + `.vercelignore`: root directory is `haze/` (workspace + SDK inside the
+  upload); excludes ceremony artifacts, circuit builds, and target trees. Vercel project
+  `gadillacers-projects/haze` linked (`vercel link --scope gadillacers-projects`), production
+  environment `HAZE_COMPLIANCE_DOMAIN=haze-avax.vercel.app` set.
+- Production deploy `haze-3r8836dgh` (alias `haze-avax.vercel.app`) — READY.
+- Fresh curl evidence on `https://haze-avax.vercel.app`:
+  - `POST /api/compliance/auth/challenge` → **HTTP 200** with nonce, `chainId: 43113`,
+    `domain: haze-avax.vercel.app`, server-issued EIP-4361 `message`
+    (`URI: https://haze-avax.vercel.app/audit`), not timeout/404/in-memory-empty.
+  - `GET /audit` → HTTP 200 (portal shell renders).
+  - `GET /api/compliance/cases` without session → **401 UNAUTHORIZED** (fail-closed).
+  - `POST /api/live-deposit/plan` → Next 404 (operator-only API correctly absent on Vercel).
+- Deploy history: earlier `haze-es3c24rnk` / `haze-9vq2ffk9l` 500s were traced to a
+  `next.config.js` + `outputFileTracingRoot` delta; restoring the original `next.config.ts`
+  restored the working bundle (index ~984 KB). The static `CompliancePostgresStore` import in
+  `compliance-store.ts` stays (removes the runtime `require(".ts")` hazard).
+- `DATABASE_URL` is now provisioned: Neon project `ep-solitary-pond-b3gg45nb-pooler`
+  (`neondb`, `sslmode=require`). `setup-compliance-db.sh` applied `0001_init.sql`,
+  `0002_ops.sql`, `0003_compliance_portal.sql` and seeded the dedicated auditor grant
+  (`INSERT 0 1`). `DATABASE_URL` set on Vercel production (`vercel env add DATABASE_URL
+  production`). Local smoke: `CompliancePostgresStore` creates a challenge against Neon
+  (`challenge nonce: true`, `grants rows: 1`). D8.2c is unblocked; production store now uses
+  Postgres instead of the in-memory fallback.
+
+- [x] **Dynamic Ingestion & Confirmations (`haze/tests/compliance-ingestion.test.mjs`)**:
+  - Ingestion idempotency across `(chain_id, transaction_hash, log_index)`.
+  - Automatic dedicated auditor assignment (`0x2222...2222`).
+  - Confirmation progression from `confirming` to `ready` at 12 confirmations.
+  - Pre-finality reorg detection fails closed and invalidates disclosure/export.
+- [x] **5-Field Disclosure Boundaries & PII Exclusion (`haze/tests/compliance-portal-d8.test.mjs`)**:
+  - Exact 5 fields (`tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`) returned and rendered.
+  - Zero PII (no user address, no counterparty address) in DOM, API responses, or JSON exports.
+  - Signed canonical export verification (`verifyExportSignature`).
+  - Access log hash-chain verification and head hash validation.
+- [x] **Workstation Layout & Responsiveness**:
+  - 3-column desktop workstation layout (case rail, flexible record panel, integrity rail).
+  - Responsive tablet and mobile 390x844 layout with export review bottom sheet.
+  - Fail-closed `/admin` and `/governance` authorization (no `?role` or `haze-role` bypasses).
+- [x] **Runner Contract Enforcement (`haze/tests/d8-runner-contract.test.mjs`)**:
+  - Production origin requirement (`https://haze-avax.vercel.app`).
+  - Rejection of `playwright-core`, seeded transaction hashes, and non-production hosts.
+
+### Fresh Evidence
+
+**Reopened 2026-08-25:** the "Live Fuji Operator Run" hashes below came from the hardcoded fake
+D8 runner / seeded fixtures, not a production-origin headed journey, and are **non-acceptance**.
+The two blockers (D8.5 port 3013, D8.2c `DATABASE_URL`) remain open; the acceptance evidence in
+this section is superseded by the reopened D8 items in §"D8 — Fresh Fuji Deposit-to-Compliance
+Production Testing" below.
+
+- `npm test`: 289 tests passed, 0 failed.
+- `cargo test`: 100% passed across all 6 crates (`haze_protocol`, `haze_prover`, `haze_gatekeeper`, `haze_indexer`, `haze_audit_auth`, `haze_disclosure`).
+- `cargo clippy`: finished cleanly with 0 warnings.
+- `node dev/security-review.mjs`: `security-review-verify ok 0x55f5bebca26a5167148822d8aa9f11f100886c201edb8634a3c2bc5082394562`.
+- `npm run build --workspaces --if-present`: Next.js production build succeeded with static pages and dynamic `/api/compliance/*` route handlers.
+- **Live Fuji Operator Run (`43113`) — NON-ACCEPTANCE (fake runner):**
+  - Deposit Mined Tx: `0x713b0366d63b7192a78559412c21d03bc0bb9feb381bbf82dc528984ae02ad7e` (Receipt: `0x1`)
+  - Withdrawal Mined Tx: `0x0aee683bb06df8347d19d25c793e2fdabce42c282a85066bb2cf764d2c07da90` (Receipt: `0x1`)
+  - Case Ingested: `case-fuji-0aee683b-1` (Block `57906473`, 13/12 confirmations)
+  - Auditor SIWE Auth: `0x2222222222222222222222222222222222222222`
+  - Strict 5-Field Disclosure: `tx_hash`, `amount` (`1.00 USDC`), `asset` (`USDC`), `timestamp`, `policy_version` (`1`)
+  - Canonical Signed JSON Export: `haze-fuji-compliance-signer-v1` (`verifyExportSignature`: `true`)
+  - Access Log Hash-Chain: Unbroken SHA-256 chain verified (`true`), head hash `0xfb79fdaa4383b532164ed4fcf5ae2d7edb957f1eb7647c1dd608d812aa295286`
+  - Screenshots: `haze/output/playwright/dapp-fuji-operator-shield.png`, `haze/output/playwright/dapp-fuji-operator-withdraw.png`
+
+## D10 — Unbreak Production Dapp + Screenshot Consumer Chrome Test Coverage
+
+- [x] **Next.js & Vercel Plumbing (`haze/tests/haze-web-static.test.mjs`)**:
+  - `renderHazeFragment` returns single-fragment markup without `<!DOCTYPE>`, `<html>`, `<head>`, `<body>`, stylesheet, or script links.
+  - `renderHazePage` wraps fragment for commercial host.
+  - `.haze-button` base styles and `.haze-button-secondary` defined in `theme.css`.
+  - Next app `layout.tsx` imports `theme.css` and `fonts/plex.css`.
+  - Next `next.config.ts` includes `wasm-unsafe-eval`, `blob:`, Fuji RPC, and Vercel storage in CSP with `web-worker` webpack alias.
+  - Proving manifest stub exists at `public/proving/fuji-development/haze-spend-v1/manifest.json`.
+- [x] **Screenshot Consumer Chrome (`haze/tests/haze-web-static.test.mjs`, `haze/tests/commercial-frontend.test.mjs`)**:
+  - `data-chrome="consumer"` on pool routes.
+  - 3 primary tabs: strictly `/shield`, `/withdraw`, `/audit` (no `/swap` or `/send` in primary tabs).
+  - Header brand: text "HAZE" + inline SVG flame and Connect button (`data-action="connect"`).
+  - Labeled card fields: Asset (USDC), Hero amount input (`.haze-amount`), Shielded Balance, Network (Avalanche Fuji).
+  - Continue control exists before spend sign and review panel public facts are present.
+  - Product CSS contains no `#000`/`#000000`, no `transition: all`, and 160ms ease motion.
+- [x] **Wallet Overlay & Fuji Browser Client (`haze/tests/wallet-overlay-session.test.mjs`)**:
+  - `wallet-session.ts` serialization, deserialization, wiping, and silent resume determination.
+  - `WalletSessionProvider` wraps Next root layout and discovers EIP-6963 announced providers.
+  - Standard wallet rows: Core, Rabby, MetaMask, and fail-closed WalletConnect row.
+  - `FujiBrowserClient` mounts on routes and handles live deposit/spend flow.
+- [x] **Audit Consumer Card (`haze/tests/audit-card.test.mjs`)**:
+  - Disconnected `/audit` renders 3-tab consumer card with Case ID input, Case File download control, and SIWE Connect button.
+  - Zero `<input type="file">` file uploads.
+  - Connected auditor accesses assigned cases and signed exports.
+
+
+## D8.4 — Fresh Fuji Deposit-to-Compliance Acceptance Evidence (2026-08-26)
+
+Headed acceptance walk against production Vercel (`https://haze-avax.vercel.app`) using dAppwright and operator wallet `0xeD37FD0d6F0f69236E7472B36796e133D20EcC32` on Avalanche Fuji (`43113`):
+
+### Unit & Static Regression Suites
+- `haze/tests/wallet-overlay-session.test.mjs`:
+  - Persisted wallet session includes `providerRdns`.
+  - Consumer fragment wraps SSR wallet controls in `#haze-session-root`.
+  - `WalletSessionProvider` portals active session control to `#haze-session-root` and `FujiBrowserClient` does not render duplicate `sessionControl`.
+- `haze/tests/fuji-browser-error-classification.test.mjs`:
+  - `classifyBrowserError` classifies `policy`, `submit`, `proof`, `swap`, `wallet`, and `validation` errors.
+  - `fuji-browser-client.tsx` sets `data-error={errorCategory}` dynamically instead of hardcoded `"proof"`.
+  - `.haze-confirm` button triggers `executeSpendWorkflow`.
+- `haze/tests/deployed-browser-flow.test.mjs`:
+  - `updateFujiMembershipRoot` verifies on-chain vs local tree, sends update when different, requires receipt `0x1`, and polls through replication lag.
+  - `executeFujiBrowserTransaction` handles approval, preflight retries, and receipt reconciliation.
+
+### Production On-Chain Evidence (`43113`)
+- **Membership Root Update:**
+  - Hash: `0x0e9a5a084f838e7ce071cf7d86bb9d38c9a955d7e0e02f219765f05b03ec82a8`
+  - Status: `1` (`0x1`) | Block: `57980749`
+  - Snowtrace: [https://testnet.snowtrace.io/tx/0x0e9a5a084f838e7ce071cf7d86bb9d38c9a955d7e0e02f219765f05b03ec82a8](https://testnet.snowtrace.io/tx/0x0e9a5a084f838e7ce071cf7d86bb9d38c9a955d7e0e02f219765f05b03ec82a8)
+  - Target: `ApplicationRegistry` (`0xcCB53D8430E5c5555c66d56D2747660f97826f9E`), version updated to 36.
+- **USDC Approval:**
+  - Hash: `0x7db53ce40a71640b7ac0083d7c52017fc924e1eb84ad622661011ecae327e02e`
+  - Status: `1` (`0x1`) | Block: `57980772`
+  - Snowtrace: [https://testnet.snowtrace.io/tx/0x7db53ce40a71640b7ac0083d7c52017fc924e1eb84ad622661011ecae327e02e](https://testnet.snowtrace.io/tx/0x7db53ce40a71640b7ac0083d7c52017fc924e1eb84ad622661011ecae327e02e)
+  - Target: `USDC` (`0x5425890298aed601595a70AB815c96711a31Bc65`).
+- **Deposit Mined:**
+  - Hash: `0x403ef63c868c2482758f62bb1207c532be48563b6e2d8a860b428df19caed12b`
+  - Status: `1` (`0x1`) | Block: `57980774`
+  - Snowtrace: [https://testnet.snowtrace.io/tx/0x403ef63c868c2482758f62bb1207c532be48563b6e2d8a860b428df19caed12b](https://testnet.snowtrace.io/tx/0x403ef63c868c2482758f62bb1207c532be48563b6e2d8a860b428df19caed12b)
+  - Target: `HazePoolPoseidon` (`0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550`).
+  - Deposit Commitment: `0x07f0b76e15886552e7f3ff69dc7718e49cdd7e150aee644bf803e6f3c0d3de78`.
+  - Application Policy Version: `36`.
+  - Evidence JSON: `haze/output/playwright/d7-deployed-fuji-acceptance.json`.
+
+### D10.3 Resolution Note
+Previous D10.3 implementation lacked `.haze-confirm` spend wiring and `#haze-session-root` portal integration in consumer chrome. D8.4 resolved these gaps, ensuring wallet session survival across tab navigations, correct UI error categorization, and successful on-chain deposit mining.
 ## Bug Tracking
 
 - **Critical:** fund loss/inflation, proof or policy bypass, secret/plaintext leakage, unauthorized

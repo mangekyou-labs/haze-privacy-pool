@@ -1,0 +1,33 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace @haze-avalanche/haze-web",
+  "outputDirectory": "web/apps/haze/.next",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "haze-mu-flax.vercel.app" }],
+      "destination": "https://haze-avax.vercel.app/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "haze.vercel.app" }],
+      "destination": "https://haze-avax.vercel.app/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "haze-finance.vercel.app" }],
+      "destination": "https://haze-avax.vercel.app/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "haze-pool.vercel.app" }],
+      "destination": "https://haze-avax.vercel.app/:path*",
+      "permanent": true
+    }
+  ]
+}

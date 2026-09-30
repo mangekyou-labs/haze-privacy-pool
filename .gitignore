@@ -7,6 +7,7 @@
 haze/dev/artifacts/ceremony-private/
 
 # Dependencies and build outputs
+**/.next/
 node_modules/
 **/dist/
 haze/target/
@@ -24,6 +25,9 @@ haze/output/playwright/
 .playwright/
 .playwright-cli/
 .playwright-mcp/
+
+# Isolated feature worktrees
+.worktrees/
 
 # Editor / OS
 .DS_Store

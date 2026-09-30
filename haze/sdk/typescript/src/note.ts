@@ -75,7 +75,8 @@ export function encodeRecipientPlaintext(plaintext: {
 }): Buffer {
   const value = typeof plaintext.value === "number" ? BigInt(plaintext.value) : plaintext.value;
   const out = Buffer.alloc(8);
-  out.writeBigUInt64BE(value);
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+  view.setBigUint64(0, value, false);
   return Buffer.concat([
     out,
     parseHex(plaintext.blinding),

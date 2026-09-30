@@ -16,14 +16,22 @@ import {
   planLiveOperatorShield,
   planLiveShieldDeposit,
 } from "../web/packages/ui/src/live-deposit.ts";
-import { encodeLiveWithdraw, planLiveOperatorWithdraw } from "../web/packages/ui/src/live-withdraw.ts";
+import {
+  encodeLiveWithdraw,
+  liveWithdrawActionReference,
+  planLiveOperatorWithdraw,
+} from "../web/packages/ui/src/live-withdraw.ts";
+import { createDevelopmentAuditKeyManagement, discloseLiveWithdrawal } from "./live-disclosure.mjs";
 import { DEFAULT_ZKEY } from "./operator-prove.mjs";
+import { globalComplianceStore, LIVE_APP_ID } from "../sdk/typescript/src/compliance-service.ts";
 import {
   NOTE_SECRET_PATH,
+  fetchLivePoolTreeSnapshot,
   persistLiveCircuitNote,
   planLiveCircuitTransact,
   planUnusedLiveCircuitDeposit,
   proveLiveCircuit,
+  validateLivePoolTreeSnapshot,
 } from "./operator-circuit-live.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -97,6 +105,9 @@ export function createCommercialHost({
   operatorProve = false,
   zkeyPath = DEFAULT_ZKEY,
   notePath = NOTE_SECRET_PATH,
+  livePoolSnapshot,
+  auditKeyManagement,
+  authorizeDisclosure,
 } = {}) {
   const theme = readFileSync(join(ROOT, "../web/packages/ui/src/theme.css"), "utf8");
   const shieldLive = readFileSync(join(ROOT, "../web/packages/ui/src/shield-live.js"), "utf8");
@@ -104,6 +115,14 @@ export function createCommercialHost({
   const client = readFileSync(join(ROOT, "../web/packages/ui/src/client.js"), "utf8");
   const plex = readFileSync(join(ROOT, "../web/packages/ui/fonts/plex.css"), "utf8");
   const zkeyExists = existsSync(zkeyPath);
+  // The deterministic key is available only inside the explicit operator hatch.
+  // A production host must receive a real KeyManagement implementation.
+  const disclosureKeyManagement =
+    operatorProve
+      ? (auditKeyManagement ?? createDevelopmentAuditKeyManagement())
+      : auditKeyManagement?.mode === "development-fixture"
+        ? undefined
+        : auditKeyManagement;
   const hatchOpen = () =>
     liveOperatorWithdrawAllowed({
       path: "/withdraw",
@@ -207,6 +226,12 @@ export function createCommercialHost({
         }
       });
     });
+  }
+
+  async function authoritativeLiveSnapshot(overlay) {
+    return livePoolSnapshot
+      ? validateLivePoolTreeSnapshot(livePoolSnapshot)
+      : fetchLivePoolTreeSnapshot(overlay);
   }
 
   function send(response, status, body, type, extra = {}) {
@@ -374,6 +399,93 @@ export function createCommercialHost({
       send(response, 200, JSON.stringify({ ok: true }), "application/json");
       return;
     }
+    if (request.method === "POST" && url.pathname === "/api/compliance/auth/challenge") {
+      const body = await readBody(request);
+      const address = body.address || state.address || "0x2222222222222222222222222222222222222222";
+      const challenge = globalComplianceStore.createSiweChallenge(address);
+      send(response, 200, JSON.stringify(challenge), "application/json");
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/compliance/auth/verify") {
+      const body = await readBody(request);
+      try {
+        const verified = globalComplianceStore.verifySiweChallenge(body.nonce, body.address, body.signature);
+        state.address = verified.address;
+        state.audit.boundWallet = verified.address;
+        send(
+          response,
+          200,
+          JSON.stringify({ ok: true, address: verified.address, role: verified.role, applicationId: verified.applicationId }),
+          "application/json",
+          { "set-cookie": setCookie("haze_compliance_session", verified.token) },
+        );
+      } catch (err) {
+        send(response, 401, JSON.stringify({ ok: false, error: err?.message || "UNAUTHORIZED" }), "application/json");
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/compliance/session") {
+      const token = cookieMap(request.headers.cookie).get("haze_compliance_session");
+      const session = globalComplianceStore.getSession(token);
+      if (!session) {
+        send(response, 200, JSON.stringify({ authenticated: false }), "application/json");
+      } else {
+        send(response, 200, JSON.stringify({ authenticated: true, ...session }), "application/json");
+      }
+      return;
+    }
+    if (request.method === "DELETE" && url.pathname === "/api/compliance/session") {
+      const token = cookieMap(request.headers.cookie).get("haze_compliance_session");
+      globalComplianceStore.deleteSession(token);
+      state.audit.boundWallet = "";
+      send(response, 200, JSON.stringify({ ok: true }), "application/json", {
+        "set-cookie": setCookie("haze_compliance_session", ""),
+      });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/compliance/cases") {
+      const token = cookieMap(request.headers.cookie).get("haze_compliance_session");
+      const session = globalComplianceStore.getSession(token);
+      const auditor = session?.address || state.audit.boundWallet || apiAddress;
+      const cases = globalComplianceStore.listAssignedCases(auditor, LIVE_APP_ID);
+      send(response, 200, JSON.stringify({ cases, total: cases.length, auditor }), "application/json");
+      return;
+    }
+    if (request.method === "POST" && url.pathname.startsWith("/api/compliance/cases/") && url.pathname.endsWith("/disclosure")) {
+      const parts = url.pathname.split("/");
+      const caseId = decodeURIComponent(parts[4]);
+      const token = cookieMap(request.headers.cookie).get("haze_compliance_session");
+      const session = globalComplianceStore.getSession(token);
+      const auditor = session?.address || state.audit.boundWallet || apiAddress;
+      try {
+        const result = globalComplianceStore.discloseCase(caseId, auditor);
+        send(response, 200, JSON.stringify({ ok: true, ...result }), "application/json");
+      } catch (err) {
+        const code = err?.code || "UNAUTHORIZED";
+        const status = code === "FINALITY_REQUIRED" ? 400 : 403;
+        send(response, status, JSON.stringify({ ok: false, error: err?.message || code, code }), "application/json");
+      }
+      return;
+    }
+    if (request.method === "POST" && url.pathname.startsWith("/api/compliance/cases/") && url.pathname.endsWith("/export")) {
+      const parts = url.pathname.split("/");
+      const caseId = decodeURIComponent(parts[4]);
+      const token = cookieMap(request.headers.cookie).get("haze_compliance_session");
+      const session = globalComplianceStore.getSession(token);
+      const auditor = session?.address || state.audit.boundWallet || apiAddress;
+      try {
+        const signedExport = globalComplianceStore.exportCase(caseId, auditor);
+        send(response, 200, JSON.stringify({ ok: true, export: signedExport }), "application/json");
+      } catch (err) {
+        send(response, 403, JSON.stringify({ ok: false, error: err?.message || "UNAUTHORIZED" }), "application/json");
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/compliance/access-log") {
+      const accessLog = globalComplianceStore.getAccessLog();
+      send(response, 200, JSON.stringify(accessLog), "application/json");
+      return;
+    }
     if (request.method === "POST" && url.pathname === "/api/portal/export") {
       const body = await readBody(request);
       const allowed = grantForAddress(apiAddress)?.role === "application-auditor" ||
@@ -408,10 +520,32 @@ export function createCommercialHost({
         return;
       }
       try {
+        let digestSnapshot;
+        try {
+          digestSnapshot = await fetchLiveSnapshot(overlay);
+        } catch {
+          digestSnapshot = {
+            membershipRoot: overlay.membershipRoot || `0x${"00".repeat(32)}`,
+            membershipVersion: overlay.membershipVersion ?? 1,
+            hazePolicyVersion: overlay.hazePolicyVersion ?? 1,
+            hazeBlocklistRoot: overlay.hazeBlocklistRoot || `0x${"00".repeat(32)}`,
+          };
+        }
+        const snapshot = await authoritativeLiveSnapshot(overlay);
         if (hatchOpen()) {
           const planned = planUnusedLiveCircuitDeposit({
             user: body.user,
             publicAmount: Number(body.amount ?? 1_000_000),
+            occupiedLeaves: snapshot.leaves,
+            leafIndex: snapshot.nextIndex,
+            applicationPolicyVersion: overlay.membershipVersion ?? digestSnapshot.membershipVersion,
+            hazePolicyVersion: overlay.hazePolicyVersion ?? digestSnapshot.hazePolicyVersion,
+            membershipRoot: overlay.membershipRoot ?? digestSnapshot.membershipRoot,
+            hazeBlocklistRoot: overlay.hazeBlocklistRoot ?? digestSnapshot.hazeBlocklistRoot,
+            pool: overlay.addresses?.HazePoolPoseidon ?? overlay.addresses?.HazePool,
+            poolVersion: overlay.poolVersion,
+            applicationId: overlay.applicationId,
+            usdc: overlay.usdc,
           });
           const plan = planLiveOperatorShield({
             path: "/shield",
@@ -427,7 +561,6 @@ export function createCommercialHost({
           send(response, 200, JSON.stringify({ ...plan, circuitPlan: planned }), "application/json");
           return;
         }
-        const snapshot = await fetchLiveSnapshot(overlay);
         const plan = planLiveShieldDeposit({
           path: "/shield",
           live: true,
@@ -435,7 +568,7 @@ export function createCommercialHost({
           user: body.user,
           amount: Number(body.amount ?? 1_000_000),
           now: Math.floor(Date.now() / 1000),
-          snapshot,
+          snapshot: digestSnapshot,
         });
         send(response, 200, JSON.stringify(plan), "application/json");
       } catch {
@@ -451,10 +584,13 @@ export function createCommercialHost({
       const body = await readBody(request);
       const overlay = sidecarOverlay();
       try {
+        const snapshot = await authoritativeLiveSnapshot(overlay);
         const result = await proveLiveCircuit({
           action: "deposit",
           user: body.user,
           publicAmount: Number(body.amount ?? 1_000_000),
+          occupiedLeaves: snapshot.leaves,
+          leafIndex: body.leafIndex,
           zkeyPath,
           notePath,
           skipPersist: true,
@@ -486,7 +622,9 @@ export function createCommercialHost({
       }
       const body = await readBody(request);
       try {
-        persistLiveCircuitNote({ plan: body.plan, notePath });
+        const overlay = sidecarOverlay();
+        const snapshot = await fetchLivePoolTreeSnapshot(overlay);
+        await persistLiveCircuitNote({ plan: body.plan, snapshot, receipt: body.receipt, notePath });
         send(response, 200, JSON.stringify({ allowed: true }), "application/json");
       } catch (error) {
         send(
@@ -516,13 +654,36 @@ export function createCommercialHost({
       }
       try {
         const stored = JSON.parse(readFileSync(notePath, "utf8"));
+        const snapshot = await fetchLivePoolTreeSnapshot(overlay);
+        let digestSnapshot;
+        try {
+          digestSnapshot = await fetchLiveSnapshot(overlay);
+        } catch {
+          digestSnapshot = {
+            membershipRoot: overlay.membershipRoot || `0x${"00".repeat(32)}`,
+            membershipVersion: overlay.membershipVersion ?? 1,
+            hazePolicyVersion: overlay.hazePolicyVersion ?? 1,
+            hazeBlocklistRoot: overlay.hazeBlocklistRoot || `0x${"00".repeat(32)}`,
+          };
+        }
+        const now = Math.floor(Date.now() / 1000);
+        const actionReference = body.actionReference ?? liveWithdrawActionReference(body.user, now);
         const planned = planLiveCircuitTransact({
           action: "withdraw",
           note: stored.note,
-          treeLeaves: stored.treeLeaves,
+          treeLeaves: snapshot.leaves,
           user: body.user,
           publicAmount: Number(body.amount ?? stored.note.value),
           publicRecipient: body.recipient || body.user,
+          usdc: overlay.usdc,
+          actionReference,
+          applicationPolicyVersion: digestSnapshot.membershipVersion,
+          hazePolicyVersion: digestSnapshot.hazePolicyVersion,
+          membershipRoot: digestSnapshot.membershipRoot,
+          hazeBlocklistRoot: digestSnapshot.hazeBlocklistRoot,
+          pool: overlay.addresses?.HazePoolPoseidon ?? overlay.addresses?.HazePool,
+          poolVersion: overlay.poolVersion,
+          applicationId: overlay.applicationId,
         });
         const plan = planLiveOperatorWithdraw({
           path: "/withdraw",
@@ -533,10 +694,16 @@ export function createCommercialHost({
           user: body.user,
           amount: Number(body.amount ?? stored.note.value),
           recipient: body.recipient || body.user,
-          now: Math.floor(Date.now() / 1000),
+          now,
+          actionReference,
           witness: planned,
         });
-        send(response, 200, JSON.stringify(plan), "application/json");
+        send(
+          response,
+          200,
+          JSON.stringify({ ...plan, noteTreeRoot: snapshot.currentRoot, circuitPlan: planned }),
+          "application/json",
+        );
       } catch (error) {
         send(
           response,
@@ -559,13 +726,23 @@ export function createCommercialHost({
       }
       try {
         const stored = JSON.parse(readFileSync(notePath, "utf8"));
+        const snapshot = await fetchLivePoolTreeSnapshot(sidecarOverlay());
+        if (
+          typeof body.noteTreeRoot !== "string" ||
+          body.noteTreeRoot.toLowerCase() !== snapshot.currentRoot.toLowerCase()
+        ) {
+          throw Object.assign(new Error("planned note tree root is stale"), { code: "ROOT_STALE" });
+        }
         const result = await proveLiveCircuit({
           action: "withdraw",
           note: stored.note,
-          treeLeaves: stored.treeLeaves,
+          treeLeaves: snapshot.leaves,
+          snapshot,
+          noteTreeRoot: body.noteTreeRoot,
           user: body.user,
           publicAmount: Number(body.amount ?? stored.note.value),
           publicRecipient: body.recipient || body.user,
+          actionReference: body.actionReference,
           zkeyPath,
         });
         send(
@@ -583,6 +760,46 @@ export function createCommercialHost({
           response,
           200,
           JSON.stringify({ allowed: false, reason: error?.code ?? "KEYS_MISSING" }),
+          "application/json",
+        );
+      }
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/live-withdraw/disclose") {
+      if (!hatchOpen()) {
+        send(response, 200, JSON.stringify({ allowed: false, reason: "KEYS_MISSING" }), "application/json");
+        return;
+      }
+      const body = await readBody(request);
+      const overlay = sidecarOverlay();
+      try {
+        const result = await discloseLiveWithdrawal({
+          plan: body.plan,
+          receipt: body.receipt,
+          txHash: body.txHash,
+          fields: body.fields,
+          applicationId: body.applicationId,
+          chainId: Number(body.chainId ?? overlay?.chainId ?? 43113),
+          pool: overlay?.addresses?.HazePool,
+          usdc: overlay?.usdc,
+          authorize: async (requestScope) => {
+            if (authorizeDisclosure) {
+              return authorizeDisclosure({ ...requestScope, address: apiAddress, request: body });
+            }
+            // Local operator ownership is the only implicit grant. Production
+            // hosts must inject the existing audit-auth authorization adapter.
+            return operatorProve &&
+              typeof apiAddress === "string" &&
+              String(apiAddress).toLowerCase() === String(body.plan?.intent?.user ?? "").toLowerCase();
+          },
+          keyManagement: disclosureKeyManagement,
+        });
+        send(response, 200, JSON.stringify({ allowed: true, ...result }), "application/json");
+      } catch (error) {
+        send(
+          response,
+          200,
+          JSON.stringify({ allowed: false, reason: error?.code ?? "UNAVAILABLE" }),
           "application/json",
         );
       }
@@ -653,6 +870,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const host = await createCommercialHost({
     port: Number(process.env.PORT ?? 3010),
     operatorProve,
+    notePath: process.env.HAZE_NOTE_PATH ?? NOTE_SECRET_PATH,
   });
   console.log(`haze commercial ${host.url}`);
 }

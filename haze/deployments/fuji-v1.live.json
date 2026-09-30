@@ -135,8 +135,8 @@
         }
       }
     },
-    "websiteOperatorShield": "0x15a9f9c3f2223476203d95fa2acdeaf0a8d7c078aa17c4b523cc9b98700b1b4b",
-    "websiteOperatorWithdraw": "0xb97e014e858dea1264924e3f7b53dbaecdf4b0a340a933e3f5347d565cf3f850",
+    "websiteOperatorShield": "0x713b0366d63b7192a78559412c21d03bc0bb9feb381bbf82dc528984ae02ad7e",
+    "websiteOperatorWithdraw": "0x0aee683bb06df8347d19d25c793e2fdabce42c282a85066bb2cf764d2c07da90",
     "websiteOperatorHost": "http://127.0.0.1:3014"
   },
   "noteTree": "poseidon2",

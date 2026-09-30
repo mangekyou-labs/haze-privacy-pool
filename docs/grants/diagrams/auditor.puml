@@ -1,0 +1,49 @@
+@startuml
+hide footbox
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 12
+skinparam BoxPadding 8
+skinparam sequence {
+  ArrowColor #222222
+  LifeLineBorderColor #888888
+  LifeLineBackgroundColor white
+  ParticipantBackgroundColor #D9D9E3
+  ParticipantBorderColor #8A8A9A
+  ActorBackgroundColor #D9D9E3
+  ActorBorderColor #8A8A9A
+  GroupBorderColor #222222
+  GroupBackgroundColor white
+}
+
+actor Auditor
+collections Pool
+participant Indexer
+participant Auth
+actor Application
+participant Disclosure
+
+Pool -> Indexer : Emits on-chain audit events
+Auditor -> Auth : SIWE with application binding
+Auth -> Application : Checks signed manifest and auditor grants
+
+alt Auditor is eligible
+  Auth --> Auditor : Session token with policy claims
+else Auditor is not eligible
+  Auth --> Auditor : reject
+end
+
+opt Investigation not started yet
+  Auditor -> Auth : Creates the investigation case
+  Auth --> Auditor : Case created
+end
+
+Auditor -> Disclosure : Asks to decrypt events for the case
+Disclosure -> Auth : Checks case params (period, data access, ...)
+Disclosure -> Indexer : Fetch event ciphertexts
+Disclosure --> Auditor : Decrypted events report
+
+@enduml

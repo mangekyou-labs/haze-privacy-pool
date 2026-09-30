@@ -668,6 +668,17 @@ plan.
   source-token swap, deposit amount, withdrawal amount, application affiliation, gas payment, or
   version migration as private.
 
+## Emergency ceremony design (2026-08-24)
+
+The emergency-exit circuit production ceremony design is documented separately at
+`docs/ai/design/2026-08-24-haze-emergency-production-ceremony-design.md`. It covers
+the emergency-exit Groth16 phase-2 ceremony for `haze-emergency-v1` (192,535 constraints,
+20 public inputs, Circom 2.2.3). The spend ceremony design remains unchanged in
+`docs/ai/design/2026-08-18-haze-production-ceremony-design.md`.
+
+The emergency ceremony design phase changes documentation only: no keys, no ceremony
+execution, no transaction broadcast, no contract deployment, and no SC-09 approval.
+
 ## Commercial one-origin override (2026-08-18)
 
 Product accepted a single commercial origin for pool and compliance. Role comes from the connected

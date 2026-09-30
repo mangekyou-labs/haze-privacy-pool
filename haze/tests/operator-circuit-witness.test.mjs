@@ -38,14 +38,16 @@ test("sentinel blocklist root matches the frozen circuit vector", () => {
   assert.equal(FIXTURE_DEPOSIT.hazeBlocklistRoot, BLOCKLIST_SENTINEL_ROOT);
 });
 
-test("fixture deposit witness reproduces frozen membership, commitment, audit, and intent", () => {
+test("fixture deposit witness preserves frozen circuit facts with a real audit envelope", () => {
   const { circom } = buildFixtureDepositWitness();
   assert.equal(circom.applicationMembershipRoot, FIXTURE_DEPOSIT_MEMBERSHIP_ROOT);
   assert.equal(circom.outputCommitment0, FIXTURE_DEPOSIT_COMMITMENT);
   assert.equal(circom.hazeBlocklistRoot, BLOCKLIST_SENTINEL_ROOT);
   assert.equal(circom.auditDataCommitment, FIXTURE_DEPOSIT.auditDataCommitment);
-  assert.equal(circom.intentHashHi, FIXTURE_DEPOSIT.intentHashHi);
-  assert.equal(circom.intentHashLo, FIXTURE_DEPOSIT.intentHashLo);
+  assert.notEqual(circom.auditCiphertextHashHi, FIXTURE_DEPOSIT.auditCiphertextHashHi);
+  assert.notEqual(circom.auditCiphertextHashLo, FIXTURE_DEPOSIT.auditCiphertextHashLo);
+  assert.notEqual(circom.intentHashHi, FIXTURE_DEPOSIT.intentHashHi);
+  assert.notEqual(circom.intentHashLo, FIXTURE_DEPOSIT.intentHashLo);
   assert.equal(circom.outputCommitment0, FIXTURE_DEPOSIT.outputCommitment0);
   assert.equal(circom.applicationMembershipRoot, FIXTURE_DEPOSIT.applicationMembershipRoot);
   assert.equal(circom.action, "1");

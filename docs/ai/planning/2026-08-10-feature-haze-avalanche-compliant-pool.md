@@ -17,6 +17,39 @@ if it introduces more detail than the approved umbrella design.
 No calendar commitments are assigned until staffing and external provider/auditor availability are
 known. Ordering is dependency-based. A milestone exits only with the listed fresh validation evidence.
 
+## Phase 5 — Canonical Vercel Origin (2026-08-31)
+
+The single canonical production origin is `https://haze-avax.vercel.app`. The rejected aliases
+`haze-finance.vercel.app` (collision with the 2021 BSC Haze Finance mixer/token) and
+`haze-pool.vercel.app` (privacy-mixer wording on a free Vercel host) are not production targets.
+The fallback order, used only if the locked host is already assigned, is
+`haze-on-avax.vercel.app` → `haze-avalanche.vercel.app` → `haze-fuji.vercel.app`; availability
+preflight found the locked host unassigned and absent from the checked MetaMask
+`eth-phishing-detect` config.
+
+Execution queue and evidence:
+
+- [x] **T1 — Preflight:** feature lint passed; task tracing is unavailable because the installed
+  CLI has no `task` command; Vercel project `haze` is linked under `gadillacers-projects`; the
+  locked host is available; candidate and rejected names are absent from the checked phishing config.
+- [x] **T2 — Origin contract tests:** D8 default-origin, preview rejection, host-redirect, and SIWE
+  canonical-host tests are green.
+- [x] **T3 — Code cutover:** runners import `haze/dev/production-origin.mjs`; redirects cover
+  `haze-mu-flax.vercel.app`, `haze.vercel.app`, `haze-finance.vercel.app`, and
+  `haze-pool.vercel.app`; the canonical host is excluded from redirect conditions.
+- [x] **T4 — Vercel alias/env/deploy:** deployment `dpl_BT4ibkDDFNG1KdbGmCdpDKcVCuH5` is READY,
+  `haze-avax.vercel.app` is assigned, production `HAZE_COMPLIANCE_DOMAIN=haze-avax.vercel.app`
+  is set, and the production deployment was rebuilt. Project SSO protection was disabled only after
+  approval because it otherwise returned a Vercel SSO `302/401` instead of public content.
+- [x] **T5 — Docs lockstep:** implementation, testing, design, setup, and grant references use the
+  canonical origin and record the redirect/SIWE policy.
+- [x] **T6 — Live HTTP/SIWE gates:** canonical `/audit` returns 200, the current legacy host returns
+  permanent 308 to the canonical path, the challenge returns `domain: haze-avax.vercel.app` and
+  `URI: https://haze-avax.vercel.app/audit`, and the checked phishing config has no candidate hit.
+- [ ] **T6 wallet gate:** headed MetaMask displayed `Malicious site` for `haze-avax.vercel.app`
+  during the recovery-vault signature prompt. This is a Blockaid/content flag, so the `*.vercel.app`
+  rollout is stopped; the next step is a custom domain, not another alias.
+
 ## Milestones
 
 - [x] **M0 — Haze foundation:** independent product boundary, canonical protocol specification,
@@ -621,16 +654,94 @@ Overrides the 2026-08-10 two-deployment frontend split for this hosted UI only.
 - [x] Compliance routes + `FORBIDDEN` isolation on the same origin
 - [x] Opt-in live `/shield` browser broadcast (planner + `/api/live-deposit/*` + injected wallet; committed fuji-v1 stays `broadcast: false`)
 - [x] playwright-cli one-origin walk
+- [x] ROOT_UNKNOWN repair: authoritative pinned Fuji event snapshots, complete-leaf persistence,
+  receipt gating, and stale-root fail-closed proving
+- [x] Phase 5 headed resume: existing leaf-3 note withdrawal mined
+  `0x8c72b723fbd8a9739792a3e691678d9473119b4e5a92f61a76d50f8b12efdb9f` with receipt `0x1` and
+  a `1,000,000` USDC pool-to-operator transfer
+- [x] Phase 5 live audit decrypt: the operator witness now emits a Rust-compatible canonical
+  audit envelope, and the completed-withdrawal disclosure endpoint verifies the receipt/event,
+  decrypts through the injected KMS abstraction, recomputes the commitment, and returns only
+  authorized redactions. Production remains `KEYS_MISSING` without KMS credentials.
+- [x] Phase 5 headed network rerun: the dAppwright walk now requires receipt `0x1` plus scoped
+  audit acceptance before recording the live overlay; rerun when the harness is available.
+
+## D8 — Fresh Fuji Deposit-to-Compliance Production E2E
+
+Continuous production journey on Fuji (`43113`).
+
+**Reopened 2026-08-25:** prior checkboxes were ahead of evidence. D8.2, D8.4, D8.5, and D8.6 are
+reopened; the "Live Fuji Operator Run" hashes (`0x713b0366…ad7e` / `0x0aee683b…da90`) were produced
+by the hardcoded fake runner, not a production-origin headed walk, and are non-acceptance. D8.4 has
+passed once before on a local host (2026-08-20 walk-2 hashes `0x15a9f9c3…` / `0xb97e014e…`) but is
+re-opened because fresh production-origin evidence is required. D8.2c (Neon `DATABASE_URL`) and
+D8.2d (live ingestion of a fresh withdraw) were never satisfied.
+
+- [x] **D8.1 — TDD & Contract Tests**: Dynamic ingestion, idempotency, auditor assignment, confirmation progression (12 confirmations required), reorg handling, wrong pool/app/action rejection, exact 5-field disclosure boundaries, canonical signed export signature verification, hash-chained access logging, fail-closed `/admin` and `/governance`.
+- [ ] **D8.2 — Compliance Ingestion Worker & Service** (reopened; D8.2c/D8.2d sub-items below): Background Fuji event listener polling `PrivateTransaction` (action = 3, application `0x...0a11`), tracking confirmation depths, upserting cases by `(chain_id, transaction_hash, log_index)`, managing SIWE challenges and sessions.
+  - [x] **D8.2c — Neon `DATABASE_URL` provisioned** on Vercel production + local poller so the BFF never silently falls back to the in-memory store. (2026-08-25: Neon `ep-solitary-pond-b3gg45nb-pooler`/`neondb`; migrations applied; auditor grant seeded; `DATABASE_URL` set on Vercel production; local `CompliancePostgresStore` smoke test passes against Neon.)
+  - [ ] **D8.2d — A fresh Fuji withdraw is ingested** into the Postgres store by the local poller and served by production `GET /api/compliance/cases`. (Blocked on D8.4's fresh withdraw.)
+- [x] **D8.3 — Production Frontend & Workstation UX**: Next.js compliance API routes (`/api/compliance/*`), 3-column workstation layout (case rail, record panel, integrity rail), responsive mobile/tablet layouts with export review bottom sheet, exact 5-field disclosure (`tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`) with zero PII leaks, fail-closed administrative routes.
+- [x] **D8.4 — Dappwright Fuji Transaction Journey Contract** (deposit verified 2026-08-26): Automated operator deposit (1 USDC) -> recovery -> withdrawal flow on Fuji testnet against production Vercel (`https://haze-avax.vercel.app`).
+  - **Wallet session stability:** Session survives tab switching across `/shield`, `/withdraw`, `/swap`, `/audit` without re-connection or re-signing. Provider RDNS is persisted in session storage; internal navigation links are intercepted with Next router `router.push()` so `WalletSessionProvider` stays mounted.
+  - **Membership rotation:** Operator wallet `0xeD37FD0d6F0f69236E7472B36796e133D20EcC32` rotated membership root on `ApplicationRegistry` (`0xcCB53D8430E5c5555c66d56D2747660f97826f9E`) via tx `0x0e9a5a084f838e7ce071cf7d86bb9d38c9a955d7e0e02f219765f05b03ec82a8` (Status: 1, Block: 57980749), updating to version 36.
+  - **USDC Approval:** Approved pool contract in tx `0x7db53ce40a71640b7ac0083d7c52017fc924e1eb84ad622661011ecae327e02e` (Status: 1, Block: 57980772).
+  - **Deposit Mined (status: 0x1):** Operator deposit submitted and mined on `HazePoolPoseidon` (`0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550`) via tx `0x403ef63c868c2482758f62bb1207c532be48563b6e2d8a860b428df19caed12b` (Status: 1, Block: 57980774, commitment `0x07f0b76e15886552e7f3ff69dc7718e49cdd7e150aee644bf803e6f3c0d3de78`).
+  - **Encoding & Preflight repairs:** Aligned `POOL_VERSION_B002` to `0x00...b001` matching on-chain pool; converted `uintWord` decimal string handling and `Buffer.writeBigUInt64BE` / `base64url` to browser-standard `DataView` operations.
+- [ ] **D8.5 — Named Playwright-CLI Production Walk Contract** (blocked on D8.2c/D8.2d full withdrawal ingestion): Verification of fresh transaction, 12-confirmation progression, exact 5-field disclosure, signed canonical export download and cryptographic verification, access log chain inspection, mobile 390x844 layout, unauthenticated/admin fail-closed verification. Target origin is `https://haze-avax.vercel.app`; preview/localhost are refused by contract.
+- [ ] **D8.6 — Verification & Quality Gates** (reopened): Full test suites passing (`npm test`, `cargo test`, `cargo clippy`, `secret-scan`, Next.js build) plus fresh production-origin challenge/cases curls, dAppwright hashes, and playwright-cli snapshots.
+## D9-SO-01 — Emergency Ceremony Design Return
+
+- [x] **D9-SO-01 — Design resolved; artifact/tooling implementation pending.**
+  - Outcome: decision-complete production-ceremony design for `haze-emergency-v1`
+    (192,535 constraints, 20 public inputs, Circom 2.2.3) covering audit freeze,
+    ptau pinning, three-party contributor protocol, beacon protocol with Avalanche
+    mainnet anchoring, EIP-712 receipt structures, public outputs, future contract
+    handoff, and validation cases.
+  - Design phase only: no keys, no ceremony execution, no transaction broadcast,
+    no contract deployment, no SC-09 approval.
+  - Spec: `docs/ai/design/2026-08-24-haze-emergency-production-ceremony-design.md`.
+  - The emergency ceremony alone does not make the pool production-ready; spend
+    proving, audits, incident review, Fuji approval, and the remaining SC-09 gates
+    still apply.
+  - Phases 7–9 remain blocked. Finding not closed.
+  - Existing `emergency-operator-owned-ceremony-transcript.json` preserved as
+    rehearsal evidence; prohibited from promotion or relabeling.
+
+## D10 — Unbreak Production Dapp + Screenshot Consumer Chrome
+
+- [x] **D10.1 — Unbreak Next/Vercel plumbing (TDD first)**:
+  - Split `html.ts` into `renderHazeFragment` (no nested doctype/html/scripts) and `renderHazePage` (for local commercial host).
+  - Next `app/[route]/page.tsx` renders `renderHazeFragment` and returns `notFound()` (404) for unknown slugs.
+  - Next `app/layout.tsx` imports `theme.css` and `fonts/plex.css`.
+  - Restored base `.haze-button` in `theme.css`.
+  - Next CSP includes `'wasm-unsafe-eval'`, `blob:`, Fuji RPC `https://api.avax-test.network`, and Vercel storage `connect-src` plus webpack alias for `web-worker`.
+  - Added proving manifest stub to `public/proving/fuji-development/haze-spend-v1/manifest.json`.
+- [x] **D10.2 — Screenshot consumer chrome**:
+  - Centered card (~440px) on dark volcanic background (`#16130f`, `#221e18`, `#f3ece2`, `#c47a3a`).
+  - Header: HAZE wordmark + inline SVG flame, Connect button (`data-action="connect"`).
+  - Primary tabs: strictly `Shield | Withdraw | Audit` (hide Swap/Send/History/Emergency-exit/Migrate from primary tabs; keep unlisted).
+  - Labeled card fields: Asset (USDC locked, Circle Fuji `0x5425…c65`), Amount hero input, Shielded Balance (`0.00 USDC` or note sum), Network (Avalanche Fuji display-only).
+  - Continue review panel before signing (`data-review="public-facts"`).
+  - Fail-closed chips on spend paths (`KEYS_MISSING`, `broadcast:false`).
+- [x] **D10.3 — Port worktree wallet + Fuji browser client into main with EIP-6963 wallet overlay**:
+  - Ported `wallet-session.ts`, `wallet-session-provider.tsx`, and `fuji-browser-client.tsx`.
+  - Implemented EIP-6963 wallet picker overlay with Core, Rabby, MetaMask rows, discovered providers, and fail-closed WalletConnect row.
+  - Connecting overlay state with spinner and message.
+  - Network enforcement: Avalanche Fuji `0xa869` (43113) required.
+- [x] **D10.4 — Audit consumer card (SIWE + cases + export as "Case File")**:
+  - Disconnected `/audit`: 3-tab consumer card with Case ID + Case File (signed export download, NOT file upload) + SIWE Connect action.
+  - Connected auditor: SIWE session, assigned cases from `/api/compliance/cases`, download export.
+- [x] **D10.5 — Docs lockstep + local verify + deploy + playwright-cli on production**:
+  - Design addendum `docs/ai/design/2026-08-26-haze-consumer-screenshot-chrome.md`.
+  - Updated planning, implementation, and testing docs.
+  - Fresh verification: full unit tests, Next build, local and production checks.
 
 ## Initial Next Actions
 
-1. T0.1–T7.5, hosted H0–H5, and commercial one-origin frontend are complete. There is no T7.6.
-2. Phases 7–9 (2026-08-20) are closed: approved overrides/deferrals only, secret-scan and
-   public-input binding tests in place, local Foundry gas pins refreshed, holistic review
-   found no merge-blocking defect. Next is `dev-pr` / first commit when the operator is
-   ready. `fuji-v1.json` stays `broadcast: false`. Production spend keys stay
-   `KEYS_MISSING`. Do not invent production Groth16 keys. Do not authorize or broadcast a
-   mainnet deployment. SC-09 stays closed. M7 remains open until those four approvals exist.
-3. Keep Circom 2.2.3 at `haze/.tools/bin/circom`; do not use PATH Circom 0.5.
-3. Keep Circom 2.2.3 at `haze/.tools/bin/circom`; do not use PATH Circom 0.5.
-   T2.1 wraps development equality, not a ceremony-bound spend VK.
+1. D10 is complete: Vercel production dapp unbroke, single HTML document, CSS/fonts imported, 3-tab consumer chrome matching screenshots deployed, EIP-6963 wallet overlay, USDC on Fuji, Audit consumer card with SIWE. The D10.3 missing confirm button and session portal gaps are resolved and verified on production.
+2. D8 is in progress: D8.4 operator deposit on Fuji is verified on production with `status: 1` (`0x403ef63c868c2482758f62bb1207c532be48563b6e2d8a860b428df19caed12b`). D8.2d / D8.5 / D8.6 remain open for full withdrawal ingestion and audit workflow verification.
+   Do not invent production Groth16/KMS keys, authorize or broadcast mainnet, or close SC-09.
+   M7 remains open until the four approvals exist.
+4. Keep Circom 2.2.3 at `haze/.tools/bin/circom`; do not use PATH Circom 0.5. T2.1 wraps
+   development equality, not a ceremony-bound spend VK.

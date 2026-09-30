@@ -158,12 +158,17 @@ try {
 
 async function confirmAny(label, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
-  const names = /^(Confirm|Approve|Next|Sign)$/;
+  const names = /^(Confirm|Approve|Next|Sign)$/i;
   while (Date.now() < deadline) {
     for (const popup of context.pages()) {
       const url = popup.url();
       if (url.startsWith(COMMERCIAL)) {
         continue;
+      }
+      const scrollBtn = popup.locator("[data-testid='signature-request-scroll-button']").first();
+      if (await scrollBtn.isVisible().catch(() => false)) {
+        await scrollBtn.click().catch(() => undefined);
+        await sleep(250);
       }
       const button = popup
         .getByTestId("confirm-footer-button")
@@ -232,6 +237,38 @@ if (!connected || !/ed37fd0d6f0f69236e7472b36796e133d20ecc32/i.test(connected)) 
   process.exit(1);
 }
 
+async function currentChainId() {
+  return page.evaluate(() => globalThis.ethereum?.request({ method: "eth_chainId" }));
+}
+
+async function ensureFujiNetwork() {
+  let chainId = await currentChainId();
+  if (chainId !== "0xa869") {
+    const switchButton = page.locator('[data-code="wrong-chain"] [data-action="switch-network"]').first();
+    if (await switchButton.isVisible().catch(() => false)) {
+      await switchButton.click();
+      await confirmAny("network-switch", 30_000);
+      await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+      await sleep(500);
+    }
+    chainId = await currentChainId();
+  }
+  if (chainId !== "0xa869") {
+    await wallet.switchNetwork(FUJI_NAME).catch((error) => {
+      console.error("switchNetwork retry:", error instanceof Error ? error.message : error);
+    });
+    await sleep(500);
+    chainId = await currentChainId();
+  }
+  console.error(JSON.stringify({ chainId }));
+  if (chainId !== "0xa869") {
+    await context.close();
+    process.exit(1);
+  }
+}
+
+await ensureFujiNetwork();
+
 async function reviewAndSubmit() {
   const review = page.getByRole("button", { name: "I understand — continue" });
   if (await review.isVisible() && (await review.isEnabled())) {
@@ -287,6 +324,16 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(withdrawStatus)) {
 }
 const withdrawReceipt = await waitFujiReceipt(withdrawStatus);
 console.error(JSON.stringify({ withdrawReceipt: withdrawReceipt?.status ?? null }));
+if (withdrawReceipt?.status !== "0x1") {
+  await context.close();
+  process.exit(1);
+}
+const disclosurePhase = (await page.locator("[data-prove-phase]").textContent().catch(() => ""))?.trim() ?? "";
+console.error(JSON.stringify({ auditAcceptance: disclosurePhase === "Scoped audit disclosure verified." }));
+if (disclosurePhase !== "Scoped audit disclosure verified.") {
+  await context.close();
+  process.exit(1);
+}
 const recorded = recordLiveOperatorOverlay({
   overlayPath: LIVE_OVERLAY,
   shield: shieldStatus,

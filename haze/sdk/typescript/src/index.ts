@@ -46,13 +46,27 @@ export {
   requireAddressBinding,
 } from "./address.ts";
 export type { HazeAddress } from "./address.ts";
-export { encodeEnvelope, envelopeHash, parseEnvelope } from "./envelope.ts";
+export { AUDIT_INFO, encodeEnvelope, envelopeHash, parseEnvelope } from "./envelope.ts";
 export type { Envelope, EnvelopePurpose } from "./envelope.ts";
 export {
+  DEVELOPMENT_AUDIT_IKM,
+  DEVELOPMENT_AUDIT_KEY_VERSION,
+  DEVELOPMENT_AUDIT_SENDER_SEED,
+  auditAad,
+  auditDataCommitment,
+  decodeAuditRecord,
+  encodeAuditRecord,
+  openAuditRecord,
+  sealAuditRecord,
+} from "./audit.ts";
+export type { AuditCommitmentInput, AuditRecord } from "./audit.ts";
+export {
   deriveX25519KeyPair,
+  openAuditEnvelope,
   openRecipientNote,
   parseRecipientPlaintext,
   recipientAad,
+  sealAuditEnvelope,
   sealRecipientNote,
 } from "./hpke.ts";
 export type { RecipientPlaintext } from "./hpke.ts";
@@ -151,4 +165,3 @@ export type {
   WorkflowResult,
   WorkflowWallet,
 } from "./workflow.ts";
-

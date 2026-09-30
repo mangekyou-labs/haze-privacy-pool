@@ -2,6 +2,12 @@ import { domainField, protocolVersionTag } from "../sdk/typescript/src/domain.ts
 import { intentDigest } from "../sdk/typescript/src/eip712.ts";
 import { encodeEnvelope, envelopeHash } from "../sdk/typescript/src/envelope.ts";
 import {
+  DEVELOPMENT_AUDIT_IKM,
+  DEVELOPMENT_AUDIT_KEY_VERSION,
+  DEVELOPMENT_AUDIT_SENDER_SEED,
+  sealAuditRecord,
+} from "../sdk/typescript/src/audit.ts";
+import {
   bytes32Limbs,
   fieldFromAddress,
   fieldFromHex,
@@ -36,7 +42,9 @@ const FIXTURE_POOL_VERSION = `0x${"bb".repeat(32)}`;
 const FIXTURE_ACTION_REFERENCE = `0x${"01".repeat(32)}`;
 const FIXTURE_X25519 = "0x851fe1e88c633c75d58459b39cdd10b0ea81d42ef73d36cc46ea05eb2de45947";
 const DEPOSIT = 1;
+const TRANSFER = 2;
 const WITHDRAW = 3;
+const SWAP_AND_SHIELD = 4;
 const FUJI_CHAIN_ID = 43113;
 const AUDIT_SALT = 3n;
 
@@ -138,7 +146,7 @@ export function sentinelBlocklistTree() {
 }
 
 function toHexBytes(bytes) {
-  return `0x${Buffer.from(bytes).toString("hex")}`;
+  return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function dummyRecipientEnvelope(tag) {
@@ -242,13 +250,14 @@ function fillPolicyPaths(slots, applicationId, appTree, blockTree) {
   const lowerSibs = blockTree.path(0);
   const upperSibs = blockTree.path(1);
   const upper = blocklistUpperSentinel();
+  const maxIndex = Math.max(32, appTree.leaves.size);
   for (const slot of slots) {
     if (!slot.enabled) {
       continue;
     }
     const member = applicationMember(applicationId, slot.npk, slot.enc);
     let found;
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < maxIndex; index += 1) {
       const path = appTree.path(index);
       const reconstructed = rootFromAppPath(member, index, path);
       if (reconstructed === appTree.root()) {
@@ -350,6 +359,8 @@ function pairPath(a, b) {
 
 function buildCase(input) {
   const action = input.action;
+  const applicationPolicyVersion = input.applicationPolicyVersion ?? 1;
+  const hazePolicyVersion = input.hazePolicyVersion ?? 1;
   const bindings = {
     pool: input.pool,
     user: input.user,
@@ -375,7 +386,7 @@ function buildCase(input) {
   });
 
   const noteTree = new SparseMerkleTree(NOTE_TREE);
-  if (action !== DEPOSIT) {
+  if (action !== DEPOSIT && action !== SWAP_AND_SHIELD) {
     const extras = Array.isArray(input.treeLeaves) ? input.treeLeaves : [];
     if (extras.length > 0) {
       for (const leaf of extras) {
@@ -398,6 +409,19 @@ function buildCase(input) {
   const appTree = new SparseMerkleTree(APP_TREE);
   let nextMember = 0;
   const seen = new Set();
+  const initialLeaves = Array.isArray(input.membershipLeaves) ? input.membershipLeaves : [];
+  for (const leaf of initialLeaves) {
+    if (!leaf || !leaf.npk || !leaf.enc) {
+      continue;
+    }
+    const key = `${leaf.npk}:${leaf.enc}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    appTree.insert(nextMember, applicationMember(bindings.applicationId, leaf.npk, leaf.enc));
+    seen.add(key);
+    nextMember += 1;
+  }
   for (const slot of [...inSlots, ...outSlots]) {
     if (!slot.enabled) {
       continue;
@@ -414,8 +438,8 @@ function buildCase(input) {
   fillPolicyPaths(inSlots, bindings.applicationId, appTree, blockTree);
   fillPolicyPaths(outSlots, bindings.applicationId, appTree, blockTree);
 
-  const screen = action === DEPOSIT || action === WITHDRAW;
-  const screened = action === WITHDRAW ? publicRecipient : action === DEPOSIT ? bindings.user : ZERO_ADDRESS;
+  const screen = action === DEPOSIT || action === WITHDRAW || action === SWAP_AND_SHIELD;
+  const screened = action === WITHDRAW ? publicRecipient : screen ? bindings.user : ZERO_ADDRESS;
   let addressLowerIndex = 0;
   let addressLowerLeaf = ZERO;
   let addressUpperLeaf = ZERO;
@@ -429,27 +453,21 @@ function buildCase(input) {
     void screened;
   }
 
-  const recipient0 = outSlots[0].enabled ? dummyRecipientEnvelope(0x11) : { hash: ZERO, bytes: "0x" };
-  const recipient1 = outSlots[1].enabled ? dummyRecipientEnvelope(0x21) : { hash: ZERO, bytes: "0x" };
-  const auditEnvelope = dummyAuditEnvelope();
-  const rc0 = recipient0.hash;
-  const rc1 = recipient1.hash;
-  const auditCt = auditEnvelope.hash;
-  const [rc0Hi, rc0Lo] = limbsHex(rc0);
-  const [rc1Hi, rc1Lo] = limbsHex(rc1);
-  const [auditCtHi, auditCtLo] = limbsHex(auditCt);
-  const [appHi, appLo] = limbsHex(bindings.applicationId);
-  const [poolHi, poolLo] = limbsHex(bindings.poolVersion);
-  const [refHi, refLo] = limbsHex(bindings.actionReference);
-
-  const noteTreeRoot = action === DEPOSIT ? ZERO : noteTree.root();
+  const recipient0 = outSlots[0].enabled
+    ? input.recipientEnvelope0 ?? dummyRecipientEnvelope(0x11)
+    : { hash: ZERO, bytes: "0x" };
+  const recipient1 = outSlots[1].enabled
+    ? input.recipientEnvelope1 ?? dummyRecipientEnvelope(0x21)
+    : { hash: ZERO, bytes: "0x" };
+  const noteTreeRoot = action === DEPOSIT || action === SWAP_AND_SHIELD ? ZERO : noteTree.root();
   const nf0 = inSlots[0].enabled ? inSlots[0].nullifier : ZERO;
   const nf1 = inSlots[1].enabled ? inSlots[1].nullifier : ZERO;
   const cm0 = outSlots[0].enabled ? outSlots[0].commitment : ZERO;
   const cm1 = outSlots[1].enabled ? outSlots[1].commitment : ZERO;
-
-  const auditSalt = fieldHex(AUDIT_SALT);
-  const auditCommitment = auditDataCommitment({
+  const rc0 = recipient0.hash;
+  const rc1 = recipient1.hash;
+  const auditSalt = input.auditSalt ?? fieldHex(AUDIT_SALT);
+  const auditFacts = {
     chainId: FUJI_CHAIN_ID,
     pool: bindings.pool,
     poolVersion: bindings.poolVersion,
@@ -459,8 +477,8 @@ function buildCase(input) {
     usdc: bindings.usdc,
     publicAmount,
     publicRecipient,
-    applicationPolicyVersion: 1,
-    hazePolicyVersion: 1,
+    applicationPolicyVersion,
+    hazePolicyVersion,
     actionReference: bindings.actionReference,
     inputEnabled: [inSlots[0].enabled ? 1 : 0, inSlots[1].enabled ? 1 : 0],
     inputValues: [inSlots[0].value, inSlots[1].value],
@@ -474,7 +492,25 @@ function buildCase(input) {
     outputCommitments: [cm0, cm1],
     recipientCiphertextHashes: [rc0, rc1],
     auditSalt,
+  };
+  const auditEnvelope = input.auditEnvelope ?? sealAuditRecord({
+    record: {
+      facts: auditFacts,
+      caseTag: Buffer.from(input.caseTag ?? "live-fixture", "utf8"),
+    },
+    recipientIkm: DEVELOPMENT_AUDIT_IKM,
+    senderSeed: DEVELOPMENT_AUDIT_SENDER_SEED,
+    auditKeyVersion: DEVELOPMENT_AUDIT_KEY_VERSION,
   });
+  const auditCt = auditEnvelope.hash;
+  const [rc0Hi, rc0Lo] = limbsHex(rc0);
+  const [rc1Hi, rc1Lo] = limbsHex(rc1);
+  const [auditCtHi, auditCtLo] = limbsHex(auditCt);
+  const [appHi, appLo] = limbsHex(bindings.applicationId);
+  const [poolHi, poolLo] = limbsHex(bindings.poolVersion);
+  const [refHi, refLo] = limbsHex(bindings.actionReference);
+
+  const auditCommitment = auditDataCommitment(auditFacts);
 
   const intentHash = intentDigest(
     {
@@ -484,8 +520,8 @@ function buildCase(input) {
       poolVersion: bindings.poolVersion,
       action,
       noteTreeRoot,
-      applicationPolicyVersion: 1,
-      hazePolicyVersion: 1,
+      applicationPolicyVersion,
+      hazePolicyVersion,
       applicationMembershipRoot: appTree.root(),
       hazeBlocklistRoot: blockTree.root(),
       inputNullifier0: nf0,
@@ -498,11 +534,11 @@ function buildCase(input) {
       recipientCiphertextHash1: rc1,
       auditDataCommitment: auditCommitment,
       auditCiphertextHash: auditCt,
-      tokenIn: ZERO_ADDRESS,
-      amountIn: ZERO,
-      minUsdcOut: 0,
-      routeHash: ZERO,
-      deadline: 0,
+      tokenIn: input.tokenIn ?? ZERO_ADDRESS,
+      amountIn: input.amountIn !== undefined ? fieldHex(input.amountIn) : ZERO,
+      minUsdcOut: input.minUsdcOut ?? 0,
+      routeHash: input.routeHash ?? ZERO,
+      deadline: input.deadline ?? 0,
     },
     FUJI_CHAIN_ID,
   );
@@ -517,8 +553,8 @@ function buildCase(input) {
     applicationIdHi: appHi,
     applicationIdLo: appLo,
     noteTreeRoot,
-    applicationPolicyVersion: dec(1),
-    hazePolicyVersion: dec(1),
+    applicationPolicyVersion: dec(applicationPolicyVersion),
+    hazePolicyVersion: dec(hazePolicyVersion),
     applicationMembershipRoot: appTree.root(),
     hazeBlocklistRoot: blockTree.root(),
     inputNullifier0: nf0,
@@ -575,20 +611,74 @@ function buildCase(input) {
     addressUpperSiblings: addressUpperSibs,
   };
 
-  const primary = action === DEPOSIT ? outSlots[0] : inSlots[0];
+  let noteResult = null;
+  if (action === DEPOSIT || action === SWAP_AND_SHIELD) {
+    noteResult = {
+      value: outSlots[0].value,
+      secret: outSlots[0].secret,
+      blinding: outSlots[0].blinding,
+      x25519: outSlots[0].x25519,
+      npk: outSlots[0].npk,
+      enc: outSlots[0].enc,
+      commitment: outSlots[0].commitment,
+      nullifier: outSlots[0].nullifier,
+      leafIndex: outSlots[0].leafIndex,
+    };
+  } else if (action === TRANSFER) {
+    if (outSlots[1].enabled) {
+      noteResult = {
+        value: outSlots[1].value,
+        secret: outSlots[1].secret,
+        blinding: outSlots[1].blinding,
+        x25519: outSlots[1].x25519,
+        npk: outSlots[1].npk,
+        enc: outSlots[1].enc,
+        commitment: outSlots[1].commitment,
+        nullifier: outSlots[1].nullifier,
+        leafIndex: outSlots[1].leafIndex,
+      };
+    } else {
+      noteResult = null;
+    }
+  } else {
+    noteResult = {
+      value: inSlots[0].value,
+      secret: inSlots[0].secret,
+      blinding: inSlots[0].blinding,
+      x25519: inSlots[0].x25519,
+      npk: inSlots[0].npk,
+      enc: inSlots[0].enc,
+      commitment: inSlots[0].commitment,
+      nullifier: inSlots[0].nullifier,
+      leafIndex: inSlots[0].leafIndex,
+    };
+  }
+
+  const recipientNote = outSlots[0].enabled
+    ? {
+        value: outSlots[0].value,
+        secret: outSlots[0].secret,
+        blinding: outSlots[0].blinding,
+        x25519: outSlots[0].x25519,
+        npk: outSlots[0].npk,
+        enc: outSlots[0].enc,
+        commitment: outSlots[0].commitment,
+      }
+    : null;
+
   return {
     circom,
-    note: {
-      value: primary.value,
-      secret: primary.secret,
-      blinding: primary.blinding,
-      x25519: primary.x25519,
-      npk: primary.npk,
-      enc: primary.enc,
-      commitment: primary.commitment,
-      nullifier: primary.nullifier,
-      leafIndex: primary.leafIndex,
+    auditFacts,
+    auditRecord: auditEnvelope.record ?? {
+      facts: auditFacts,
+      caseTag: Buffer.from(input.caseTag ?? "live-fixture", "utf8"),
     },
+    auditRecordBytes: auditEnvelope.plaintext,
+    auditKeyVersion: (auditEnvelope.envelope?.keyVersion ?? DEVELOPMENT_AUDIT_KEY_VERSION).toString(),
+    auditDevelopmentFixture: true,
+    actionReference: bindings.actionReference,
+    note: noteResult,
+    recipientNote,
     membershipRoot: circom.applicationMembershipRoot,
     hazeBlocklistRoot: circom.hazeBlocklistRoot,
     noteTreeRoot: circom.noteTreeRoot,
@@ -625,15 +715,24 @@ export function buildLiveDepositWitness(input) {
     poolVersion: input.poolVersion,
     publicAmount: input.publicAmount ?? 1_000_000,
     publicRecipient: ZERO_ADDRESS,
+    applicationPolicyVersion: input.applicationPolicyVersion,
+    hazePolicyVersion: input.hazePolicyVersion,
+    actionReference: input.actionReference,
+    auditSalt: input.auditSalt,
+    recipientEnvelope0: input.recipientEnvelope0,
+    recipientEnvelope1: input.recipientEnvelope1,
+    auditEnvelope: input.auditEnvelope,
     outputs: [
       {
-        value: input.value ?? 1_000_000,
+        value: input.value ?? input.publicAmount ?? 1_000_000,
         secret: input.secret ?? 1,
         blinding: input.blinding ?? 2,
         leafIndex: input.leafIndex ?? 0,
         x25519: input.x25519,
       },
     ],
+    treeLeaves: input.treeLeaves,
+    membershipLeaves: input.membershipLeaves,
   });
 }
 
@@ -647,6 +746,13 @@ export function buildLiveWithdrawWitness(input) {
     poolVersion: input.poolVersion,
     publicAmount: input.publicAmount ?? note.value,
     publicRecipient: input.publicRecipient ?? input.user,
+    applicationPolicyVersion: input.applicationPolicyVersion,
+    hazePolicyVersion: input.hazePolicyVersion,
+    actionReference: input.actionReference,
+    auditSalt: input.auditSalt,
+    recipientEnvelope0: input.recipientEnvelope0,
+    recipientEnvelope1: input.recipientEnvelope1,
+    auditEnvelope: input.auditEnvelope,
     inputs: [
       {
         value: note.value,
@@ -657,5 +763,94 @@ export function buildLiveWithdrawWitness(input) {
       },
     ],
     treeLeaves: input.treeLeaves,
+    membershipLeaves: input.membershipLeaves,
   });
 }
+
+export function buildLiveTransferWitness(input) {
+  const note = input.note;
+  const sendAmount = input.sendAmount;
+  const changeAmount = note.value - sendAmount;
+  const outputs = [
+    {
+      value: sendAmount,
+      secret: input.recipientSecret ?? 1,
+      blinding: input.recipientBlinding ?? 2,
+      leafIndex: 0,
+      x25519: input.recipientX25519,
+    },
+  ];
+  if (changeAmount > 0) {
+    outputs.push({
+      value: changeAmount,
+      secret: input.changeSecret ?? note.secret,
+      blinding: input.changeBlinding ?? note.blinding,
+      leafIndex: 1,
+      x25519: input.changeX25519 ?? note.x25519,
+    });
+  }
+  return buildCase({
+    action: TRANSFER,
+    pool: input.pool,
+    user: input.user,
+    applicationId: input.applicationId,
+    poolVersion: input.poolVersion,
+    publicAmount: 0,
+    publicRecipient: ZERO_ADDRESS,
+    applicationPolicyVersion: input.applicationPolicyVersion,
+    hazePolicyVersion: input.hazePolicyVersion,
+    actionReference: input.actionReference,
+    auditSalt: input.auditSalt,
+    recipientEnvelope0: input.recipientEnvelope0,
+    recipientEnvelope1: input.recipientEnvelope1,
+    auditEnvelope: input.auditEnvelope,
+    inputs: [
+      {
+        value: note.value,
+        secret: note.secret,
+        blinding: note.blinding,
+        leafIndex: note.leafIndex,
+        x25519: note.x25519,
+      },
+    ],
+    outputs,
+    treeLeaves: input.treeLeaves,
+    membershipLeaves: input.membershipLeaves,
+  });
+}
+
+export function buildLiveSwapWitness(input) {
+  return buildCase({
+    action: SWAP_AND_SHIELD,
+    pool: input.pool,
+    user: input.user,
+    applicationId: input.applicationId,
+    poolVersion: input.poolVersion,
+    publicAmount: input.amountIn ?? input.value ?? 1_000_000,
+    publicRecipient: ZERO_ADDRESS,
+    applicationPolicyVersion: input.applicationPolicyVersion,
+    hazePolicyVersion: input.hazePolicyVersion,
+    actionReference: input.actionReference,
+    auditSalt: input.auditSalt,
+    recipientEnvelope0: input.recipientEnvelope0,
+    recipientEnvelope1: input.recipientEnvelope1,
+    auditEnvelope: input.auditEnvelope,
+    tokenIn: input.tokenIn,
+    amountIn: input.amountIn ?? input.value,
+    minUsdcOut: input.minUsdcOut,
+    routeHash: input.routeHash,
+    deadline: input.deadline,
+    outputs: [
+      {
+        value: input.value ?? input.amountIn ?? 1_000_000,
+        secret: input.secret ?? 1,
+        blinding: input.blinding ?? 2,
+        leafIndex: input.leafIndex ?? 0,
+        x25519: input.x25519,
+      },
+    ],
+    treeLeaves: input.treeLeaves,
+    membershipLeaves: input.membershipLeaves,
+  });
+}
+

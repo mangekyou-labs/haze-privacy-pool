@@ -83,11 +83,16 @@
         return;
       }
       if (plan.operatorHatch && plan.circuitPlan) {
-        await fetch("/api/live-deposit/persist", {
+        const persisted = await fetch("/api/live-deposit/persist", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ plan: plan.circuitPlan }),
+          body: JSON.stringify({ plan: plan.circuitPlan, receipt }),
         });
+        const persistedBody = await persisted.json();
+        if (!persistedBody.allowed) {
+          status.textContent = persistedBody.reason || "TREE_SNAPSHOT_INVALID";
+          return;
+        }
       }
       status.textContent = hash;
     } catch (error) {

@@ -44,7 +44,13 @@
       const proved = await fetch("/api/live-withdraw/prove", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ user, amount, recipient: recipient || user }),
+        body: JSON.stringify({
+          user,
+          amount,
+          recipient: recipient || user,
+          noteTreeRoot: plan.noteTreeRoot || plan.intent?.noteTreeRoot,
+          actionReference: plan.authorization?.nonce,
+        }),
       });
       const proof = await proved.json();
       if (!proof.allowed || !proof.proofBytes) {
@@ -73,7 +79,45 @@
         params: [{ from: user, to: transact.to, data: transact.data }],
       });
       if (phase) {
-        phase.textContent = "Withdraw submitted.";
+        phase.textContent = "Withdraw submitted — waiting for a successful receipt.";
+      }
+      let receipt = null;
+      const minedDeadline = Date.now() + 180_000;
+      while (Date.now() < minedDeadline) {
+        receipt = await provider.request({
+          method: "eth_getTransactionReceipt",
+          params: [hash],
+        });
+        if (receipt) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (receipt?.status !== "0x1") {
+        status.textContent = "RECEIPT_REVERTED";
+        return;
+      }
+      if (phase) {
+        phase.textContent = "Verifying the scoped audit disclosure…";
+      }
+      const disclosed = await fetch("/api/live-withdraw/disclose", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          plan,
+          receipt,
+          txHash: hash,
+          applicationId: plan.applicationId || plan.intent?.applicationId,
+          fields: ["amount", "counterparty", "policy_version"],
+        }),
+      });
+      const disclosure = await disclosed.json();
+      if (!disclosure.allowed || !disclosure.auditAcceptance) {
+        status.textContent = disclosure.reason || "AUDIT_REJECTED";
+        return;
+      }
+      if (phase) {
+        phase.textContent = "Scoped audit disclosure verified.";
       }
       status.textContent = hash;
     } catch (error) {

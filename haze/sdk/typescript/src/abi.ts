@@ -14,11 +14,23 @@ export function toHex(bytes: Uint8Array): string {
   return `0x${Buffer.from(bytes).toString("hex")}`;
 }
 
+/** Concatenate multiple byte arrays. */
+export function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
 /** Left-pad a value to 32 bytes. */
 export function pad32(bytes: Uint8Array): Buffer {
-  const out = Buffer.alloc(32);
-  Buffer.from(bytes).copy(out, 32 - bytes.length);
-  return out;
+  if (bytes.length > 32) throw new Error("ENCODING_INVALID");
+  const out = new Uint8Array(32);
+  out.set(bytes, 32 - bytes.length);
+  return Buffer.from(out);
 }
 
 /** ABI word for an EVM address. */
@@ -37,7 +49,7 @@ export function bytes32Word(value: string): Buffer {
 
 /** ABI word for an unsigned integer. */
 export function uintWord(value: number | bigint | string): Buffer {
-  if (typeof value === "string") {
+  if (typeof value === "string" && /^0x/i.test(value)) {
     return pad32(hexToBuf(value));
   }
   const hex = BigInt(value).toString(16).padStart(64, "0");

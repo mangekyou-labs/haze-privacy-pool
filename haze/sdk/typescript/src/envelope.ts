@@ -76,8 +76,8 @@ export function encodeEnvelope(envelope: Envelope): Uint8Array {
   ]);
 }
 
-export function parseEnvelope(bytes: Uint8Array): Envelope {
-  const buffer = Buffer.from(bytes);
+export function parseEnvelope(bytes: Uint8Array | string): Envelope {
+  const buffer = typeof bytes === "string" ? parseHex(bytes) : Buffer.from(bytes);
   if (buffer.length < FIXED + 4) {
     throw new SdkError("ENCODING_INVALID");
   }
@@ -91,20 +91,21 @@ export function parseEnvelope(bytes: Uint8Array): Envelope {
   if (!purpose) {
     throw new SdkError("ENCODING_INVALID");
   }
-  const kem = buffer.readUInt16BE(6);
-  const kdf = buffer.readUInt16BE(8);
-  const aead = buffer.readUInt16BE(10);
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const kem = view.getUint16(6, false);
+  const kdf = view.getUint16(8, false);
+  const aead = view.getUint16(10, false);
   if (kem !== KEM_ID || kdf !== KDF_ID || aead !== AEAD_ID) {
     throw new SdkError("ENCODING_INVALID");
   }
-  const keyVersion = buffer.readBigUInt64BE(12);
-  const encapLen = buffer.readUInt16BE(20);
+  const keyVersion = view.getBigUint64(12, false);
+  const encapLen = view.getUint16(20, false);
   const encapEnd = FIXED + encapLen;
   const ctLenEnd = encapEnd + 4;
   if (buffer.length < ctLenEnd) {
     throw new SdkError("ENCODING_INVALID");
   }
-  const ciphertextLen = buffer.readUInt32BE(encapEnd);
+  const ciphertextLen = view.getUint32(encapEnd, false);
   const end = ctLenEnd + ciphertextLen;
   if (buffer.length !== end) {
     throw new SdkError("ENCODING_INVALID");

@@ -30,7 +30,7 @@ test("commercial site is one origin with pool and compliance nav groups", () => 
   assert.equal(site.nav.filter((item) => item.group === "compliance").length, 3);
 });
 
-test("pool-user chrome is a centered DEX card, not a compliance workstation", async () => {
+test("pool-user chrome is a centered consumer card, not a compliance workstation", async () => {
   const { renderHazePage } = await import("../web/packages/ui/src/html.ts");
   const site = createHazeSite({ role: "pool-user", applicationId: APP_A });
   assert.equal(site.homePath(), "/shield");
@@ -38,12 +38,12 @@ test("pool-user chrome is a centered DEX card, not a compliance workstation", as
     address: FIXTURE_ACCOUNTS[0].address,
     walletStatus: "connected",
   });
-  assert.match(html, /data-chrome="dex"/);
+  assert.match(html, /data-chrome="consumer"/);
   assert.match(html, /data-card="pool"/);
   assert.match(html, /class="haze-dex-tabs"/);
   assert.match(html, /href="\/shield"/);
-  assert.match(html, /href="\/send"/);
   assert.match(html, /href="\/withdraw"/);
+  assert.match(html, /href="\/audit"/);
   assert.match(html, /haze-token[^>]*>USDC/);
   assert.match(html, /class="haze-amount/);
   assert.match(html, /data-review="public-facts"/);
@@ -341,7 +341,7 @@ test("commercial host serves both products on one origin", async () => {
     const poolHtml = await pool.text();
     assert.equal(pool.status, 200);
     assert.match(poolHtml, /data-origin="single"/);
-    assert.match(poolHtml, /data-chrome="dex"/);
+    assert.match(poolHtml, /data-chrome="consumer"/);
     assert.match(poolHtml, /data-card="pool"/);
     assert.match(poolHtml, /aria-label="Pool"/);
     assert.doesNotMatch(poolHtml, /haze-group-label">Compliance/);
@@ -505,6 +505,110 @@ test("operator withdraw hatch encodes transact and stays off the default host", 
   }
 });
 
+test("live withdrawal disclosure route requires the mined event and returns scoped fields", async () => {
+  const { buildLiveWithdrawWitness } = await import("../dev/operator-circuit-witness.mjs");
+  const { PRIVATE_TRANSACTION_TOPIC } = await import("../dev/live-disclosure.mjs");
+  const { planLiveOperatorWithdraw } = await import("../web/packages/ui/src/live-withdraw.ts");
+  const { uintWord } = await import("../sdk/typescript/src/abi.ts");
+  const overlay = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.live.json"), "utf8"));
+  const stored = JSON.parse(readFileSync(join(HAZE_ROOT, "dev/artifacts/ceremony-private/fuji-poseidon-note.json"), "utf8"));
+  const user = "0xeD37fd0d6f0f69236e7472b36796e133d20ecc32";
+  const actionReference = `0x${"45".repeat(32)}`;
+  const witness = buildLiveWithdrawWitness({
+    pool: overlay.addresses.HazePool,
+    user,
+    applicationId: overlay.applicationId,
+    poolVersion: overlay.poolVersion,
+    usdc: overlay.usdc,
+    note: stored.note,
+    treeLeaves: stored.treeLeaves,
+    publicRecipient: user,
+    actionReference,
+  });
+  const plan = planLiveOperatorWithdraw({
+    path: "/withdraw",
+    live: true,
+    operatorProve: true,
+    zkeyExists: true,
+    sidecar: overlay,
+    user,
+    amount: stored.note.value,
+    recipient: user,
+    now: 1_700_000_000,
+    actionReference,
+    witness,
+  });
+  const word = (value) => Buffer.from(uintWord(
+    typeof value === "string" && !value.startsWith("0x") ? BigInt(value) : value,
+  ));
+  const circom = witness.circom;
+  const eventData = Buffer.concat([
+    word(circom.applicationPolicyVersion),
+    word(circom.hazePolicyVersion),
+    word(circom.noteTreeRoot),
+    word(circom.inputNullifier0),
+    word(circom.inputNullifier1),
+    word(circom.outputCommitment0),
+    word(circom.outputCommitment1),
+    word(circom.publicAmount),
+    word(user),
+    word(witness.envelopes.recipientCiphertextHash0),
+    word(witness.envelopes.recipientCiphertextHash1),
+    word(witness.circom.auditDataCommitment),
+    word(witness.envelopes.auditCiphertextHash),
+    word(16 * 32),
+    word(16 * 32),
+    word(16 * 32),
+  ]);
+  const receipt = {
+    status: "0x1",
+    transactionHash: `0x${"77".repeat(32)}`,
+    logs: [{
+      address: overlay.addresses.HazePool,
+      topics: [PRIVATE_TRANSACTION_TOPIC, overlay.applicationId, `0x${"00".repeat(31)}03`, `0x${"00".repeat(12)}${user.slice(2)}`],
+      data: `0x${eventData.toString("hex")}`,
+    }],
+  };
+  const disclosureBody = {
+    plan: { ...plan, circuitPlan: witness },
+    receipt,
+    applicationId: overlay.applicationId,
+    fields: ["amount", "counterparty"],
+  };
+
+  const closed = await createCommercialHost({ port: 0 });
+  try {
+    const refused = await fetch(new URL("/api/live-withdraw/disclose", closed.url), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(disclosureBody),
+    });
+    assert.deepEqual(await refused.json(), { allowed: false, reason: "KEYS_MISSING" });
+  } finally {
+    await closed.close();
+  }
+
+  const host = await createCommercialHost({
+    port: 0,
+    operatorProve: true,
+    zkeyPath: join(HAZE_ROOT, "package.json"),
+  });
+  try {
+    const response = await fetch(new URL("/api/live-withdraw/disclose", host.url), {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: `haze-address=${user}` },
+      body: JSON.stringify(disclosureBody),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.allowed, true);
+    assert.equal(result.auditAcceptance, true);
+    assert.deepEqual(result.fields, { amount: stored.note.value, counterparty: user.toLowerCase() });
+  } finally {
+    await host.close();
+  }
+});
+
 test("DEX copy names Fuji demo when the operator hatch is open", async () => {
   const { renderHazePage } = await import("../web/packages/ui/src/html.ts");
   const { humanStatus, liveOperatorShieldAllowed } = await import("../web/packages/ui/src/site.ts");
@@ -647,10 +751,27 @@ test("operator commercial command requires a local zkey and does not flip fuji-v
 
 test("hatch live-deposit plan does not reuse an on-chain commitment", async () => {
   const overlay = JSON.parse(readFileSync(join(HAZE_ROOT, "deployments/fuji-v1.live.json"), "utf8"));
+  const { planLiveCircuitTransact } = await import("../dev/operator-circuit-live.mjs");
+  const note = JSON.parse(
+    readFileSync(join(HAZE_ROOT, "dev/artifacts/ceremony-private/fuji-poseidon-note.json"), "utf8"),
+  ).note;
+  const liveLeaves = [
+    { leafIndex: 0, commitment: "0x0acd50a5afb0a74605cea66358fae514a6aba02dce5ee081ae888fee11f716c3" },
+    { leafIndex: 1, commitment: "0x214107a40cd5289d482150889bf6c6299c7b347b4e4b2583b95446e08a7085df" },
+    { leafIndex: 2, commitment: "0x08cbf5f1fcf47c7c848d2fdcff1e2a7bf05b529d954886994037d96a051a0389" },
+    { leafIndex: 3, commitment: "0x2a003882516d7362de42261ebe44c4c84bdacb37417d9c4868f58db0634dabaa" },
+  ];
+  const livePoolSnapshot = {
+    blockTag: "0x2a",
+    nextIndex: 4,
+    currentRoot: planLiveCircuitTransact({ action: "withdraw", note, treeLeaves: liveLeaves }).noteTreeRoot,
+    leaves: liveLeaves,
+  };
   const host = await createCommercialHost({
     port: 0,
     operatorProve: true,
     zkeyPath: join(HAZE_ROOT, "package.json"),
+    livePoolSnapshot,
   });
   try {
     const planned = await fetch(new URL("/api/live-deposit/plan", host.url), {
@@ -672,7 +793,11 @@ test("hatch live-deposit plan does not reuse an on-chain commitment", async () =
       plan.intent.outputCommitment0.toLowerCase(),
       overlay.transactions.deposit1Commitment.toLowerCase(),
     );
-    assert.equal(Number(plan.circuitPlan.note.leafIndex), 2);
+    assert.equal(Number(plan.circuitPlan.note.leafIndex), 4);
+    assert.equal(
+      liveLeaves.some((leaf) => leaf.commitment.toLowerCase() === plan.circuitPlan.note.commitment.toLowerCase()),
+      false,
+    );
     const script = await fetch(new URL("/shield-live.js", host.url));
     const source = await script.text();
     assert.match(source, /eth_getTransactionReceipt/);

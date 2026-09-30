@@ -1,0 +1,13 @@
+# Keep Vercel uploads small: exclude operator/ceremony artifacts and build trees
+.tools/
+dev/artifacts/ceremony-private/
+circuits/build/
+target/
+**/*.zkey
+**/*.ptau
+**/*.r1cs
+**/*.sym
+**/*.wasm
+output/
+**/.next/
+**/node_modules/

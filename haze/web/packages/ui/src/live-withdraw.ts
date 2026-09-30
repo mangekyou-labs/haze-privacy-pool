@@ -9,6 +9,16 @@ import { liveOperatorWithdrawAllowed } from "./site.ts";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 = `0x${"00".repeat(32)}`;
 
+export function liveWithdrawActionReference(user: string, now: number): string {
+  return keccakHex(
+    Buffer.concat([
+      Buffer.from("haze-fuji-poseidon-withdraw"),
+      hexToBuf(user),
+      uintWord(now),
+    ]),
+  );
+}
+
 export type LiveWithdrawWitness = {
   circom: {
     noteTreeRoot: string;
@@ -60,6 +70,7 @@ export function planLiveOperatorWithdraw(input: {
   amount: number;
   recipient: string;
   now: number;
+  actionReference?: string;
   witness: LiveWithdrawWitness;
   productionCeremonyApproved?: boolean;
   writeCommittedFuji?: boolean;
@@ -119,19 +130,14 @@ export function planLiveOperatorWithdraw(input: {
     hazePolicyVersion: intent.hazePolicyVersion,
     auditDataCommitment: intent.auditDataCommitment,
     auditCiphertextHash: intent.auditCiphertextHash,
-    nonce: keccakHex(
-      Buffer.concat([
-        Buffer.from("haze-fuji-poseidon-withdraw"),
-        hexToBuf(input.user),
-        uintWord(input.now),
-      ]),
-    ),
+    nonce: input.actionReference ?? liveWithdrawActionReference(input.user, input.now),
     validAfter: input.now - 1,
     validUntil: input.now + 3600,
   };
 
   return {
     allowed: true,
+    noteTreeRoot: circom.noteTreeRoot,
     chainId: input.sidecar.chainId,
     usdc: input.sidecar.usdc,
     pool,

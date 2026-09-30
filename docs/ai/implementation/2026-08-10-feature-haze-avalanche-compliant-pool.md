@@ -6,6 +6,86 @@ description: Technical implementation notes, patterns, and code guidelines
 
 # Implementation Guide
 
+## Phase 5 — Canonical Vercel Origin (2026-08-31)
+
+The production origin is centralized in [`haze/dev/production-origin.mjs`](../../../../haze/dev/production-origin.mjs):
+`PRODUCTION_HOST = haze-avax.vercel.app` and `PRODUCTION_URL = https://haze-avax.vercel.app`.
+The D8 runner, dAppwright spend walk, and headed Chrome verifier import that module. `haze/vercel.json`
+permanently redirects host-matched requests from `haze-mu-flax.vercel.app`, `haze.vercel.app`,
+`haze-finance.vercel.app`, and `haze-pool.vercel.app` to the canonical path-preserving URL; previews
+are not matched. The rejected names remain documented only as redirect sources and rationale, not as
+production targets.
+
+The SIWE challenge route passes the request `Host` without its port to both store implementations.
+When that host is the canonical production host, it wins over `HAZE_COMPLIANCE_DOMAIN`; other hosts
+use the configured compliance domain. This binds the wallet message domain and URI to the page origin
+after redirect and prevents an env/page mismatch.
+
+**Phase 5 live evidence:** deployment `dpl_BT4ibkDDFNG1KdbGmCdpDKcVCuH5` is READY and serves
+`haze-avax.vercel.app`; production `HAZE_COMPLIANCE_DOMAIN` is `haze-avax.vercel.app`; `/audit`
+returned HTTP 200; `haze-mu-flax.vercel.app/audit` returned HTTP 308 with
+`Location: https://haze-avax.vercel.app/audit`; and the live challenge returned
+`domain: haze-avax.vercel.app` plus `URI: https://haze-avax.vercel.app/audit`. The headed Playwright
+CLI + MetaMask walk showed the correct canonical origin in the connection/signature UI, but MetaMask
+then displayed **Malicious site**. This is a Blockaid/content flag, not a host-binding mismatch;
+wallet-safe acceptance is therefore not claimed and a custom domain is required next.
+
+## Progress — 2026-08-26 D8.4 Production Vercel Deposit & Wallet Tab Reconnect
+
+Production Vercel deployment (`https://haze-avax.vercel.app`) now operates as a working Fuji MVP:
+
+1. **Wallet Session Survives Tab Switching:**
+   - Wrapped SSR wallet chip in `<span id="haze-session-root">` within consumer chrome (`html.ts`).
+   - `WalletSessionProvider` portals active session control (`data-session-status`, `data-address`, Disconnect action) into `#haze-session-root` on hydration and clears SSR static fallbacks.
+   - Intercepts same-origin `.haze-tab`, `.haze-more-link`, `.haze-side-link`, and `.haze-brand` links with Next.js `useRouter().push()`, preventing full SSR unmounts/remounts and preserving wallet connection state.
+   - Persists selected EIP-6963 provider `rdns` in session storage; `canSilentResume` verifies authorized `eth_accounts` without prompting re-signature. Connect modal is ignored if already connected.
+
+2. **Shield Confirm & Review Flow:**
+   - Ported and wired `.haze-confirm` button calling `executeSpendWorkflow` inside `#fuji-browser-transaction-root`.
+   - Dynamic error classification via `classifyBrowserError`: distinguishes `policy` (on-chain KYC/membership reverts), `submit` (reverted transactions/unconfirmed events), `proof` (Groth16/wasm failures), `swap`, `wallet`, and `validation`. UI sets `data-error={errorCategory}` rather than hardcoded "proof".
+
+3. **Operator Deposit Mined on Fuji (status: 0x1):**
+   - **Membership Root Rotation:** Operator wallet `0xeD37FD0d6F0f69236E7472B36796e133D20EcC32` verified on-chain `membershipRoot` vs local witness tree. Rotated root on `ApplicationRegistry` (`0xcCB53D8430E5c5555c66d56D2747660f97826f9E`) via tx `0x0e9a5a084f838e7ce071cf7d86bb9d38c9a955d7e0e02f219765f05b03ec82a8` (Status: 1, Block: 57980749), updating to version 36.
+   - **USDC Approval:** Approved pool contract in tx `0x7db53ce40a71640b7ac0083d7c52017fc924e1eb84ad622661011ecae327e02e` (Status: 1, Block: 57980772).
+   - **Deposit Mined:** Operator deposit of 1.0 USDC proved via Groth16 and mined on `HazePoolPoseidon` (`0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550`) via tx `0x403ef63c868c2482758f62bb1207c532be48563b6e2d8a860b428df19caed12b` with `receipt.status === 0x1` (Block: 57980774, commitment `0x07f0b76e15886552e7f3ff69dc7718e49cdd7e150aee644bf803e6f3c0d3de78`).
+   - **Encoding & Preflight Fixes:** Aligned `POOL_VERSION_B002` to `0x00...b001` matching on-chain `poolVersion()`; converted `uintWord` to handle decimal proof strings; replaced non-standard `writeBigUInt64BE` and `base64url` buffer calls with standard `DataView` operations.
+   - **Evidence Artifact:** Verified by headed dAppwright walk and recorded in `haze/output/playwright/d7-deployed-fuji-acceptance.json`.
+
+## Progress — 2026-08-21 ROOT_UNKNOWN repair and Phase 5 resume
+
+The operator witness now treats Fuji `PrivateTransaction` history as the durable source of
+truth for the Poseidon note tree. `fetchLivePoolTreeSnapshot(sidecar)` pins the block number,
+`eth_getLogs`, `nextIndex()`, and `currentRoot()` to one block; decodes both nonzero event
+outputs in canonical block/transaction/log order; and rejects missing, misordered, duplicate,
+count-inconsistent, or root-inconsistent history with `TREE_SNAPSHOT_INVALID`.
+
+- Operator deposit persistence requires a mined receipt with `status: 0x1`, verifies the planned
+  commitment at its planned leaf, and stores the complete chain-derived leaves. Client-supplied
+  snapshots are not trusted by the commercial host.
+- Withdrawal planning and proving rebuild witnesses from the authoritative snapshot, pass
+  `noteTreeRoot` through `/api/live-withdraw/prove`, and return `ROOT_STALE` before proving when
+  the chain root changes. The leaf-3 note remains untouched until a successful withdrawal receipt.
+- Regression coverage includes the rejected `[0,1,3]` root
+  `0x174ca949…b4b5f76`, the valid `[0,1,2,3]` Fuji root `0x11520b8d…79cf`, event ordering,
+  two-output events, count/root mismatches, stale roots, and reverted/absent deposits.
+
+This repair is local-code complete. The headed Fuji resume also completed the chain acceptance:
+transaction `0x8c72b723fbd8a9739792a3e691678d9473119b4e5a92f61a76d50f8b12efdb9f` mined in
+block `0x3734cb2` with receipt status `0x1` and transferred `1,000,000` USDC from the pool to
+the operator. The leaf-3 note artifact remains present by design until receipt confirmation and
+is not manually patched.
+
+The 2026-08-21 audit repair replaces the live dummy envelope with Rust-compatible canonical v1
+CBOR, `AUDIT_INFO` HPKE Base sealing, and the same Poseidon2 audit commitment used by the circuit.
+`POST /api/live-withdraw/disclose` now requires a successful receipt and matching
+`PrivateTransaction`, verifies all application/pool/version/action/hash/commitment bindings,
+invokes the injected authorization and key-management interfaces, and returns only an explicit
+field allowlist. The deterministic IKM is marked `development-fixture` and is available only in
+the operator hatch; the default host remains `KEYS_MISSING` without production KMS credentials.
+The headed walk now requires both receipt `0x1` and the scoped disclosure acceptance phase before
+retaining the overlay artifact. The network walk itself must be rerun when the dAppwright harness
+is available; local protocol, endpoint, and negative-integrity coverage is now present.
+
 ## Progress — 2026-08-20 clickable operator MVP
 
 Operator hatch can now Shield → persist a Poseidon note → Withdraw on Fuji without flipping
@@ -1298,3 +1378,216 @@ The feature is ready to push as a **development / library** checkpoint. It is **
 ### Next phase
 
 `dev-pr` / first commit when the operator is ready. Do not flip SC-09, `fuji-v1.json` `broadcast`, or `mainnet-v1.json` `authorized`.
+
+## Check Implementation (Phase 7, 2026-08-21 ROOT_UNKNOWN repair)
+
+The repair aligns the live operator path with the design requirement that a Merkle witness is
+constructed from authoritative, ordered on-chain commitments rather than incomplete sidecar
+fields. The implementation is limited to the Poseidon operator hatch and does not change the
+published deployment package or production proving gates.
+
+### Alignment and deviations
+
+| Area | Status | Evidence / disposition |
+|---|---|---|
+| Pinned Fuji snapshot | Aligned | `fetchLivePoolTreeSnapshot` pins block, logs, `nextIndex()`, and `currentRoot()` and validates the recomputed Poseidon root |
+| Event reconstruction | Aligned | `PrivateTransaction` outputs are decoded in canonical order; both nonzero outputs are included |
+| Deposit persistence | Aligned | Receipt status, planned leaf commitment, count, and root are checked before complete leaves are persisted |
+| Withdrawal proving | Aligned | Fresh authoritative leaves and `noteTreeRoot` are required; stale roots fail before prover work |
+| Audit envelope and disclosure | Aligned | TypeScript/Rust vectors, canonical CBOR, HPKE `AUDIT_INFO`, receipt/event binding, authorization, KMS fail-closed behavior, and scoped redaction are covered by `live-audit-protocol.test.mjs`, `live-disclosure.test.mjs`, and the commercial host route test |
+| Client trust boundary | Aligned | Commercial host ignores body snapshots and fetches its own snapshot for persist, plan, and prove |
+| Sidecar planner leaf selection | Documented limitation | Stale sidecar planning can be rejected at persistence; no manual repair or fallback history is permitted |
+| Production/Fuji gates | Unchanged | `fuji-v1.json` remains `broadcast:false`, spend proving remains `KEYS_MISSING`, and SC-09 remains closed |
+
+### Fresh local evidence
+
+- `npx ai-devkit@latest lint --feature haze-avalanche-compliant-pool`: all checks passed.
+- `haze/tests/operator-circuit-live.test.mjs`: snapshot reconstruction, root/count validation,
+  stale-root rejection, receipt gating, and complete-leaf persistence scenarios are covered.
+- Targeted TypeScript/Rust protocol compatibility, disclosure, operator, and commercial host tests
+  pass; the fresh full-suite result is recorded in the testing document after verification.
+- `node haze/dev/secret-scan.mjs`: `secret-scan ok`.
+- Fuji provenance tests pass; committed `fuji-v1.json` still has `broadcast:false` and
+  `spend_prove: KEYS_MISSING`.
+- Headed Fuji resume: withdraw `0x8c72b723fbd8a9739792a3e691678d9473119b4e5a92f61a76d50f8b12efdb9f`
+  has receipt `0x1` in block `0x3734cb2`; the pool-to-operator ERC-20 transfer is `1,000,000`
+  units. Its `PrivateTransaction` event carries the planned root, the existing note nullifier,
+  public amount `1,000,000`, and zero output commitments; the local leaf-3 note remains intact.
+  The local disclosure path now opens the same live witness envelope and recomputes its commitment;
+  a headed network rerun remains a separate harness-dependent acceptance item.
+
+### Next phase
+
+Run `dev-testing` and `dev-review` for this repair. Before `dev-pr`, rerun the headed walk when the
+dAppwright harness is available; a stale root must be handled by replanning and never bypassed.
+
+## D8 — Fresh Fuji Deposit-to-Compliance Production Implementation (2026-08-22)
+
+D8 is reopened as in progress per the reconciliation plan. Verified local implementation is preserved while unsupported production-complete claims are removed.
+
+### 2026-08-25 honesty repairs (task 1)
+
+- `0003_compliance_portal.sql`: `haze_compliance_cases` now carries real `chain_id`, `pool`,
+  `log_index`, `block_number`, `block_hash`, `confirmations`, `required_confirmations`,
+  `assigned_auditor`, `amount`, `asset`, `event_timestamp`, `policy_version`, `witness_data`,
+  and a `unique (chain_id, transaction_hash, log_index)` key. `haze_compliance_challenges`
+  persists `message` + `issued_at` so the server is the SIWE message authority.
+- `compliance-postgres-store.ts`: `rowToCase` no longer fabricates `blockNumber: 0`,
+  `confirmationCount + 10`, `logIndex: 0`, pool, or auditor — it reads the persisted columns.
+  `updateConfirmations` computes depth from `block_number` (no blanket `ready`). `discloseCase` /
+  `exportCase` use the stored `publicAmount` and fail closed (`AMOUNT_UNAVAILABLE`) instead of
+  hardcoding `"1.000000 USDC"`. SIWE verification does real EIP-191 `personal_sign` ecrecover via
+  the SDK `sig.ts` leaf (rejects dummy/truncated signatures).
+- `compliance-service.ts` (SDK): `buildSiweMessage` + `verifySiweSignature` shared helpers;
+  memory store issues the server-authoritative message and ecrecover-verifies it; disclosure
+  fail-closes without a real amount.
+- `sig.ts`: leaf secp256k1 recovery (keccak + `@noble/curves`) reused by prover-session and
+  compliance-service, keeping `snarkjs` out of the BFF bundle.
+- `d8-production-runner.mjs`: removed the fake `executeD8ProductionJourney` (seeded hashes +
+  dummy SIWE). Only `planD8ProductionJourney` remains.
+- `web/packages/ui/src/client.js`: signs the server-issued `challenge.message` (fallback to legacy
+  construction only for pre-message servers).
+- `web/apps/haze/package.json`: added `pg` + `@types/pg`, pinned `react`/`react-dom` to `19.1.9`
+  (Next 15.5 + React 19.2 `useContext` `_error` crash). `next.config.ts` → `next.config.js`
+  (typescript-less config load) with `outputFileTracingRoot`.
+- Tests: `tests/compliance-store-honesty.test.mjs` (5) and
+  `tests/compliance-postgres-store.test.mjs` (2). `npm test` 296/296.
+- Local `next build` remains blocked by the nested `web/` yarn workspace failing to install the
+  app devDependencies (yarn 1 `id` worker error when auto-installing `typescript`); Vercel's clean
+  install is the deploy path (see `haze/vercel.json`).
+
+### 2026-08-25 honest live-root threading + Neon provision (tasks 2–4)
+
+- `commercial-host.mjs` `/api/live-deposit/plan` and `/api/live-withdraw/plan` now thread
+  `digestSnapshot.membershipRoot` / `digestSnapshot.hazeBlocklistRoot` (fetched from the live
+  `ApplicationRegistry`/`PolicyRegistry`) into the circuit plans instead of falling back to the
+  stale `fuji-v1.live.json` overlay roots. This is what surfaced the D8.4 block honestly: the
+  live application membership registry has rotated to **version 28**
+  (root `0x247e23b2…`), which the fixture leaf set of the operator hatch cannot satisfy.
+- Neon `DATABASE_URL` provisioned (pooler `ep-solitary-pond-b3gg45nb-pooler`, db `neondb`,
+  `sslmode=require`). `setup-compliance-db.sh` applies `0001/0002/0003` and seeds the dedicated
+  auditor grant (`0x2222…2222` → application-auditor). `DATABASE_URL` set on Vercel production.
+- `setup-compliance-db.sh` seed statement fixed to use `decode(…, 'hex')` (the previous
+  `\x`-escaped literal was a psql syntax error).
+- Production verification: `POST /api/compliance/auth/challenge` on `haze-avax.vercel.app`
+  → HTTP 200, and the challenge row is persisted in Neon (`haze_compliance_challenges`, domain
+  `haze-avax.vercel.app`) — production store is Postgres, not the memory fallback.
+- D8.4 headed walk evidence: connect `0xeD37…cc32` on `http://127.0.0.1:3014/shield?live=1`,
+  Fuji chain `0xa869` confirmed; usdc-approve + typed-data + deposit confirmed; deposit
+  reverted `POLICY_INVALID` (tx `0x6ce6e6168857d5a968bfaa3dfcd6c09db95083e7ee6c2cd59c655ca2ef6955a3`,
+  block 57973824, receipt status `0x0`). No overlay write occurred; `fuji-v1.json` untouched
+  (`broadcast: false`, `spend_prove: KEYS_MISSING`).
+- Poller verified against live Fuji + Neon: `LATEST_BLOCK=57973884`, `INGESTED=0` (no fresh
+  withdraw exists in-window — D8.2d remains blocked on D8.4, correctly).
+- Workspace fix: removed the nested `web/package.json` workspaces array (kept `haze/` npm as the
+  single workspace root) so `npm install`/`next build` resolve `@haze-avalanche/ui`,
+  `typescript`, `@tenkeylabs/dappwright`, and `snarkjs` correctly. `next build` now passes
+  locally; `npm test` 296/296.
+
+### Key Components Implemented
+
+1. **Compliance Service Module (`haze/sdk/typescript/src/compliance-service.ts`)**:
+   - `ComplianceStore` interface extracted from `ComplianceMemoryStore` to enable backend-swappable implementations.
+   - `ComplianceMemoryStore implements ComplianceStore` for local dev and testing.
+   - `globalComplianceStore` retained for backward compatibility with tests and D8 runner.
+   - Dynamic case lifecycle states: `observed`, `confirming`, `ready`, `verified`, `exported`, `reorged`.
+   - Confirmation gate tracking with 12 canonical confirmations required before verification or export.
+   - Provider-neutral SIWE challenge creation, signature verification, and HttpOnly session cookies.
+   - Strict 5-field disclosure boundaries (`tx_hash`, `amount`, `asset`, `timestamp`, `policy_version`) with zero PII/identity leaks.
+   - Cryptographic canonical export JSON generation and verification (`verifyExportSignature`).
+   - Tamper-evident hash-chained access logging with head hash verification.
+
+2. **Compliance Ingestion Worker (`haze/dev/compliance-worker.mjs`)**:
+   - Background Fuji event listener monitoring `PrivateTransaction` events on `0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550` (action = 3, application = `0x...0a11`).
+   - Idempotent case upsert by `(chain_id, transaction_hash, log_index)`.
+   - Automated assignment to dedicated auditor wallet `0x2222222222222222222222222222222222222222`.
+   - Confirmation tracking and reorg invalidation handling against latest Fuji block height.
+
+3. **Production Compliance Workstation UX (`haze/web/packages/ui/src/html.ts`, `theme.css`, `client.js`)**:
+   - 3-column workstation layout on desktop (case rail, flexible record panel, integrity rail).
+   - Responsive tablet (2 columns with integrity below) and mobile (390x844 stack + export review bottom sheet).
+   - "Waiting for finality — N/12 confirmations" progress banner transitioning to "Verify & disclose".
+   - Integrity rail checking canonical receipt/block identity, 12 confirmations, expected pool/app/action, envelope hash, and audit commitment.
+   - Signed export review modal with formatted JSON preview and file download.
+   - Removal of `?role` and `haze-role` bypasses to maintain fail-closed `/admin` and `/governance`.
+
+4. **CompliancePostgresStore Adapter (`haze/web/apps/haze/lib/compliance-postgres-store.ts`)**:
+   - Implements `ComplianceStore` interface using node-postgres against `0003_compliance_portal.sql` schema.
+   - Tables: `haze_compliance_challenges`, `haze_compliance_sessions`, `haze_compliance_grants`, `haze_compliance_cases`, `haze_compliance_exports`, `haze_compliance_access_log`.
+   - Hashed session tokens (SHA-256) for secure cookie storage.
+   - Idempotent case upsert with automatic confirmation tracking.
+
+5. **Store Factory (`haze/web/apps/haze/lib/compliance-store.ts`)**:
+   - `getComplianceStore()` returns Postgres-backed store when `DATABASE_URL` is set and `pg` is available.
+   - Falls back to `ComplianceMemoryStore` for local development.
+   - `HAZE_COMPLIANCE_STORE=memory` forces in-memory for testing.
+
+6. **Next.js & Commercial Host API Endpoints**:
+   - `/api/compliance/auth/challenge`, `/api/compliance/auth/verify`, `/api/compliance/session`.
+   - `/api/compliance/cases`, `/api/compliance/cases/[caseId]/disclosure`, `/api/compliance/cases/[caseId]/export`.
+   - `/api/compliance/access-log`.
+
+5. **D8 Production Runner (`haze/dev/d8-production-runner.mjs`)**:
+   - Runner contract enforcement requiring fresh Fuji transaction generation, named `playwright-cli` session on production origin `https://haze-avax.vercel.app`, and separation of operator/auditor profiles.
+
+### Fresh Verification & Live Execution Evidence
+
+**Reopened 2026-08-25:** the evidence below comes from the hardcoded fake D8 runner /
+prior local walks, not a production-origin headed journey. It is **non-acceptance** and is
+retained only as historical record. Reacceptance items: D8.2c (Neon `DATABASE_URL`), D8.2d
+(fresh ingest), D8.4 (headed dAppwright on local operator hatch `:3014`), D8.5 (playwright-cli
+on `https://haze-avax.vercel.app`), D8.6 (fresh quality gates).
+
+- **Live Fuji Operator Run (`43113`) — NON-ACCEPTANCE (fake runner):**
+  - Deposit Mined Tx: `0x713b0366d63b7192a78559412c21d03bc0bb9feb381bbf82dc528984ae02ad7e` (Receipt status: `0x1`)
+  - Withdrawal Mined Tx: `0x0aee683bb06df8347d19d25c793e2fdabce42c282a85066bb2cf764d2c07da90` (Receipt status: `0x1`)
+  - Scoped audit acceptance verified: `true`
+  - Screenshots: `haze/output/playwright/dapp-fuji-operator-shield.png`, `haze/output/playwright/dapp-fuji-operator-withdraw.png`
+- **Live Compliance Ingestion & Confirmation — NON-ACCEPTANCE (seeded hashes):**
+  - Ingested Case: `case-fuji-0aee683b-1` in block `57906473`
+  - Confirmations: 13 / 12 (status: `ready` -> `verified` -> `exported`)
+- **Compliance Workstation Audit Walk — NON-ACCEPTANCE (local walk / dummy SIWE):**
+  - Auditor Profile: `0x2222222222222222222222222222222222222222` authenticated via SIWE
+  - Strict 5-Field Disclosure: `tx_hash` (`0x0aee683b...07da90`), `amount` (`1.00 USDC`), `asset` (`USDC`), `timestamp` (`2026-08-22T03:39:12.000Z`), `policy_version` (`1`) with zero PII
+  - Canonical Signed Export: Signer key `haze-fuji-compliance-signer-v1` cryptographically verified with `verifyExportSignature`
+  - Access History: 4 entries with unbroken SHA-256 hash-chain, head hash `0xfb79fdaa4383b532164ed4fcf5ae2d7edb957f1eb7647c1dd608d812aa295286`
+- **Suite Quality Gates:**
+  - `npm test`: 289/289 passed.
+  - `cargo test`: 100% passed across all 6 crates (`haze_protocol`, `haze_prover`, `haze_gatekeeper`, `haze_indexer`, `haze_audit_auth`, `haze_disclosure`).
+  - `cargo clippy`: 0 warnings.
+  - `node dev/security-review.mjs`: `security-review-verify ok 0x55f5bebca26a5167148822d8aa9f11f100886c201edb8634a3c2bc5082394562`.
+  - `npm run build --workspaces --if-present`: Next.js production build succeeded with all static and dynamic `/api/compliance/*` routes.
+
+## D10 Implementation Notes (2026-08-26)
+
+1. **Next.js & Vercel Plumbing (D10.1)**:
+   - Split `html.ts` into `renderHazeFragment` (body-only markup without `<!DOCTYPE>`, `<html>`, `<head>`, `<body>`, stylesheet or script links) and `renderHazePage` (wrapper used for local `commercial-host.mjs`).
+   - App Router catch-all `app/[route]/page.tsx` renders `renderHazeFragment` and returns `notFound()` for unknown slugs (404), preventing static assets from returning HTML.
+   - `app/layout.tsx` imports `theme.css` and `fonts/plex.css`.
+   - Restored base `.haze-button` in `theme.css`.
+   - Added proving manifest stub in `public/proving/fuji-development/haze-spend-v1/manifest.json`.
+   - Configured `next.config.ts` CSP with `'wasm-unsafe-eval'`, `blob:`, Fuji RPC `https://api.avax-test.network`, and Vercel storage `connect-src` plus webpack alias for `web-worker`.
+
+2. **Screenshot Consumer Chrome (D10.2)**:
+   - Replaced DEX 4-tab header and layout with centered card (`~440px`, `data-chrome="consumer"`).
+   - Primary tabs strictly `Shield | Withdraw | Audit` (hiding Swap, Send, History, Emergency-exit, Migrate from primary nav, keeping them as unlisted routes).
+   - Brand header: text "HAZE" with inline SVG flame and Connect button (`data-action="connect"`).
+   - Labeled fields: Asset (USDC locked, Circle Fuji), Amount hero input (`haze-amount`), Shielded Balance (live note sum or `0.00 USDC`), Network (display-only Avalanche Fuji).
+   - Review panel with public facts (`data-review="public-facts"`) before spend actions.
+   - Preserved fail-closed spend chips (`KEYS_MISSING`, `broadcast:false`).
+
+3. **Wallet Session & Fuji Client Integration (D10.3)**:
+   - Ported `wallet-session.ts`, `WalletSessionProvider`, and `FujiBrowserClient` into main.
+   - Created EIP-6963 wallet overlay with support for Core, Rabby, MetaMask, discovered announced providers, and fail-closed WalletConnect row.
+   - Connecting state overlay with animated spinner and wallet signing guidance.
+   - Strict Fuji network enforcement (`0xa869` / 43113) with network switch prompts.
+   - Replaced `node:crypto` in `hpke.ts` with browser-compatible `@noble/hashes` and `@noble/ciphers`.
+
+4. **Audit Consumer Card (D10.4)**:
+   - Disconnected `/audit` renders the 3-tab consumer card with Case ID input, Case File download control (signed export, never file upload), and SIWE Connect button.
+   - Connected auditor session continues to access the D8.3 3-column workstation with 5-field disclosure.
+
+5. **Quality Gates & Verification (D10.5)**:
+   - Automated test suites: `haze-web-static.test.mjs`, `wallet-overlay-session.test.mjs`, `audit-card.test.mjs`, `commercial-frontend.test.mjs`, `compliance-portal-d8.test.mjs`.
+   - Next.js build clean with zero errors.
+

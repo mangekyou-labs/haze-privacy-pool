@@ -45,6 +45,7 @@ export type LiveSnapshot = {
 export type LiveShieldPlan = {
   allowed: boolean;
   reason?: string;
+  noteTreeRoot?: string;
   chainId?: number;
   usdc?: string;
   pool?: string;
@@ -516,4 +517,3 @@ export function encodeTransactCall(input: {
 export function encodeLiveDeposit(input: { plan: LiveShieldPlan; signature: string }) {
   return encodeTransactCall({ ...input, selector: POOL_SELECTORS.deposit });
 }
-

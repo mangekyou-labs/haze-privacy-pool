@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(git:*)",
+      "Shell(cd /Users/kyler/repos/haze-privacy-pool/.worktrees/feature-haze-avalanche-compliant-pool && git check-ignore -v haze/dev/artifacts/ceremony-private/emergency-v1/x.zkey; echo \"---\"; grep -n \"ceremony-private\" haze/.gitignore .gitignore 2>/dev/null; echo \"---\"; ls haze/tests/ | grep -i ceremony; echo \"---\"; grep -rn \"emergency-operator-owned-ceremony-transcript\" haze/dev/ --include=\"*.json\" -l 2>/dev/null | head; ls haze/dev/fixtures/ | head -20)",
+      "Shell(cat:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

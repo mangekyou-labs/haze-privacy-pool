@@ -1,7 +1,11 @@
+import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { createHazeSite } from "../../../../packages/ui/src/site.ts";
-import { renderHazePage } from "../../../../packages/ui/src/html.ts";
+import { renderHazeFragment } from "../../../../packages/ui/src/html.ts";
+import { LIVE_APP_ID } from "../../../../../sdk/typescript/src/compliance-service.ts";
+import { getComplianceStore } from "../../lib/compliance-store.ts";
 import type { Role } from "../../../../../apps/_shared/ux.ts";
+import { FujiBrowserClient } from "./fuji-browser-client";
 
 const ROUTES = new Set([
   "swap",
@@ -21,19 +25,54 @@ export default async function RoutePage({
   searchParams,
 }: {
   params: Promise<{ route: string }>;
-  searchParams: Promise<{ role?: string; live?: string }>;
+  searchParams: Promise<{ live?: string; caseId?: string; reviewed?: string }>;
 }) {
   const { route } = await params;
   const query = await searchParams;
   if (!ROUTES.has(route)) {
-    return <p>not found</p>;
+    notFound();
   }
+
   const jar = await cookies();
-  const role = (query.role ?? jar.get("haze-role")?.value ?? "pool-user") as Role;
+  const complianceToken = jar.get("haze_compliance_session")?.value;
+  const store = getComplianceStore();
+  const session = await store.getSession(complianceToken);
+
+  let role: Role = "pool-user";
+  let boundWallet: string | undefined = undefined;
+  let auditOptions: any = undefined;
+
+  if (route === "audit" && session && session.role === "application-auditor") {
+    role = "application-auditor";
+    boundWallet = session.address;
+    const cases = await store.listAssignedCases(session.address, session.applicationId);
+    const accessLog = await store.getAccessLog();
+    auditOptions = {
+      boundWallet,
+      cases,
+      selectedCaseId: query.caseId ?? cases[0]?.caseId,
+      access: accessLog.entries,
+      chainVerified: accessLog.verified,
+      headHash: accessLog.headHash,
+    };
+  }
+
+  // Fail-closed: /admin and /governance cannot be authorized via ?role or haze-role in production.
   const site = createHazeSite({
     role,
-    applicationId: "0x0000000000000000000000000000000000000000000000000000000000000a11",
+    applicationId: LIVE_APP_ID,
   });
-  const html = renderHazePage(site, `/${route}`, { live: query.live === "1" });
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+
+  const html = renderHazeFragment(site, `/${route}`, {
+    live: query.live === "1",
+    reviewed: query.reviewed === "1",
+    audit: auditOptions,
+  });
+
+  return (
+    <>
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+      <FujiBrowserClient route={route} />
+    </>
+  );
 }

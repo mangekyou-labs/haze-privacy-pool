@@ -1,0 +1,33 @@
+@startuml
+scale 1.56
+hide footbox
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 16
+skinparam sequence {
+  ArrowColor #222222
+  LifeLineBorderColor #888888
+  LifeLineBackgroundColor white
+  ParticipantBackgroundColor #D9D9E3
+  ParticipantBorderColor #8A8A9A
+  ActorBackgroundColor #D9D9E3
+  ActorBorderColor #8A8A9A
+}
+
+actor User
+actor Application
+participant Gatekeeper
+collections Pool
+
+User -> Application : Authenticates with wallet session
+User -> Gatekeeper : Asks about the deposit (amount, USDC)
+Gatekeeper -> Gatekeeper : Check the auth
+Gatekeeper --> User : EIP-712 authorization (audit metadata, signature, application identity)
+User -> User : Prove in Web Worker and sign
+User -> Pool : Deposit USDC with authorization
+Pool -> Pool : Emit HPKE audit envelope
+
+@enduml

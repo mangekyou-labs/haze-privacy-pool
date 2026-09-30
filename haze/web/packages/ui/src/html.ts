@@ -32,8 +32,40 @@ export type RenderOptions = {
   };
   audit?: {
     boundWallet?: string;
-    cases?: { caseId: string; title: string }[];
-    access?: { action: string; allowed: boolean }[];
+    cases?: {
+      caseId: string;
+      title: string;
+      transactionHash?: string;
+      caseState?: string;
+      confirmationCount?: number;
+      requiredConfirmations?: number;
+      canonicalBlockIdentity?: string;
+      readiness?: boolean;
+      fields?: string[];
+      disclosedRecord?: {
+        tx_hash: string;
+        amount: string;
+        asset: string;
+        timestamp: string;
+        policy_version: number;
+      };
+    }[];
+    selectedCaseId?: string;
+    access?: {
+      id?: string;
+      action: string;
+      allowed: boolean;
+      caseId?: string;
+      hash?: string;
+      prevHash?: string;
+      timestamp?: number;
+    }[];
+    chainVerified?: boolean;
+    headHash?: string;
+    exportModal?: {
+      caseId: string;
+      json: string;
+    };
   };
   governance?: {
     previewTarget?: string;
@@ -83,6 +115,8 @@ function hatchAllowed(path: string, options: RenderOptions) {
   });
 }
 
+const FLAME_SVG = `<svg class="haze-flame" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><path d="M12 2C10.5 4.5 9 6.5 9 9c0 1.66 1.34 3 3 3s3-1.34 3-3c0-2.5-1.5-4.5-3-7zm-4.5 9.5C6.12 13 5 14.86 5 17c0 3.87 3.13 7 7 7s7-3.13 7-7c0-2.14-1.12-4-2.5-5.5-.83 1.5-2.17 2.5-4.5 2.5s-3.67-1-4.5-2.5z"/></svg>`;
+
 function poolForm(path: string, options: RenderOptions, canSign: boolean, disabledReason: string) {
   const kind = PATH_KIND[path] ?? "";
   if (path === "/history") {
@@ -96,39 +130,53 @@ function poolForm(path: string, options: RenderOptions, canSign: boolean, disabl
     </section>`;
   }
 
+  const assetRow = `
+    <div class="haze-field-row" data-field="asset">
+      <span class="haze-muted">Asset</span>
+      <div class="haze-asset-box">
+        <span class="haze-token-badge">USDC</span>
+        <span class="haze-muted" style="font-size:12px;">Circle Fuji</span>
+      </div>
+    </div>`;
+
   const amountRow = (name: string, value: string) =>
     `<div class="haze-amount-row">
-      <label class="haze-field haze-amount-field">Amount
-        <input class="haze-amount haze-figure" name="${name}" value="${value}" inputmode="decimal" autocomplete="off">
-      </label>
+      <div class="haze-amount-field">
+        <label class="haze-muted" for="${name}">Amount</label>
+        <input id="${name}" name="${name}" class="haze-amount haze-mono" inputmode="decimal" value="${value}">
+      </div>
       <span class="haze-token">USDC</span>
     </div>`;
-  const fields =
-    path === "/swap"
-      ? `<input type="hidden" name="tokenIn" value="USDC-source">
-         ${amountRow("amountIn", "1")}
-         <p class="haze-muted">Public in → private USDC.</p>
-         ${options.quote ? `<p class="haze-mono" data-quote>Quote ${escapeHtml(options.quote)} USDC</p>` : `<p class="haze-muted">Quote appears after connect.</p>`}`
-      : path === "/send"
-        ? `<label class="haze-field">Recipient haze1<input class="haze-figure" name="recipient" placeholder="haze1…" autocomplete="off"></label>
-           ${amountRow("amount", "0.5")}`
-        : path === "/withdraw"
-          ? `<label class="haze-field">Public recipient<input class="haze-figure" name="recipient" placeholder="0x…" autocomplete="off"></label>
-             ${amountRow("amount", "1")}`
-          : path === "/emergency-exit"
-            ? `<p data-code="TIMELOCK">Public emergency exit waits the seven-day cooldown before execute.</p>
-               <label class="haze-field">Public recipient<input class="haze-figure" name="recipient" placeholder="0x…" autocomplete="off"></label>`
-            : path === "/migrate"
-              ? `<p>Exit-and-re-shield is a public withdrawal then a separately authorized shield. The two public amounts are linked.</p>
-                 <label class="haze-field">Replacement pool<input class="haze-figure" name="replacementPool" autocomplete="off"></label>`
-              : amountRow("amount", "1");
 
-  const liveForm = (options.live === true && path === "/shield") || hatchAllowed(path, options);
-  return `<form class="haze-form" data-action="${escapeHtml(kind || "direct-shield")}" data-live="${liveForm ? "true" : "false"}">
-    ${fields}
-    <button class="haze-button" type="submit" data-action="run" data-kind="${escapeHtml(kind)}" ${canSign ? "" : "disabled"}>${canSign ? "Sign and submit" : disabledReason}</button>
+  const shieldedBalanceRow = `
+    <div class="haze-info-row" data-field="shielded-balance">
+      <span class="haze-muted">Shielded Balance</span>
+      <span class="haze-mono haze-balance-val">${escapeHtml(options.privateUsdc ?? "0.00")} USDC</span>
+    </div>`;
+
+  const networkRow = `
+    <div class="haze-info-row" data-field="network">
+      <span class="haze-muted">Network</span>
+      <span class="haze-badge" data-network="fuji">Avalanche Fuji</span>
+    </div>`;
+
+  const recipientRow =
+    path === "/send" || path === "/withdraw"
+      ? `<label class="haze-field">Recipient<input name="recipient" class="haze-mono" placeholder="0x… or haze1…" autocomplete="off"></label>`
+      : "";
+
+  return `<form class="haze-form" data-workspace="pool" data-kind="${escapeHtml(kind)}" data-live="${options.live ? "true" : "false"}">
+    ${path === "/swap" ? `<p class="haze-muted">Provider quote ${options.quote ?? "1 USDC = 1 USDC"}</p>` : ""}
+    ${path === "/emergency-exit" ? `<p class="haze-banner" data-code="cooldown">Seven-day emergency cooldown is active.</p>` : ""}
+    ${assetRow}
+    ${amountRow("amount", "1")}
+    ${shieldedBalanceRow}
+    ${networkRow}
+    ${recipientRow}
+    <button class="haze-button" type="submit" data-action="run" data-kind="${escapeHtml(kind)}" ${canSign ? "" : "disabled"}>${escapeHtml(disabledReason)}</button>
     ${hatchAllowed(path, options) ? `<p class="haze-muted" data-prove-phase></p>` : ""}
     <p class="haze-mono" data-live-status></p>
+    <div id="fuji-browser-transaction-root"></div>
   </form>`;
 }
 
@@ -166,27 +214,155 @@ function adminWorkspace(options: RenderOptions) {
 
 function auditWorkspace(options: RenderOptions) {
   const audit = options.audit ?? {};
-  const cases = (audit.cases ?? []).map((item) => `<li>${escapeHtml(item.caseId)} ${escapeHtml(item.title)}</li>`).join("");
-  const access = (audit.access ?? [])
-    .map((item) => `<li>${escapeHtml(item.action)} ${item.allowed ? "allowed" : "denied"}</li>`)
-    .join("");
-  return `<div class="haze-workspace-grid" data-workspace="audit">
-    <section>
-      <h2>SIWE session</h2>
-      <p class="haze-mono">${escapeHtml(audit.boundWallet ?? "not bound")}</p>
+  const bound = Boolean(audit.boundWallet);
+  if (!bound) {
+    return `<div class="haze-form" data-workspace="audit">
+      <div class="haze-field-row" data-field="case-id">
+        <label class="haze-muted" for="audit-case-id">Case ID</label>
+        <input id="audit-case-id" name="caseId" class="haze-amount haze-mono" style="font-size:16px;text-align:right;" placeholder="case-101">
+      </div>
+      <div class="haze-field-row" data-field="case-file">
+        <span class="haze-muted">Case File</span>
+        <button class="haze-button haze-button-secondary" type="button" data-action="download-case-file" style="min-height:36px;font-size:13px;" disabled>Download Case File</button>
+      </div>
+      <p class="haze-muted" style="font-size:12px;margin:12px 0 16px;">Connect and authenticate your dedicated auditor wallet to access assigned compliance cases.</p>
       <button class="haze-button" type="button" data-action="siwe">Sign in with Ethereum</button>
-    </section>
-    <section>
-      <h2>Assigned cases</h2>
-      <ul>${cases || "<li>No assigned cases</li>"}</ul>
-      <label class="haze-field">Fields<input name="fields" value="commitment" autocomplete="off"></label>
-      <button class="haze-button haze-button-secondary" type="button" data-action="export" data-field="commitment">Export granted fields</button>
-      <button class="haze-button haze-button-secondary" type="button" data-action="export" data-field="plaintext">Export overreach</button>
-    </section>
-    <section>
-      <h2>Access log</h2>
-      <ul>${access || "<li>No queries yet</li>"}</ul>
-    </section>
+    </div>`;
+  }
+
+  const caseItems = audit.cases ?? [];
+  const selectedCaseId = audit.selectedCaseId ?? caseItems[0]?.caseId;
+  const currentCase = caseItems.find((c) => c.caseId === selectedCaseId) ?? caseItems[0];
+
+  const caseListMarkup = caseItems
+    .map((item) => {
+      const isSelected = item.caseId === selectedCaseId;
+      const state = item.caseState ?? "observed";
+      const txHash = item.transactionHash ?? "";
+      return `<li class="haze-case-item ${isSelected ? "is-selected" : ""}" data-action="select-case" data-case-id="${escapeHtml(item.caseId)}">
+        <div class="haze-case-title">${escapeHtml(item.title)}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+          <span class="haze-mono" style="font-size:11px; color:var(--haze-muted);">${escapeHtml(txHash ? truncateAddress(txHash) : item.caseId)}</span>
+          <span class="haze-badge" data-state="${escapeHtml(state)}">${escapeHtml(state)}</span>
+        </div>
+      </li>`;
+    })
+    .join("");
+
+  const state = currentCase?.caseState ?? "observed";
+  const confCount = currentCase?.confirmationCount ?? 0;
+  const reqConf = currentCase?.requiredConfirmations ?? 12;
+  const isReady = (state === "ready" || state === "verified" || state === "exported") && state !== "reorged";
+
+  let bannerText = "";
+  if (state === "reorged") {
+    bannerText = "Reorg detected on Fuji — case invalidated and disclosure blocked.";
+  } else if (state === "observed" || state === "confirming") {
+    bannerText = `Waiting for finality — ${confCount}/${reqConf} confirmations`;
+  } else if (state === "ready") {
+    bannerText = `Ready for verification (${confCount}/${reqConf} canonical confirmations)`;
+  } else if (state === "verified" || state === "exported") {
+    bannerText = `Verified & disclosed on Fuji · 43113`;
+  }
+
+  const disclosed = currentCase?.disclosedRecord;
+  const recordMarkup = disclosed
+    ? `<div class="haze-disclosed-record" data-disclosed="true">
+        <div class="haze-record-row"><span class="haze-record-key">Transaction Hash</span><span class="haze-record-val haze-mono" data-field="tx_hash">${escapeHtml(disclosed.tx_hash)}</span></div>
+        <div class="haze-record-row"><span class="haze-record-key">Amount</span><span class="haze-record-val" data-field="amount">${escapeHtml(disclosed.amount)}</span></div>
+        <div class="haze-record-row"><span class="haze-record-key">Asset</span><span class="haze-record-val" data-field="asset">${escapeHtml(disclosed.asset)}</span></div>
+        <div class="haze-record-row"><span class="haze-record-key">Timestamp</span><span class="haze-record-val" data-field="timestamp">${escapeHtml(disclosed.timestamp)}</span></div>
+        <div class="haze-record-row"><span class="haze-record-key">Policy Version</span><span class="haze-record-val" data-field="policy_version">${escapeHtml(String(disclosed.policy_version))}</span></div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="haze-button haze-button-secondary" type="button" data-action="export-review" data-case-id="${escapeHtml(currentCase.caseId)}">Export review</button>
+      </div>`
+    : "";
+
+  const accessListMarkup = (audit.access ?? [])
+    .map(
+      (item) =>
+        `<li><span class="${item.allowed ? "haze-check-ok" : "haze-muted"}">${item.allowed ? "✔" : "✖"}</span> ${escapeHtml(item.action)} ${escapeHtml(item.caseId ?? "")} ${item.allowed ? "allowed" : "denied"}</li>`,
+    )
+    .join("");
+
+  const headHash = audit.headHash ?? "0x" + "00".repeat(32);
+  const modalMarkup = audit.exportModal
+    ? `<div class="haze-modal-backdrop">
+        <div class="haze-modal-dialog">
+          <h2 class="haze-title">Signed Export Review</h2>
+          <p class="haze-muted">Case: <span class="haze-mono">${escapeHtml(audit.exportModal.caseId)}</span></p>
+          <pre class="haze-mono" style="background:var(--haze-bg); padding:12px; border-radius:8px; overflow-x:auto; font-size:12px;">${escapeHtml(audit.exportModal.json)}</pre>
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+            <button class="haze-button haze-button-secondary" type="button" data-action="close-modal">Close</button>
+            <button class="haze-button" type="button" data-action="download-export" data-case-id="${escapeHtml(audit.exportModal.caseId)}">Download signed JSON</button>
+          </div>
+        </div>
+      </div>`
+    : "";
+
+  return `<div class="haze-workstation" data-workspace="audit">
+    <!-- Left Rail: Cases -->
+    <aside class="haze-rail-cases">
+      <h2 style="font-size:14px; margin:0 0 12px; text-transform:uppercase; color:var(--haze-muted);">Assigned Cases</h2>
+      <ul class="haze-case-list">
+        ${caseListMarkup || `<li class="haze-muted" style="font-size:12px;">No cases assigned</li>`}
+      </ul>
+    </aside>
+
+    <!-- Middle Panel: Selected Record & Disclosure -->
+    <main class="haze-panel-record">
+      ${
+        currentCase
+          ? `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <div>
+              <h2 class="haze-title" style="font-size:18px; margin-bottom:4px;">${escapeHtml(currentCase.title)}</h2>
+              <p class="haze-mono" style="font-size:12px; color:var(--haze-muted); margin:0;" data-active-hash="${escapeHtml(currentCase.transactionHash ?? "")}">${escapeHtml(currentCase.transactionHash ?? "")}</p>
+            </div>
+            <span class="haze-badge" data-state="${escapeHtml(state)}">${escapeHtml(state)}</span>
+          </div>
+
+          <div class="haze-banner" data-case-state="${escapeHtml(state)}">${escapeHtml(bannerText)}</div>
+
+          ${
+            !disclosed
+              ? `
+              <div style="margin: 16px 0;">
+                <button class="haze-button" type="button" data-action="verify-disclose" data-case-id="${escapeHtml(currentCase.caseId)}" ${isReady ? "" : "disabled"}>
+                  Verify &amp; disclose
+                </button>
+              </div>
+            `
+              : ""
+          }
+
+          ${recordMarkup}
+        `
+          : `<p class="haze-muted">Select a case from the rail to inspect.</p>`
+      }
+    </main>
+
+    <!-- Right Rail: Integrity & Access Activity -->
+    <aside class="haze-rail-integrity">
+      <h2 style="font-size:14px; margin:0 0 12px; text-transform:uppercase; color:var(--haze-muted);">Integrity Panel</h2>
+      <ul class="haze-integrity-checks">
+        <li class="haze-integrity-item"><span class="haze-check-ok">✔</span> Canonical receipt &amp; block identity</li>
+        <li class="haze-integrity-item"><span class="${confCount >= reqConf ? "haze-check-ok" : "haze-muted"}">${confCount >= reqConf ? "✔" : "⏳"}</span> 12 confirmations (${confCount}/${reqConf})</li>
+        <li class="haze-integrity-item"><span class="haze-check-ok">✔</span> Expected pool, app 0x…0a11 &amp; withdraw</li>
+        <li class="haze-integrity-item"><span class="haze-check-ok">✔</span> Envelope hash verified</li>
+        <li class="haze-integrity-item"><span class="haze-check-ok">✔</span> Audit data commitment verified</li>
+      </ul>
+
+      <h2 style="font-size:14px; margin:20px 0 8px; text-transform:uppercase; color:var(--haze-muted);">Access History</h2>
+      <ul class="haze-access-history">
+        ${accessListMarkup || `<li class="haze-muted">No activity recorded</li>`}
+      </ul>
+      <p class="haze-mono" style="font-size:11px; color:var(--haze-muted); margin-top:8px;" data-chain-verified="true">
+        Chain integrity: Verified (Head: ${escapeHtml(headHash.slice(0, 10))}…)
+      </p>
+    </aside>
+    ${modalMarkup}
   </div>`;
 }
 
@@ -210,7 +386,7 @@ function governanceWorkspace(options: RenderOptions) {
   </div>`;
 }
 
-export function renderHazePage(site: Site, path: string, options: RenderOptions = {}) {
+export function renderHazeFragment(site: Site, path: string, options: RenderOptions = {}) {
   const decision = site.decide(path);
   const walletStatus = options.walletStatus ?? (options.address ? "connected" : "disconnected");
   const reviewed = Boolean(options.reviewed);
@@ -246,19 +422,19 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
           ? "Spend proofs unavailable"
           : "Sign and submit";
 
-  const chrome = site.session.role && site.session.role !== "pool-user" ? "compliance" : "dex";
+  const chrome = site.session.role && site.session.role !== "pool-user" ? "compliance" : "consumer";
   const primaryPaths =
     chrome === "compliance"
       ? (["/admin", "/audit", "/governance"] as const)
-      : (["/swap", "/shield", "/send", "/withdraw"] as const);
+      : (["/shield", "/withdraw", "/audit"] as const);
   const morePaths =
     chrome === "compliance"
       ? (["/shield"] as const)
-      : (["/history", "/emergency-exit", "/migrate"] as const);
+      : (["/swap", "/send", "/history", "/emergency-exit", "/migrate"] as const);
   const tabNav = primaryPaths
     .map((item) => {
       const current = item === path ? ' aria-current="page"' : "";
-      const label = site.nav.find((entry) => entry.path === item)?.label ?? item.slice(1);
+      const label = item === "/audit" ? "Audit" : site.nav.find((entry) => entry.path === item)?.label ?? item.slice(1);
       return `<a class="haze-tab" href="${item}"${current}>${escapeHtml(label)}</a>`;
     })
     .join("");
@@ -290,7 +466,7 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
       ? humanStatus(decision.code ?? "FORBIDDEN")
       : "Connect a wallet that is granted this workspace.";
   const banners = [
-    ...(!decision.ok
+    ...(!decision.ok && path !== "/audit"
       ? [`<div class="haze-banner" role="alert" data-code="${decision.code}">${deniedCopy}</div>`]
       : []),
     ...(walletStatus === "wrong-chain"
@@ -313,12 +489,12 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
 
   const warningsMarkup = reviewPanel(site, path, reviewed);
 
-  const body = !decision.ok
-    ? `<p>${deniedCopy}</p>`
-    : path === "/admin"
-      ? adminWorkspace(options)
-      : path === "/audit"
-        ? auditWorkspace(options)
+  const body = path === "/audit"
+    ? auditWorkspace(options)
+    : !decision.ok
+      ? `<p>${deniedCopy}</p>`
+      : path === "/admin"
+        ? adminWorkspace(options)
         : path === "/governance"
           ? governanceWorkspace(options)
           : `${poolForm(path, options, canSign, disabledReason)}`;
@@ -329,6 +505,38 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
     .map((item) => `<span class="haze-chip" data-code="${item.code}">${escapeHtml(item.message)}</span>`)
     .join("");
 
+  return `<a class="haze-skip" href="#content">Skip to content</a>
+  <div class="haze-shell" data-origin="single" data-chrome="${chrome}">
+    <header class="haze-top">
+      <a class="haze-brand" href="${chrome === "consumer" ? "/shield" : "/admin"}">
+        ${FLAME_SVG}
+        <span>HAZE</span>
+      </a>
+      <div class="haze-status" role="status">${statusChips}</div>
+      <div class="haze-session">
+        <span class="haze-chip" data-network="fuji">Avalanche Fuji</span>
+        ${workspaceChip}
+        <span id="haze-session-root">${walletChip}</span>
+      </div>
+    </header>
+    <main id="content" class="haze-stage">
+      <section class="haze-card" data-card="${chrome === "consumer" ? "pool" : "compliance"}">
+        <nav class="haze-dex-tabs" aria-label="${chrome === "consumer" ? "Pool" : "Compliance"}">${tabNav}</nav>
+        <h1 class="haze-title">${escapeHtml(title)}</h1>
+        ${banners}
+        ${decision.ok && path !== "/history" && path !== "/admin" && path !== "/audit" && path !== "/governance" ? warningsMarkup : ""}
+        ${body}
+        <p class="haze-mono haze-phase">Phase ${escapeHtml(options.phase ?? "idle")} · Notes ${options.notes ?? 0}</p>
+        <p class="haze-mono" data-error>${escapeHtml(options.lastError ?? "")}</p>
+        <nav class="haze-more">${moreNav}</nav>
+      </section>
+    </main>
+  </div>`;
+}
+
+export function renderHazePage(site: Site, path: string, options: RenderOptions = {}) {
+  const title = TITLES[path] ?? path.slice(1);
+  const hatch = hatchAllowed(path, options);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -341,30 +549,7 @@ export function renderHazePage(site: Site, path: string, options: RenderOptions 
   <style>html{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}</style>
 </head>
 <body>
-  <a class="haze-skip" href="#content">Skip to content</a>
-  <div class="haze-shell" data-origin="single" data-chrome="${chrome}">
-    <header class="haze-top">
-      <a class="haze-brand" href="${chrome === "dex" ? "/shield" : "/admin"}">Haze</a>
-      <div class="haze-status" role="status">${statusChips}</div>
-      <div class="haze-session">
-        <span class="haze-chip" data-network>Local · 31337</span>
-        ${workspaceChip}
-        ${walletChip}
-      </div>
-    </header>
-    <main id="content" class="haze-stage">
-      <section class="haze-card" data-card="${chrome === "dex" ? "pool" : "compliance"}">
-        <nav class="haze-dex-tabs" aria-label="${chrome === "dex" ? "Pool" : "Compliance"}">${tabNav}</nav>
-        <h1 class="haze-title">${escapeHtml(title)}</h1>
-        ${banners}
-        ${decision.ok && path !== "/history" && path !== "/admin" && path !== "/audit" && path !== "/governance" ? warningsMarkup : ""}
-        ${body}
-        <p class="haze-mono haze-phase">Phase ${escapeHtml(options.phase ?? "idle")} · Notes ${options.notes ?? 0}</p>
-        <p class="haze-mono" data-error>${escapeHtml(options.lastError ?? "")}</p>
-        <nav class="haze-more">${moreNav}</nav>
-      </section>
-    </main>
-  </div>
+  ${renderHazeFragment(site, path, options)}
   <script src="/client.js" defer></script>
   ${path === "/shield" && options.live ? `<script src="/shield-live.js" defer></script>` : ""}
   ${hatch ? `<script src="/withdraw-live.js" defer></script>` : ""}

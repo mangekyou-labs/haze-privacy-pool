@@ -20,6 +20,35 @@
     });
   }
 
+  async function handleSiwe() {
+    if (!window.ethereum) {
+      throw new Error("NO_INJECTED_WALLET");
+    }
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const address = accounts[0];
+    const challenge = await post("/api/compliance/auth/challenge", { address });
+    if (!challenge.nonce) {
+      throw new Error("CHALLENGE_FAILED");
+    }
+    // The server is the message authority: a server-issued `message` is the only
+    // accepted preimage. Fall back to the legacy local construction only when a
+    // pre-message server is talking (kept so INFRA curls do not regress).
+    const message = challenge.message ??
+      `${challenge.statement}\n\nURI: https://${challenge.domain}/audit\nVersion: 1\nChain ID: ${challenge.chainId}\nNonce: ${challenge.nonce}\nIssued At: ${new Date().toISOString()}`;
+    const signature = await window.ethereum.request({
+      method: "personal_sign",
+      params: [message, address],
+    });
+    const verified = await post("/api/compliance/auth/verify", {
+      address,
+      nonce: challenge.nonce,
+      signature,
+    });
+    if (!verified.ok) {
+      throw new Error(verified.reason || "SIWE_VERIFY_FAILED");
+    }
+  }
+
   document.addEventListener("click", async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
@@ -33,7 +62,7 @@
     if (!action) {
       return;
     }
-    if (control.tagName === "A") {
+    if (control.tagName === "A" && !control.getAttribute("data-action")) {
       return;
     }
     event.preventDefault();
@@ -45,6 +74,7 @@
       if (action === "connect") {
         await connectWallet();
       } else if (action === "disconnect") {
+        await fetch("/api/compliance/session", { method: "DELETE" }).catch(() => undefined);
         await post("/api/disconnect", {});
       } else if (action === "switch-network") {
         const live = document.querySelector("form[data-live='true']");
@@ -79,8 +109,55 @@
       } else if (action === "case") {
         await post("/api/portal/case", {});
       } else if (action === "siwe") {
-        const started = await post("/api/portal/siwe/start", {});
-        await post("/api/portal/siwe/complete", { nonce: started.nonce });
+        await handleSiwe();
+      } else if (action === "select-case") {
+        const caseId = control.getAttribute("data-case-id");
+        if (caseId) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("caseId", caseId);
+          window.history.pushState({}, "", url);
+        }
+      } else if (action === "verify-disclose") {
+        const caseId = control.getAttribute("data-case-id");
+        if (caseId) {
+          await post(`/api/compliance/cases/${encodeURIComponent(caseId)}/disclosure`, {});
+        }
+      } else if (action === "export-review") {
+        const caseId = control.getAttribute("data-case-id");
+        if (caseId) {
+          const res = await post(`/api/compliance/cases/${encodeURIComponent(caseId)}/export`, {});
+          if (res.export) {
+            let modal = document.querySelector(".haze-modal-backdrop");
+            if (!modal) {
+              modal = document.createElement("div");
+              modal.className = "haze-modal-backdrop";
+              document.body.appendChild(modal);
+            }
+            modal.innerHTML = `<div class="haze-modal-dialog">
+              <h2 class="haze-title">Signed Export Review</h2>
+              <p class="haze-muted">Case ID: <span class="haze-mono">${escapeHtml(caseId)}</span></p>
+              <pre class="haze-mono" style="background:var(--haze-bg); padding:12px; border-radius:8px; overflow-x:auto; font-size:12px;" data-export-preview>${escapeHtml(JSON.stringify(res.export, null, 2))}</pre>
+              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+                <button class="haze-button haze-button-secondary" type="button" data-action="close-modal">Close</button>
+                <button class="haze-button" type="button" data-action="download-export" data-case-id="${escapeHtml(caseId)}">Download signed JSON</button>
+              </div>
+            </div>`;
+            return;
+          }
+        }
+      } else if (action === "download-export") {
+        const caseId = control.getAttribute("data-case-id");
+        const res = await post(`/api/compliance/cases/${encodeURIComponent(caseId)}/export`, {});
+        const jsonStr = JSON.stringify(res.export ?? res, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `compliance-case-${caseId}.json`;
+        a.click();
+        return;
+      } else if (action === "close-modal") {
+        document.querySelector(".haze-modal-backdrop")?.remove();
+        return;
       } else if (action === "export") {
         await post("/api/portal/export", { fields: [control.getAttribute("data-field") || "commitment"] });
       } else if (action === "gov-preview") {
@@ -96,4 +173,8 @@
       }
     }
   });
+
+  function escapeHtml(val) {
+    return String(val ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+  }
 })();

@@ -12,6 +12,10 @@
     "web/apps/*",
     "web/packages/*"
   ],
+  "overrides": {
+    "react": "19.1.9",
+    "react-dom": "19.1.9"
+  },
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "node --experimental-strip-types --test tests/*.test.mjs && node circuits/vectors/check.mjs",

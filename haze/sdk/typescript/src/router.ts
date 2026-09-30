@@ -19,25 +19,24 @@ function toHex(bytes: Uint8Array): string {
 }
 
 function addressWord(address: string): Buffer {
-  const out = Buffer.alloc(32);
-  hexToBuf(address).copy(out, 32 - 20);
-  return out;
+  const raw = hexToBuf(address);
+  const out = new Uint8Array(32);
+  out.set(raw, 32 - raw.length);
+  return Buffer.from(out);
 }
 
 function word(value: number | bigint): Buffer {
-  const out = Buffer.alloc(32);
   const hex = BigInt(value).toString(16).padStart(64, "0");
-  Buffer.from(hex, "hex").copy(out);
-  return out;
+  return Buffer.from(hex, "hex");
 }
 
 /** ABI-encode `(address adapter, bytes data)` for `routeHash`. */
 export function encodeRoute(adapter: string, data: Uint8Array | string): Uint8Array {
   const payload = typeof data === "string" ? hexToBuf(data) : Buffer.from(data);
   const paddedLen = Math.ceil(payload.length / 32) * 32;
-  const padded = Buffer.alloc(paddedLen);
-  payload.copy(padded);
-  return Buffer.concat([addressWord(adapter), word(0x40), word(payload.length), padded]);
+  const padded = new Uint8Array(paddedLen);
+  padded.set(payload);
+  return Buffer.concat([addressWord(adapter), word(0x40), word(payload.length), Buffer.from(padded)]);
 }
 
 /** `keccak256(abi.encode(adapter, data))` bound to the swap intent. */

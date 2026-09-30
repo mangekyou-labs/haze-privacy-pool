@@ -3,6 +3,7 @@ import { sha256 } from "@noble/hashes/sha2";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { x25519 } from "@noble/curves/ed25519";
 import { keccak256 } from "./keccak.ts";
+import { recoverWallet } from "./sig.ts";
 
 const KEY_DOMAIN_NAME = "Haze Shielded Account";
 const KEY_DOMAIN_VERSION = "1";
@@ -48,22 +49,8 @@ export const SPEND_PUBLIC_CAMEL = [
   "auditCiphertextHashLo",
 ] as const;
 
-export type ProverErrorCode =
-  | "CANCELLED"
-  | "KEYS_MISSING"
-  | "UNSUPPORTED_RECOVERY"
-  | "ARTIFACT_INVALID"
-  | "WITNESS_INVALID"
-  | "PROOF_INVALID";
-
-export class ProverError extends Error {
-  readonly code: ProverErrorCode;
-  constructor(code: ProverErrorCode) {
-    super(code);
-    this.code = code;
-    this.name = "ProverError";
-  }
-}
+import { ProverError, type ProverErrorCode } from "./prover-types.ts";
+export { ProverError, type ProverErrorCode };
 
 export type ShieldedAccountRequest = {
   chainId: number;
@@ -226,9 +213,10 @@ function toHex(bytes: Uint8Array) {
 }
 
 function pad32(bytes: Uint8Array) {
-  const out = Buffer.alloc(32);
-  Buffer.from(bytes).copy(out, 32 - bytes.length);
-  return out;
+  if (bytes.length > 32) throw new Error("ENCODING_INVALID");
+  const out = new Uint8Array(32);
+  out.set(bytes, 32 - bytes.length);
+  return Buffer.from(out);
 }
 
 function addressWord(address: string) {
@@ -326,14 +314,8 @@ function hpkeX25519Public(ikm: Buffer) {
   return Buffer.from(x25519.getPublicKey(sk));
 }
 
-function recoverWallet(digest: Uint8Array, normalized: Uint8Array) {
-  const recovered = secp256k1.Signature.fromCompact(normalized.subarray(0, 64))
-    .addRecoveryBit(normalized[64])
-    .recoverPublicKey(digest)
-    .toRawBytes(false);
-  const address = keccak256(recovered.subarray(1)).subarray(12);
-  return toHex(address);
-}
+/** Recover the Ethereum address that produced a 65-byte recoverable secp256k1 signature. */
+export { recoverWallet } from "./sig.ts";
 
 function signNormalized(signingKey: Uint8Array, digest: Uint8Array) {
   const signed = secp256k1.sign(digest, signingKey, { prehash: false });

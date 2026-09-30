@@ -1,0 +1,49 @@
+@startuml
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 50
+skinparam rectangle {
+  BackgroundColor white
+  BorderColor #333333
+  RoundCorner 12
+  FontName Arial
+}
+skinparam database {
+  BackgroundColor white
+  BorderColor #333333
+  FontName Arial
+}
+skinparam actor {
+  BackgroundColor white
+  BorderColor #333333
+}
+skinparam frame {
+  BackgroundColor white
+  BorderColor #333333
+  FontName Arial
+}
+
+actor Auditor
+actor User
+
+frame "Haze" {
+  rectangle "Disclosure" as D
+  rectangle "Auth" as A
+  rectangle "Indexer" as I
+  rectangle "Gatekeeper" as G
+}
+
+database "Pool contract" as P
+
+Auditor --> D : Investigates
+D --> A : Decrypt
+A --> I : Authorized decrypt
+I --> P : Watches
+User --> G : Interact
+G --> P : Facilitates
+
+@enduml
