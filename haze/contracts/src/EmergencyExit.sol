@@ -10,6 +10,15 @@ import {VersionRegistry} from "./VersionRegistry.sol";
 /// @notice Seven-day delayed public exit that ignores pause and application membership.
 /// @dev Development 20-input digest only. Emergency Circom and production Groth16 remain later.
 ///      This contract has no owner, proxy, or upgrade path.
+///
+///      SECURITY: UNSAFE. DO NOT WIRE INTO ANY POOL HOLDING REAL OR SHARED FUNDS.
+///      `executeEmergencyExit` accepts `proof == keccak256(publicInputs)`, which anyone can compute
+///      from public data. There is no note-ownership proof, no bound between `publicAmount` and any
+///      deposited note, and `requester` is not bound to `msg.sender`. After `COOLDOWN` any caller
+///      can drain the pool via `HazePool.exitFromEmergency`. It must not be deployed or set as a
+///      pool's `approvedExit` until a real emergency-exit circuit and Groth16 verifier replace the
+///      digest check. The Fuji v2 set (`DeployFujiPoseidonV2`) deploys pools with
+///      `approvedExit = address(0)` for this reason.
 contract EmergencyExit {
     bool public constant NOT_FOR_PRODUCTION = true;
     uint256 public constant PUBLIC_INPUT_COUNT = 20;

@@ -16,6 +16,8 @@ interface IHazeSpendVerifier {
 /// @notice Versioned immutable wrapper around spend public-input checks.
 /// @dev Production Groth16 pairing from a ceremony-bound verifying key is T7.4.
 ///      This wrapper has no owner, proxy, or admin mutation path.
+///      SECURITY: accepts a 32-byte `keccak256(publicInputs)` digest that anyone can compute.
+///      Test/development only; use `HazeSpendVerifierGroth16` for any deployed pool.
 contract HazeSpendVerifier is IHazeSpendVerifier {
     bool public constant NOT_FOR_PRODUCTION = true;
     uint256 public constant PUBLIC_INPUT_COUNT = 29;

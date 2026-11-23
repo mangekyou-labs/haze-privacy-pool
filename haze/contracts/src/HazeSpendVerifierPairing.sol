@@ -9,6 +9,9 @@ import {DevelopmentEqualityVerifier} from "haze-dev/DevelopmentEqualityVerifier.
 /// @notice Sibling wrap for an operator-owned pairing backend. Not an upgrade of the live Fuji verifier.
 /// @dev `production=true` or a 256-byte Groth16 proof calls `verifyProof`. The committed
 ///      placeholder backend still reverts `KEYS_MISSING`. Digest path stays 32-byte keccak.
+///      SECURITY: the digest path (`production == false`, 32-byte proof) is forgeable by anyone and
+///      `HazePool` always passes `production = false`. Superseded by `HazeSpendVerifierGroth16`;
+///      do not wire into new pools.
 contract HazeSpendVerifierPairing is IHazeSpendVerifier {
     bool public constant NOT_FOR_PRODUCTION = true;
     uint256 public constant PUBLIC_INPUT_COUNT = 29;
