@@ -1,0 +1,90 @@
+{
+  "product_id": "haze-avalanche-compliant-pool",
+  "network": "fuji",
+  "chainId": 43113,
+  "usdc": "0x5425890298aed601595a70AB815c96711a31Bc65",
+  "not_for_production": true,
+  "broadcast": true,
+  "live_rpc": "https://api.avax-test.network/ext/bc/C/rpc",
+  "prove": "operator-owned-groth16",
+  "production_ceremony_approved": false,
+  "applicationId": "0x0000000000000000000000000000000000000000000000000000000000000a11",
+  "poolVersion": "0x000000000000000000000000000000000000000000000000000000000000b001",
+  "deploymentBlock": 61513413,
+  "approvedExit": "0x0000000000000000000000000000000000000000",
+  "addresses": {
+    "HazeAccess": "0xf71710A23eF782f79B5A52f3CDF6666f59690207",
+    "ApplicationRegistry": "0xF7BFcAF26a2A20A4CE3322D2Bd986a0F43336b38",
+    "PolicyRegistry": "0xD3039e93AdA153f6e331998415608e34609f5fff",
+    "VersionRegistry": "0xb429B1430C1590C62E8AA0c432A49Ec5D23F728b",
+    "Groth16Verifier": "0x87513584DF1f082ff3a34f15EAD5d3D14C7e0639",
+    "HazeOperatorGroth16Adapter": "0xb29FC413F14CE533d0821080bFd9375A84388895",
+    "HazeSpendVerifierGroth16": "0xBAab4FC9461f6Bd4bD7a7a9C99d1e973E7C8A3D3",
+    "HazePoolPoseidon": "0x2A75Ed378cf23Dd724A4077cF122E87491172e71",
+    "HazePool": "0x2A75Ed378cf23Dd724A4077cF122E87491172e71",
+    "SwapAndShieldRouter": "0xd4a102FaCcf541b28a1dD7baa19989b88e531D26"
+  },
+  "transactions": {
+    "deploy": [
+      {
+        "contract": "HazeAccess",
+        "function": null,
+        "hash": "0x1f9a7558ae2363a78ed243e09a792f7a5e3c05af9cff81e28d7622929f0a4efb"
+      },
+      {
+        "contract": "ApplicationRegistry",
+        "function": null,
+        "hash": "0xea311d15db8095e6b249d42f66120d0eef0fa4ce8383c3175910074ff27456a2"
+      },
+      {
+        "contract": "PolicyRegistry",
+        "function": null,
+        "hash": "0x48cf2b777cef7f116408054669bd441e86478a14e94047afb7fed3b03fd9787d"
+      },
+      {
+        "contract": "VersionRegistry",
+        "function": null,
+        "hash": "0x0d4ab072b4815c90bc6727cddb5a71f6d8df1ad5d471436ea5db268d2a358a90"
+      },
+      {
+        "contract": "HazeSpendVerifierGroth16",
+        "function": null,
+        "hash": "0x6d6586b3c65c91f5570416d00f9d6e6f69ff0d75ba9d893864eed0ad0492dbf5"
+      },
+      {
+        "contract": "HazePoolPoseidon",
+        "function": null,
+        "hash": "0xfbe92eac5e48dfff06c5d658104b95db84c24fe208587a24369700757679c162"
+      },
+      {
+        "contract": "SwapAndShieldRouter",
+        "function": null,
+        "hash": "0xcfda910e0d760dba943447474d638ff488d4a1afc10764226f707ad55d1f80d0"
+      },
+      {
+        "contract": "ApplicationRegistry",
+        "function": "scheduleRegister((bytes32,address,address,address,bytes32,bytes,string,bytes32,bytes32))",
+        "hash": "0x83c5fbc2cb1ea71e3948001db951ebc21bed0488c0154fe0658b2f7b5e1b85af"
+      },
+      {
+        "contract": "PolicyRegistry",
+        "function": "schedulePolicy(uint64,bytes32,bytes32)",
+        "hash": "0x5ceeb49dae732df2cedd564a1bc78fadd014461e1fe99479834970260387426e"
+      }
+    ],
+    "activate": [
+      {
+        "function": "activateRegister(bytes32)",
+        "hash": "0x6f8664cf53948bc3d5fabfbd3c98d462e2249ff42ef96d5c577416ceac89079a"
+      },
+      {
+        "function": "activatePolicy(uint64)",
+        "hash": "0x413575ec6568fad9052813aafc5a5533a112974ccfdcc452278db0c326a24277"
+      }
+    ]
+  },
+  "supersedes": {
+    "HazePool": "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550",
+    "sidecar": "fuji-v1.live.json"
+  }
+}
