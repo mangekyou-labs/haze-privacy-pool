@@ -10,15 +10,14 @@ cbor_metadata = false
 solc = "0.8.28"
 via_ir = true
 optimizer = true
-allow_paths = ["../dev/artifacts", "../dev/artifacts/ceremony-private"]
+allow_paths = ["../dev/artifacts"]
 remappings = [
     "haze-dev/=../dev/artifacts/",
-    "haze-operator/=../dev/artifacts/ceremony-private/",
+    "haze-operator/=../dev/artifacts/operator-verifier/",
 ]
 fs_permissions = [
     { access = "read", path = "../circuits/vectors" },
     { access = "read", path = "../dev/artifacts" },
-    { access = "read", path = "../dev/artifacts/ceremony-private" },
 ]
 
 [invariant]
