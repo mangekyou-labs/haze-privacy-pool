@@ -1,6 +1,6 @@
 import { keccakHex } from "./abi.ts";
 
-export const DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure.onrender.com";
+export const DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure-uegs.onrender.com";
 export const DEFAULT_HAZE_AUDIT_PUBLIC_KEY = "0x2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04";
 
 const RETRYABLE = new Set([502, 503, 504]);

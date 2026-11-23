@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const disclosureOrigin =
-      process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN || "https://haze-fuji-disclosure.onrender.com";
+      process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN || "https://haze-fuji-disclosure-uegs.onrender.com";
     const disclosureConnect = disclosureOrigin.startsWith("https://") ? ` ${disclosureOrigin}` : "";
     return [
       {
