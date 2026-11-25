@@ -40,15 +40,19 @@ const CHAIN_HEX = "0xa869";
 const APPLICATION_ID = `0x${"00".repeat(30)}0a11`;
 const POOL_VERSION_B002 = `0x${"00".repeat(30)}b001`;
 const POOL_VERSION_B003 = `0x${"00".repeat(30)}b003`;
-const POOL_B002 = "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550";
-const POOL_B003 = "0x919b338f189B1e564Af34A26fC002138f308f7dE";
-const ROUTER = "0xdb386aeAd1C0b859903702454a7ECDfC306800F6";
-const EMERGENCY_EXIT_CONTRACT = "0x3c40abEEAF252f3F37F59C8D72E7624D466f8ec9";
+// Addresses are env-overridable so the site can point at the v2 (Groth16-only) deployment
+// without a code change. Defaults are the v1 B002 deployment.
+const POOL_B002 = process.env.NEXT_PUBLIC_HAZE_POOL || "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550";
+// B003 is a development-verifier pool; migration into it is opt-in only.
+const POOL_B003 = process.env.NEXT_PUBLIC_HAZE_MIGRATION_POOL || "";
+const ROUTER = process.env.NEXT_PUBLIC_HAZE_ROUTER || "0xdb386aeAd1C0b859903702454a7ECDfC306800F6";
+// Empty string disables the emergency-exit UI (v2 deploys with no approved exit).
+const EMERGENCY_EXIT_CONTRACT = process.env.NEXT_PUBLIC_HAZE_EMERGENCY_EXIT ?? "0x3c40abEEAF252f3F37F59C8D72E7624D466f8ec9";
 const USDC = "0x5425890298aed601595a70AB815c96711a31Bc65";
 const PILOT_TOKEN = process.env.NEXT_PUBLIC_HAZE_PILOT_TOKEN || "0x15cF58144EF33af1e14b5208015d11F9143E27b9";
-const APPLICATION_REGISTRY = "0xcCB53D8430E5c5555c66d56D2747660f97826f9E";
-const POLICY_REGISTRY = "0x7147832d44094DD2a8A28470b9CD8C02e402162b";
-const POLICY_AUTHORITY = "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32";
+const APPLICATION_REGISTRY = process.env.NEXT_PUBLIC_HAZE_APPLICATION_REGISTRY || "0xcCB53D8430E5c5555c66d56D2747660f97826f9E";
+const POLICY_REGISTRY = process.env.NEXT_PUBLIC_HAZE_POLICY_REGISTRY || "0x7147832d44094DD2a8A28470b9CD8C02e402162b";
+const POLICY_AUTHORITY = process.env.NEXT_PUBLIC_HAZE_POLICY_AUTHORITY || "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32";
 const AUDIT_KEY = process.env.NEXT_PUBLIC_HAZE_AUDIT_PUBLIC_KEY || DEFAULT_HAZE_AUDIT_PUBLIC_KEY;
 const DEFAULT_AMOUNT = 1_000_000;
 
@@ -633,6 +637,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
   // Emergency exit: request with CSPRNG salt
   const requestEmergency = useCallback(async () => {
     if (!wallet) return connect();
+    if (!EMERGENCY_EXIT_CONTRACT) { setErrorMessage("EMERGENCY_EXIT_DISABLED"); return; }
     try {
       setErrorCategory(null);
       setErrorMessage("");
@@ -669,6 +674,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
   // Emergency exit: execute after 7 days
   const executeEmergency = useCallback(async () => {
     if (!wallet) return connect();
+    if (!EMERGENCY_EXIT_CONTRACT) { setErrorMessage("EMERGENCY_EXIT_DISABLED"); return; }
     try {
       setErrorCategory(null);
       setErrorMessage("");
@@ -690,6 +696,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
   // Migration from B002 to B003
   const migratePool = useCallback(async () => {
     if (!wallet || !vault.current) return connect();
+    if (!POOL_B003) { setErrorMessage("MIGRATION_DISABLED"); return; }
     try {
       setErrorCategory(null);
       setErrorMessage("");
@@ -961,11 +968,13 @@ export function FujiBrowserClient({ route }: { route: string }) {
 
       {route === "emergency-exit" ? (
         <div className="haze-emergency">
+          {EMERGENCY_EXIT_CONTRACT ? (<>
           <p className="haze-muted">Emergency exit allows an unconditional 7-day delayed exit from B002.</p>
           <div className="haze-actions">
             <button className="haze-button" type="button" onClick={requestEmergency}>1. Request Emergency Exit</button>
             <button className="haze-button haze-button-secondary" type="button" onClick={executeEmergency}>2. Execute After 7 Days</button>
           </div>
+          </>) : <p className="haze-muted">Emergency exit is disabled for this deployment. No exit contract is approved on the pool.</p>}
         </div>
       ) : null}
 
@@ -976,7 +985,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
           </div>
           {migrationStatus ? <p className="haze-mono">{migrationStatus}</p> : null}
           <div className="haze-actions">
-            <button className="haze-button" type="button" onClick={migratePool}>Execute B002 → B003 Migration</button>
+            <button className="haze-button" type="button" onClick={migratePool} disabled={!POOL_B003}>Execute B002 → B003 Migration</button>
           </div>
         </div>
       ) : null}

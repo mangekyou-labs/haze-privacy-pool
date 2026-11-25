@@ -34,7 +34,7 @@ import {
 const CHAIN_ID = 43113;
 const CHAIN_HEX = "0xa869";
 const APPLICATION_ID = `0x${"00".repeat(30)}0a11`;
-const POOL_B002 = "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550";
+const POOL_B002 = process.env.NEXT_PUBLIC_HAZE_POOL || "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550";
 const POOL_VERSION_B002 = `0x${"00".repeat(30)}b001`;
 export type EthereumProvider = {
   request(input: { method: string; params?: unknown[] }): Promise<unknown>;
