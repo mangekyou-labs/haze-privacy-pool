@@ -7,6 +7,8 @@ export const FUJI_V2 = {
   applicationRegistry: "0xF7BFcAF26a2A20A4CE3322D2Bd986a0F43336b38",
   policyRegistry: "0xD3039e93AdA153f6e331998415608e34609f5fff",
   usdc: "0x5425890298aed601595a70AB815c96711a31Bc65",
+  // First block to scan for pool events; earlier blocks cannot hold any.
+  deploymentBlock: 61513413,
   // v2 was deployed with approvedExit = address(0) and has no predecessor to migrate from.
   emergencyExit: "",
   migrationPool: "",

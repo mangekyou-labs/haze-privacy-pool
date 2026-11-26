@@ -21,7 +21,7 @@ import { createBrowserProver, generateBrowserSecrets } from "../../../../../sdk/
 import { buildSealedBrowserTransferWitness, buildSealedBrowserWitness } from "../../../../../sdk/typescript/src/browser-witness-flow.ts";
 import { emergencyExitRequestId } from "../../../../../sdk/typescript/src/emergency.ts";
 import { createFujiMembershipStore, unionMembershipLeaves, type FujiMembershipStore } from "../../../../../sdk/typescript/src/fuji-membership-store.ts";
-import { PRIVATE_TRANSACTION_TOPIC, decodePrivateTransaction, reconcileFujiOperation, recoverFujiOperation, recoverSpendableNotesFromLogs, type FujiAction, type FujiLog, type FujiReceipt } from "../../../../../sdk/typescript/src/fuji-reconciliation.ts";
+import { decodePrivateTransaction, reconcileFujiOperation, recoverFujiOperation, recoverSpendableNotesFromLogs, type FujiAction, type FujiLog, type FujiReceipt } from "../../../../../sdk/typescript/src/fuji-reconciliation.ts";
 import { classifyBrowserError, type BrowserErrorCategory } from "../../../../../sdk/typescript/src/fuji-browser-error.ts";
 import { DEFAULT_HAZE_AUDIT_PUBLIC_KEY } from "../../../../../sdk/typescript/src/render-disclosure.ts";
 import { FUJI_V2 } from "../../../../../sdk/typescript/src/fuji-v2-defaults.ts";
@@ -170,6 +170,15 @@ export function FujiBrowserClient({ route }: { route: string }) {
   }, [route, userAmount]);
 
   const rpc = useCallback((method: string, params: unknown[] = []) => ethereum().request({ method, params }), []);
+  // Pool history comes from the server: wallet RPCs cap eth_getLogs at 100 blocks.
+  const poolLogs = useCallback(async (poolAddress = POOL_B002) => {
+    const res = await fetch(`/api/v1/pool/logs?address=${encodeURIComponent(poolAddress)}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`POOL_LOGS_UNAVAILABLE: HTTP ${res.status}`);
+    return ((await res.json()) as { logs: FujiLog[] }).logs;
+  }, []);
+  const chainRpc = useCallback((method: string, params: unknown[] = []) => (
+    method === "eth_getLogs" ? poolLogs((params[0] as { address?: string } | undefined)?.address) : rpc(method, params)
+  ), [poolLogs, rpc]);
   const receipt = useCallback(async (hash: string) => {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const found = await rpc("eth_getTransactionReceipt", [hash]) as FujiReceipt | null;
@@ -186,7 +195,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
   ), [rpc]);
 
   const treeLeaves = useCallback(async (poolAddress = POOL_B002) => {
-    const logs = await rpc("eth_getLogs", [{ address: poolAddress, fromBlock: "0x0", toBlock: "latest", topics: [PRIVATE_TRANSACTION_TOPIC, APPLICATION_ID] }]) as FujiLog[];
+    const logs = await poolLogs(poolAddress);
     const leaves: { leafIndex: number; commitment: string }[] = [];
     for (const log of logs) {
       const event = decodePrivateTransaction(log);
@@ -195,7 +204,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
       }
     }
     return leaves;
-  }, [rpc]);
+  }, [poolLogs]);
 
   const loadVaultNotes = useCallback(async (active: Vault) => {
     const list = await active.list();
@@ -210,7 +219,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
     await loadVaultNotes(active);
     const operations = await active.list();
     for (const operation of operations.filter((item) => item.state === "submitted" || item.state === "pending_finality")) {
-      const result = await recoverFujiOperation({ ...binding(operation, address), rpc });
+      const result = await recoverFujiOperation({ ...binding(operation, address), rpc: chainRpc });
       if (result.confirmed) {
         const confirmed = await active.transition(operation.id, "confirmed", {
           recovered: true,
@@ -233,9 +242,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
     }
     if (account) {
       try {
-        const logs = (await rpc("eth_getLogs", [
-          { address: POOL_B002, fromBlock: "0x0", toBlock: "latest", topics: [PRIVATE_TRANSACTION_TOPIC, APPLICATION_ID] },
-        ])) as FujiLog[];
+        const logs = await poolLogs(POOL_B002);
         const recovered = recoverSpendableNotesFromLogs({
           chainId: CHAIN_ID,
           pool: POOL_B002,
@@ -267,7 +274,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
         setTransactionStatus("ready");
       }
     }
-  }, [loadVaultNotes, rpc]);
+  }, [loadVaultNotes, rpc, chainRpc, poolLogs]);
 
   // Sync vault/account refs from the session provider (silent resume path).
   // Depends on vaultGeneration so a connected first-paint still reloads after openVault.
