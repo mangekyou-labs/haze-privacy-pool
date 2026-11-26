@@ -1,10 +1,8 @@
-import { chacha20poly1305 } from "@noble/ciphers/chacha";
-import { hmac } from "@noble/hashes/hmac";
-import { sha256 } from "@noble/hashes/sha256";
+import { createCipheriv, createDecipheriv, createHmac } from "node:crypto";
 import { x25519 } from "@noble/curves/ed25519";
 import { AUDIT_INFO, RECIPIENT_INFO } from "./envelope.ts";
 import { SdkError } from "./errors.ts";
-import { parseAddress, parseHex, toHex, u64be } from "./field.ts";
+import { parseAddress, parseHex, readU64Be, toHex, u64be } from "./field.ts";
 import { encodeRecipientPlaintext } from "./note.ts";
 
 export type RecipientPlaintext = {
@@ -18,32 +16,26 @@ export type RecipientPlaintext = {
   spendingSecret?: string;
 };
 
+const hexBuffer = (value: string): Buffer => Buffer.from(parseHex(value));
+
 const KEM_SUITE = Buffer.concat([Buffer.from("KEM"), Buffer.from([0x00, 0x20])]);
 const HPKE_SUITE = Buffer.concat([Buffer.from("HPKE"), Buffer.from([0x00, 0x20, 0x00, 0x01, 0x00, 0x03])]);
 
 function extract(salt: Buffer, ikm: Buffer) {
-  return Buffer.from(hmac(sha256, salt.length === 0 ? new Uint8Array(32) : salt, ikm));
+  return createHmac("sha256", salt.length === 0 ? Buffer.alloc(32) : salt).update(ikm).digest();
 }
 
 function expand(prk: Buffer, info: Buffer, length: number) {
   const blocks = Math.ceil(length / 32);
-  let previous = new Uint8Array(0);
-  const out: Uint8Array[] = [];
+  let previous: Buffer = Buffer.alloc(0);
+  const out = [];
   for (let index = 1; index <= blocks; index += 1) {
-    const input = new Uint8Array(previous.length + info.length + 1);
-    input.set(previous, 0);
-    input.set(info, previous.length);
-    input[previous.length + info.length] = index;
-    previous = hmac(sha256, prk, input);
+    previous = createHmac("sha256", prk)
+      .update(Buffer.concat([previous, info, Buffer.from([index])]))
+      .digest();
     out.push(previous);
   }
-  const total = new Uint8Array(out.reduce((acc, curr) => acc + curr.length, 0));
-  let offset = 0;
-  for (const part of out) {
-    total.set(part, offset);
-    offset += part.length;
-  }
-  return Buffer.from(total.subarray(0, length));
+  return Buffer.concat(out).subarray(0, length);
 }
 
 function labeledExtract(suiteId: Buffer, salt: Buffer, label: string, ikm: Buffer) {
@@ -65,7 +57,7 @@ function labeledExpand(suiteId: Buffer, prk: Buffer, label: string, info: Buffer
 }
 
 export function deriveX25519KeyPair(ikm: string | Uint8Array): { secret: Buffer; publicKey: Buffer } {
-  const bytes = typeof ikm === "string" ? parseHex(ikm) : Buffer.from(ikm);
+  const bytes = typeof ikm === "string" ? hexBuffer(ikm) : Buffer.from(ikm);
   if (bytes.length !== 32) {
     throw new SdkError("ENCODING_INVALID");
   }
@@ -96,14 +88,8 @@ function requireRecipientInfo(info: string) {
   }
 }
 
-function requireAuditInfo(info: string) {
-  if (info !== AUDIT_INFO) {
-    throw new SdkError("DOMAIN_MISMATCH");
-  }
-}
-
 function asBytes(value: string | Uint8Array): Buffer {
-  return typeof value === "string" ? parseHex(value) : Buffer.from(value);
+  return typeof value === "string" ? hexBuffer(value) : Buffer.from(value);
 }
 
 function setupBaseR(recipientIkm: Buffer, encapsulatedKey: Buffer, info: Buffer) {
@@ -122,16 +108,20 @@ function setupBaseS(recipientPublic: Buffer, senderSeed: Buffer, info: Buffer) {
 
 function aeadOpen(key: Buffer, nonce: Buffer, aad: Buffer, ciphertext: Buffer) {
   try {
-    const cipher = chacha20poly1305(key, nonce, aad);
-    return Buffer.from(cipher.decrypt(ciphertext));
+    const decipher = createDecipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 });
+    decipher.setAAD(aad, { plaintextLength: ciphertext.length - 16 });
+    decipher.setAuthTag(ciphertext.subarray(ciphertext.length - 16));
+    return Buffer.concat([decipher.update(ciphertext.subarray(0, ciphertext.length - 16)), decipher.final()]);
   } catch {
     throw new SdkError("CIPHERTEXT_INVALID");
   }
 }
 
 function aeadSeal(key: Buffer, nonce: Buffer, aad: Buffer, plaintext: Buffer) {
-  const cipher = chacha20poly1305(key, nonce, aad);
-  return Buffer.from(cipher.encrypt(plaintext));
+  const cipher = createCipheriv("chacha20-poly1305", key, nonce, { authTagLength: 16 });
+  cipher.setAAD(aad, { plaintextLength: plaintext.length });
+  const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return Buffer.concat([body, cipher.getAuthTag()]);
 }
 
 export function recipientAad(input: {
@@ -146,22 +136,21 @@ export function recipientAad(input: {
   return Buffer.concat([
     u64be(input.chainId),
     parseAddress(input.pool),
-    parseHex(input.poolVersion),
-    parseHex(input.applicationId),
+    hexBuffer(input.poolVersion),
+    hexBuffer(input.applicationId),
     Buffer.from([input.outputIndex]),
-    parseHex(input.outputCommitment),
+    hexBuffer(input.outputCommitment),
     Buffer.from([input.envelopeVersion]),
   ]);
 }
 
 export function parseRecipientPlaintext(bytes: Uint8Array): RecipientPlaintext {
   const buffer = Buffer.from(bytes);
-  if (buffer.length !== 200) {
+  if (buffer.length !== 200 && buffer.length !== 232) {
     throw new SdkError("ENCODING_INVALID");
   }
-  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  return {
-    value: view.getBigUint64(0, false),
+  const result: RecipientPlaintext = {
+    value: readU64Be(buffer, 0),
     blinding: toHex(buffer.subarray(8, 40)),
     notePublicKey: toHex(buffer.subarray(40, 72)),
     encryptionKeyHash: toHex(buffer.subarray(72, 104)),
@@ -169,6 +158,10 @@ export function parseRecipientPlaintext(bytes: Uint8Array): RecipientPlaintext {
     poolVersion: toHex(buffer.subarray(136, 168)),
     commitment: toHex(buffer.subarray(168, 200)),
   };
+  if (buffer.length === 232) {
+    result.spendingSecret = toHex(buffer.subarray(200, 232));
+  }
+  return result;
 }
 
 export function openRecipientNote(input: {
@@ -179,8 +172,8 @@ export function openRecipientNote(input: {
   aad: string | Uint8Array;
 }): Uint8Array {
   requireRecipientInfo(input.info);
-  const ctx = setupBaseR(parseHex(input.recipientIkm), parseHex(input.encapsulatedKey), Buffer.from(input.info));
-  return aeadOpen(ctx.key, ctx.nonce, asBytes(input.aad), parseHex(input.ciphertext));
+  const ctx = setupBaseR(hexBuffer(input.recipientIkm), hexBuffer(input.encapsulatedKey), Buffer.from(input.info));
+  return aeadOpen(ctx.key, ctx.nonce, asBytes(input.aad), hexBuffer(input.ciphertext));
 }
 
 export function sealRecipientNote(input: {
@@ -190,11 +183,11 @@ export function sealRecipientNote(input: {
   plaintext: RecipientPlaintext | Uint8Array;
 }): { encapsulatedKey: string; ciphertext: string } {
   const recipient = deriveX25519KeyPair(input.recipientIkm);
-  const ctx = setupBaseS(recipient.publicKey, parseHex(input.senderSeed), Buffer.from(RECIPIENT_INFO));
+  const ctx = setupBaseS(recipient.publicKey, hexBuffer(input.senderSeed), Buffer.from(RECIPIENT_INFO));
   const plaintext =
     input.plaintext instanceof Uint8Array
       ? Buffer.from(input.plaintext)
-      : encodeRecipientPlaintext(input.plaintext);
+      : Buffer.from(encodeRecipientPlaintext(input.plaintext));
   return {
     encapsulatedKey: toHex(ctx.encapsulatedKey),
     ciphertext: toHex(aeadSeal(ctx.key, ctx.nonce, asBytes(input.aad), plaintext)),
@@ -208,9 +201,8 @@ export function openAuditEnvelope(input: {
   ciphertext: string;
   aad: string | Uint8Array;
 }): Uint8Array {
-  requireAuditInfo(AUDIT_INFO);
-  const ctx = setupBaseR(parseHex(input.recipientIkm), parseHex(input.encapsulatedKey), Buffer.from(AUDIT_INFO));
-  return aeadOpen(ctx.key, ctx.nonce, asBytes(input.aad), parseHex(input.ciphertext));
+  const ctx = setupBaseR(hexBuffer(input.recipientIkm), hexBuffer(input.encapsulatedKey), Buffer.from(AUDIT_INFO));
+  return aeadOpen(ctx.key, ctx.nonce, asBytes(input.aad), hexBuffer(input.ciphertext));
 }
 
 /** Seal a Rust-compatible HPKE Base audit envelope. */
@@ -219,11 +211,10 @@ export function sealAuditEnvelope(input: {
   senderSeed: string;
   aad: string | Uint8Array;
   plaintext: string | Uint8Array;
-}): { encapsulatedKey: string; ciphertext: string; bytes?: string; hash?: string } {
-  requireAuditInfo(AUDIT_INFO);
+}): { encapsulatedKey: string; ciphertext: string } {
   const recipient = deriveX25519KeyPair(input.recipientIkm);
-  const ctx = setupBaseS(recipient.publicKey, parseHex(input.senderSeed), Buffer.from(AUDIT_INFO));
-  const plaintext = typeof input.plaintext === "string" ? parseHex(input.plaintext) : Buffer.from(input.plaintext);
+  const ctx = setupBaseS(recipient.publicKey, hexBuffer(input.senderSeed), Buffer.from(AUDIT_INFO));
+  const plaintext = typeof input.plaintext === "string" ? hexBuffer(input.plaintext) : Buffer.from(input.plaintext);
   return {
     encapsulatedKey: toHex(ctx.encapsulatedKey),
     ciphertext: toHex(aeadSeal(ctx.key, ctx.nonce, asBytes(input.aad), plaintext)),

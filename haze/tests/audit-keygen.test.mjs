@@ -12,9 +12,9 @@ import { DEFAULT_HAZE_AUDIT_PUBLIC_KEY } from "../sdk/typescript/src/render-disc
 const outDir = () => mkdtempSync(join(tmpdir(), "haze-keygen-"));
 const hex = (bytes) => `0x${Buffer.from(bytes).toString("hex")}`;
 
-test("published default audit key is the fixture IKM's derived key", () => {
+test("published default audit key is not the public fixture IKM's derived key", () => {
   const ikm = Buffer.from(DEVELOPMENT_AUDIT_IKM.slice(2), "hex");
-  assert.equal(hex(deriveBrowserX25519PublicKey(ikm)), DEFAULT_HAZE_AUDIT_PUBLIC_KEY);
+  assert.notEqual(hex(deriveBrowserX25519PublicKey(ikm)), DEFAULT_HAZE_AUDIT_PUBLIC_KEY);
 });
 
 test("writes a 0600 IKM file and returns the matching public key", () => {

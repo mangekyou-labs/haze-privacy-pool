@@ -1,18 +1,19 @@
-import { NextResponse } from "next/server";
-import { getComplianceStore } from "../../../../../lib/compliance-store.ts";
+import { type NextRequest, NextResponse } from "next/server.js";
+import { forwardToDisclosure } from "../../_lib.ts";
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const address = body.address;
-    if (!address || typeof address !== "string") {
-      return NextResponse.json({ error: "ADDRESS_REQUIRED" }, { status: 400 });
-    }
-    const store = getComplianceStore();
-    const requestHost = request.headers.get("host")?.split(":", 1)[0];
-    const challenge = await store.createSiweChallenge(address, requestHost);
-    return NextResponse.json(challenge);
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "CHALLENGE_FAILED" }, { status: 500 });
-  }
+export async function POST(req: NextRequest) {
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  body.host = req.headers.get("host")?.split(":", 1)[0];
+  const resp = await forwardToDisclosure("/v1/auth/challenge", req, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  const data = await resp.text();
+  return new NextResponse(data, {
+    status: resp.status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }

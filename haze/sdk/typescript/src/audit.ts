@@ -47,7 +47,7 @@ export type AuditRecord = {
   caseTag: string;
 };
 
-function fail() {
+function fail(): never {
   throw new SdkError("ENCODING_INVALID");
 }
 
@@ -68,7 +68,7 @@ function asAction(value: number): number {
 }
 
 function bytes(value: string | Uint8Array, length?: number): Buffer {
-  const output = typeof value === "string" ? parseHex(value) : Buffer.from(value);
+  const output = Buffer.from(typeof value === "string" ? parseHex(value) : value);
   if (length !== undefined && output.length !== length) {
     throw new SdkError("ENCODING_INVALID");
   }
@@ -269,7 +269,7 @@ function readBytes32Pair(bytesInput: Buffer, cursor: { value: number }) {
 
 /** Decode the frozen v1 RFC 8949 audit record and reject unknown/trailing data. */
 export function decodeAuditRecord(value: string | Uint8Array): AuditRecord {
-  const input = typeof value === "string" ? parseHex(value) : Buffer.from(value);
+  const input = Buffer.from(typeof value === "string" ? parseHex(value) : value);
   const cursor = { value: 0 };
   if (readUint(input, cursor, 5) !== 2n) fail();
   expectKey(input, cursor, 1);

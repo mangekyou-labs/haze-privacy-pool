@@ -11,6 +11,8 @@ const text = new TextEncoder();
 const RECIPIENT_INFO = text.encode("haze/avalanche/v1/recipient-note");
 const AUDIT_INFO = text.encode("haze/avalanche/v1/audit-record");
 type EnvelopeBinding = { hash: string; bytes: string };
+/** Stand-in until the real audit envelope is sealed; keeps the witness off its node:crypto dev-key fallback. The final build always overrides it. */
+const PENDING_AUDIT_ENVELOPE: EnvelopeBinding = { hash: `0x${"00".repeat(32)}`, bytes: "0x" };
 type Witness = { circom: Record<string, any>; auditFacts: BrowserAuditFacts; actionReference: string; note: Record<string, any> | null; recipientNote?: Record<string, any> | null; membershipRoot: string; envelopes: Record<string, string> };
 type WitnessFactory = (input: Record<string, unknown>) => Witness;
 
@@ -27,18 +29,50 @@ function recipientAad(input: { chainId: number; pool: string; poolVersion: strin
 export function buildSealedBrowserWitness(input: {
   buildWitness: WitnessFactory; witnessInput: Record<string, unknown>; chainId: number; pool: string; poolVersion: string; applicationId: string;
   auditPublicKey: Uint8Array; auditKeyVersion: bigint; caseTag: Uint8Array; browserCrypto?: Pick<Crypto, "getRandomValues">; secrets?: BrowserSecrets;
+  recipientPublicKey?: Uint8Array;
 }) {
   const secrets = input.secrets ?? generateBrowserSecrets(input.browserCrypto);
   const noteSecret = nonzeroField(secrets.noteSecret); const blinding = nonzeroField(secrets.blinding);
   const actionReference = toHex(secrets.actionReference); const auditSalt = nonzeroField(secrets.auditSalt);
-  const x25519 = toHex(deriveBrowserX25519PublicKey(secrets.noteSecret));
-  const base = { ...input.witnessInput, secret: noteSecret, blinding, x25519, actionReference, auditSalt };
+  const x25519 = input.recipientPublicKey
+    ? toHex(input.recipientPublicKey)
+    : toHex(deriveBrowserX25519PublicKey(secrets.noteSecret));
+  const base = { ...input.witnessInput, secret: noteSecret, blinding, x25519, actionReference, auditSalt, auditEnvelope: PENDING_AUDIT_ENVELOPE };
   const initial = input.buildWitness(base);
   const outCommitment = String(initial.circom?.outputCommitment0 ?? "");
   const hasOutputNote = outCommitment !== "" && outCommitment !== "0" && outCommitment !== `0x${"00".repeat(32)}`;
   const note = initial.note as Record<string, string | number>;
-  const recipient = hasOutputNote
-    ? envelope("recipient", 0n, sealBrowserHpke({ recipientIkm: secrets.noteSecret, ephemeralSeed: secrets.recipientHpkeSeed, plaintext: encodeRecipientPlaintext({ value: Number(note.value), blinding, notePublicKey: String(note.npk), encryptionKeyHash: String(note.enc), applicationId: input.applicationId, poolVersion: input.poolVersion, commitment: String(note.commitment) }), info: RECIPIENT_INFO, aad: recipientAad({ ...input, outputCommitment: String(note.commitment) }) }))
+  const recipientPlaintext = hasOutputNote
+    ? encodeRecipientPlaintext({
+        value: Number(note.value),
+        blinding,
+        notePublicKey: String(note.npk),
+        encryptionKeyHash: String(note.enc),
+        applicationId: input.applicationId,
+        poolVersion: input.poolVersion,
+        commitment: String(note.commitment),
+        spendingSecret: input.recipientPublicKey ? noteSecret : undefined,
+      })
+    : undefined;
+  const recipientSealed = recipientPlaintext
+    ? input.recipientPublicKey
+      ? sealBrowserHpkeToPublicKey({
+          recipientPublicKey: input.recipientPublicKey,
+          ephemeralSeed: secrets.recipientHpkeSeed,
+          plaintext: recipientPlaintext,
+          info: RECIPIENT_INFO,
+          aad: recipientAad({ ...input, outputCommitment: String(note.commitment) }),
+        })
+      : sealBrowserHpke({
+          recipientIkm: secrets.noteSecret,
+          ephemeralSeed: secrets.recipientHpkeSeed,
+          plaintext: recipientPlaintext,
+          info: RECIPIENT_INFO,
+          aad: recipientAad({ ...input, outputCommitment: String(note.commitment) }),
+        })
+    : undefined;
+  const recipient = recipientSealed
+    ? envelope("recipient", 0n, recipientSealed)
     : { hash: `0x${"00".repeat(32)}`, bytes: "0x" };
   const draft = input.buildWitness({ ...base, recipientEnvelope0: recipient });
   const auditPlaintext = encodeBrowserAuditRecord(draft.auditFacts, input.caseTag);
@@ -68,6 +102,7 @@ export function buildSealedBrowserTransferWitness(input: {
   secrets?: BrowserSecrets;
   membershipLeaves?: Array<{ npk: string; enc: string }>;
   treeLeaves?: Array<{ leafIndex: number; commitment: string }>;
+  ownerPublicKey?: Uint8Array;
 }) {
   if (!input.note || typeof input.note !== "object" || !input.note.secret || input.note.value === undefined) {
     throw new Error("DEPOSIT_NOTE_REQUIRED");
@@ -94,7 +129,9 @@ export function buildSealedBrowserTransferWitness(input: {
   const recipientBlinding = nonzeroField(secrets.recipientBlinding);
   const changeSecret = nonzeroField(secrets.noteSecret);
   const changeBlinding = nonzeroField(secrets.blinding);
-  const changeX25519 = toHex(deriveBrowserX25519PublicKey(secrets.noteSecret));
+  const changeX25519 = input.ownerPublicKey
+    ? toHex(input.ownerPublicKey)
+    : toHex(deriveBrowserX25519PublicKey(secrets.noteSecret));
 
   const base = {
     ...input.witnessInput,
@@ -111,6 +148,7 @@ export function buildSealedBrowserTransferWitness(input: {
     changeX25519,
     actionReference,
     auditSalt,
+    auditEnvelope: PENDING_AUDIT_ENVELOPE,
     treeLeaves: input.treeLeaves,
     membershipLeaves: input.membershipLeaves,
   };
@@ -144,26 +182,37 @@ export function buildSealedBrowserTransferWitness(input: {
     outCommitment1 !== "" &&
     outCommitment1 !== "0" &&
     outCommitment1 !== `0x${"00".repeat(32)}`;
-  const recipientEnvelope1 = hasChange
-    ? envelope(
-        "recipient",
-        0n,
-        sealBrowserHpke({
-          recipientIkm: secrets.noteSecret,
+  const changePlaintext = hasChange
+    ? encodeRecipientPlaintext({
+        value: noteValue - sendAmount,
+        blinding: changeBlinding,
+        notePublicKey: String(initial.note?.npk ?? ""),
+        encryptionKeyHash: String(initial.note?.enc ?? ""),
+        applicationId: input.applicationId,
+        poolVersion: input.poolVersion,
+        commitment: outCommitment1,
+        spendingSecret: input.ownerPublicKey ? changeSecret : undefined,
+      })
+    : undefined;
+  const changeSealed = changePlaintext
+    ? input.ownerPublicKey
+      ? sealBrowserHpkeToPublicKey({
+          recipientPublicKey: input.ownerPublicKey,
           ephemeralSeed: secrets.recipientHpkeSeed,
-          plaintext: encodeRecipientPlaintext({
-            value: noteValue - sendAmount,
-            blinding: changeBlinding,
-            notePublicKey: String(initial.note?.npk ?? ""),
-            encryptionKeyHash: String(initial.note?.enc ?? ""),
-            applicationId: input.applicationId,
-            poolVersion: input.poolVersion,
-            commitment: outCommitment1,
-          }),
+          plaintext: changePlaintext,
           info: RECIPIENT_INFO,
           aad: recipientAad({ ...input, outputIndex: 1, outputCommitment: outCommitment1 }),
-        }),
-      )
+        })
+      : sealBrowserHpke({
+          recipientIkm: secrets.noteSecret,
+          ephemeralSeed: secrets.recipientHpkeSeed,
+          plaintext: changePlaintext,
+          info: RECIPIENT_INFO,
+          aad: recipientAad({ ...input, outputIndex: 1, outputCommitment: outCommitment1 }),
+        })
+    : undefined;
+  const recipientEnvelope1 = changeSealed
+    ? envelope("recipient", 0n, changeSealed)
     : { hash: `0x${"00".repeat(32)}`, bytes: "0x" };
 
   const draft = input.buildWitness({

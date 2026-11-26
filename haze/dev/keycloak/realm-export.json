@@ -1,0 +1,61 @@
+{
+  "realm": "haze-fuji",
+  "enabled": true,
+  "displayName": "Haze Avalanche Fuji Compliance Realm",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "pool-user",
+        "description": "Standard privacy pool user authorized for deposit, swap, send, and withdraw."
+      },
+      {
+        "name": "application-admin",
+        "description": "Application operator authorized for member enrollment, policy root updates, and audit delegation."
+      },
+      {
+        "name": "auditor",
+        "description": "Compliance auditor authorized for assigned cases and field-scoped disclosure."
+      },
+      {
+        "name": "governance-operator",
+        "description": "2-of-3 multisig governance participant authorized for proposals, versioning, and policy activation."
+      },
+      {
+        "name": "super-auditor",
+        "description": "Institutional auditor with timelocked, case-bound cross-application disclosure access."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "haze-portal",
+      "name": "Haze Privacy Pool Portal",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://compliance-haze.vercel.app/*",
+        "oauth2.device.authorization.grant.enabled": "false"
+      },
+      "redirectUris": [
+        "https://compliance-haze.vercel.app/*"
+      ],
+      "webOrigins": [
+        "https://compliance-haze.vercel.app"
+      ]
+    }
+  ]
+}

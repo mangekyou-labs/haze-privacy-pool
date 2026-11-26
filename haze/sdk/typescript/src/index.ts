@@ -46,27 +46,13 @@ export {
   requireAddressBinding,
 } from "./address.ts";
 export type { HazeAddress } from "./address.ts";
-export { AUDIT_INFO, encodeEnvelope, envelopeHash, parseEnvelope } from "./envelope.ts";
+export { encodeEnvelope, envelopeHash, parseEnvelope } from "./envelope.ts";
 export type { Envelope, EnvelopePurpose } from "./envelope.ts";
 export {
-  DEVELOPMENT_AUDIT_IKM,
-  DEVELOPMENT_AUDIT_KEY_VERSION,
-  DEVELOPMENT_AUDIT_SENDER_SEED,
-  auditAad,
-  auditDataCommitment,
-  decodeAuditRecord,
-  encodeAuditRecord,
-  openAuditRecord,
-  sealAuditRecord,
-} from "./audit.ts";
-export type { AuditCommitmentInput, AuditRecord } from "./audit.ts";
-export {
   deriveX25519KeyPair,
-  openAuditEnvelope,
   openRecipientNote,
   parseRecipientPlaintext,
   recipientAad,
-  sealAuditEnvelope,
   sealRecipientNote,
 } from "./hpke.ts";
 export type { RecipientPlaintext } from "./hpke.ts";
@@ -106,6 +92,7 @@ export {
   checkSpendPublicInputs,
   createProverSession,
   deriveShieldedAccount,
+  deriveShieldedAccountFromSignature,
   developmentProofDigest,
   handleProverWorkerMessage,
   hashArtifactSet,
@@ -120,6 +107,7 @@ export type {
   ProverErrorCode,
   ShieldedAccount,
   ShieldedAccountRequest,
+  ShieldedAccountSignatureRequest,
 } from "./prover.ts";
 export {
   ApplicationStatus,
@@ -149,13 +137,68 @@ export type { EmergencyExitRequest } from "./emergency.ts";
 export {
   createArtifactCache,
   createBrowserProver,
+  generateBrowserSecrets,
+  loadFujiProvingArtifacts,
   selectCircuitArtifact,
 } from "./browser-prover.ts";
+export {
+  browserAuditAad,
+  decodeBrowserEnvelope,
+  encodeBrowserEnvelope,
+  openBrowserHpke,
+  sealBrowserHpke,
+  sealBrowserHpkeToPublicKey,
+  deriveBrowserX25519PublicKey,
+} from "./browser-crypto.ts";
+export type { BrowserEnvelope } from "./browser-crypto.ts";
+export { encodeBrowserAuditRecord } from "./browser-audit.ts";
+export type { BrowserAuditFacts } from "./browser-audit.ts";
+export {
+  createBrowserOperationVault,
+  createIndexedDbOperationStore,
+  createMemoryIndexedDb,
+  deriveBrowserVaultKey,
+  isConfirmedSpendableInput,
+} from "./browser-operation-vault.ts";
+export type {
+  BrowserOperation,
+  BrowserOperationState,
+  BrowserOperationStore,
+  BrowserVaultBinding,
+} from "./browser-operation-vault.ts";
+export {
+  PRIVATE_TRANSACTION_TOPIC,
+  broadcastFujiTransaction,
+  decodePrivateTransaction,
+  reconcileFujiOperation,
+  recoverFujiOperation,
+  recoverSpendableNotesFromLogs,
+} from "./fuji-reconciliation.ts";
+export type { FujiLog, FujiReceipt, FujiRpc } from "./fuji-reconciliation.ts";
+export { DEFAULT_HAZE_AUDIT_PUBLIC_KEY, DEFAULT_HAZE_DISCLOSURE_ORIGIN, planFujiWithdrawalDisclosure, requestFujiDisclosure } from "./render-disclosure.ts";
+export { ensureFujiMembershipRoot, executeFujiBrowserTransaction, updateFujiMembershipRoot } from "./browser-fuji-flow.ts";
+export { classifyBrowserError } from "./fuji-browser-error.ts";
+export type { BrowserErrorCategory, ClassifiedBrowserError } from "./fuji-browser-error.ts";
+export { createFujiMembershipStore, createMemoryMembershipStore, unionMembershipLeaves } from "./fuji-membership-store.ts";
+export type { FujiMembershipStore, MembershipLeaf } from "./fuji-membership-store.ts";
+export { buildSealedBrowserTransferWitness, buildSealedBrowserWitness } from "./browser-witness-flow.ts";
+export {
+  encodeBrowserFujiSpend,
+  encodeBrowserGroth16Proof,
+  encodeBrowserSwapAndShield,
+  encodeErc20Approve,
+  encodeMembershipRootUpdate,
+  planBrowserFujiSpend,
+  swapRouteHash,
+} from "./browser-fuji-contracts.ts";
 export type {
   ArtifactCache,
   BrowserProverConfig,
+  BrowserSecrets,
   BrowserWorker,
   CircuitArtifactManifest,
+  FujiProvingArtifact,
+  FujiProvingArtifactManifest,
 } from "./browser-prover.ts";
 export { createWorkflowClient } from "./workflow.ts";
 export type {

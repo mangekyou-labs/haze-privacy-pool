@@ -6,10 +6,12 @@ import test from "node:test";
 import {
   createProverSession,
   deriveShieldedAccount,
+  deriveShieldedAccountFromSignature,
   hashArtifactSet,
   keyDerivationDigest,
   spendPublicInputs,
 } from "../sdk/typescript/src/prover.ts";
+import { secp256k1 } from "@noble/curves/secp256k1";
 
 const HAZE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SPEND = join(HAZE_ROOT, "circuits/vectors/v1/haze-spend-v1.json");
@@ -80,6 +82,47 @@ test("TypeScript derives a repeatable shielded account from the wallet message",
   assert.equal(first.localVaultKey, expected.localVaultKey);
   assert.equal(first.membershipBlinding, expected.membershipBlinding);
   assert.notEqual(first.spendingSecret, "0x" + "00".repeat(32));
+});
+
+test("deriveShieldedAccountFromSignature derives identical account from valid signature and rejects mismatch", () => {
+  const req = fixtureRequest();
+  const expected = deriveShieldedAccount(req);
+  const digest = Buffer.from(keyDerivationDigest(req).replace(/^0x/i, ""), "hex");
+  const privKey = Buffer.from(req.signingKey.replace(/^0x/i, ""), "hex");
+  const sig = secp256k1.sign(digest, privKey, { prehash: false });
+  const low = sig.normalizeS();
+  const recovery = sig.recovery === undefined ? 0 : sig.recovery;
+  const flipped = sig.hasHighS() ? recovery ^ 1 : recovery;
+  const sigBytes = Buffer.alloc(65);
+  Buffer.from(low.toCompactRawBytes()).copy(sigBytes);
+  sigBytes[64] = flipped + 27; // standard Ethereum v = 27 or 28
+
+  const derived = deriveShieldedAccountFromSignature({
+    signature: `0x${sigBytes.toString("hex")}`,
+    wallet: req.wallet,
+    chainId: req.chainId,
+    pool: req.pool,
+    applicationId: req.applicationId,
+    poolVersion: req.poolVersion,
+  });
+  assert.equal(derived.wallet, expected.wallet);
+  assert.equal(derived.spendingSecret, expected.spendingSecret);
+  assert.equal(derived.x25519PublicKey, expected.x25519PublicKey);
+  assert.equal(derived.x25519Secret, expected.x25519Secret);
+  assert.equal(derived.localVaultKey, expected.localVaultKey);
+
+  assert.throws(
+    () =>
+      deriveShieldedAccountFromSignature({
+        signature: `0x${sigBytes.toString("hex")}`,
+        wallet: "0x0000000000000000000000000000000000000001",
+        chainId: req.chainId,
+        pool: req.pool,
+        applicationId: req.applicationId,
+        poolVersion: req.poolVersion,
+      }),
+    { code: "UNSUPPORTED_RECOVERY" },
+  );
 });
 
 test("TypeScript spend public inputs match the frozen order and deposit fixture", () => {

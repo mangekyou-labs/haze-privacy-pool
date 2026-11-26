@@ -1,5 +1,5 @@
 import { SdkError } from "./errors.ts";
-import { parseField, parseHex, toHex, u64be } from "./field.ts";
+import { parseField, parseHex, readU64Be, toHex, u64be } from "./field.ts";
 import { keccak256 } from "./keccak.ts";
 
 const MAGIC = Buffer.from("HZAV");
@@ -29,8 +29,8 @@ function normalizeHex(bytes: Uint8Array): string {
   return toHex(bytes);
 }
 
-export function rejectLowOrderX25519(key: string | Uint8Array): Buffer {
-  const bytes = typeof key === "string" ? parseHex(key) : Buffer.from(key);
+export function rejectLowOrderX25519(key: string | Uint8Array): Uint8Array {
+  const bytes = typeof key === "string" ? Buffer.from(parseHex(key)) : Buffer.from(key);
   if (bytes.length !== 32) {
     throw new SdkError("ENCODING_INVALID");
   }
@@ -63,11 +63,23 @@ export function encodeHazeAddressBytes(address: HazeAddress): Uint8Array {
   return Buffer.concat([payload, Buffer.from(checksum)]);
 }
 
+function toBase64Url(bytes: Uint8Array): string {
+  return Buffer.from(bytes)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function fromBase64Url(str: string): Buffer {
+  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = base64.length % 4;
+  const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
+  return Buffer.from(padded, "base64");
+}
+
 export function encodeHazeAddress(address: HazeAddress): string {
-  const raw = encodeHazeAddressBytes(address);
-  const base64 = Buffer.from(raw).toString("base64");
-  const base64url = base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `haze1:${base64url}`;
+  return `haze1:${toBase64Url(encodeHazeAddressBytes(address))}`;
 }
 
 export function parseHazeAddressBytes(bytes: Uint8Array): HazeAddress {
@@ -88,9 +100,8 @@ export function parseHazeAddressBytes(bytes: Uint8Array): HazeAddress {
   }
   const notePublicKey = parseField(buffer.subarray(77, 109));
   const x25519PublicKey = rejectLowOrderX25519(buffer.subarray(109, 141));
-  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   return {
-    chainId: Number(view.getBigUint64(5, false)),
+    chainId: Number(readU64Be(buffer, 5)),
     applicationId: normalizeHex(buffer.subarray(13, 45)),
     poolVersion: normalizeHex(buffer.subarray(45, 77)),
     notePublicKey: normalizeHex(notePublicKey),
@@ -106,13 +117,9 @@ export function decodeHazeAddress(text: string): HazeAddress {
   if (encoded.includes("=")) {
     throw new SdkError("ENCODING_INVALID");
   }
-  let base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
-  while (base64.length % 4 !== 0) {
-    base64 += "=";
-  }
   let bytes: Buffer;
   try {
-    bytes = Buffer.from(base64, "base64");
+    bytes = fromBase64Url(encoded);
   } catch {
     throw new SdkError("ENCODING_INVALID");
   }

@@ -172,7 +172,7 @@ test("layouts collapse on mobile and keep independent product shells", () => {
   assert.equal(portalLayout(1280).mode, "workspace");
   assert.deepEqual(
     dexNav(poolUser).map((item) => item.path).sort(),
-    ["/emergency-exit", "/history", "/migrate", "/send", "/shield", "/swap", "/withdraw"].sort(),
+    ["/emergency-exit", "/history", "/migrate", "/overview", "/send", "/shield", "/swap", "/withdraw"].sort(),
   );
   assert.ok(dexNav(poolUser).every((item) => !item.path.startsWith("/admin")));
   assert.ok(portalNav(adminA).some((item) => item.path === "/admin"));

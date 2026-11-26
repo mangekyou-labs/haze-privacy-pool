@@ -38,6 +38,7 @@ export function grantForAddress(address?: string | null) {
 }
 
 const POOL_ROUTES = [
+  "/overview",
   "/swap",
   "/shield",
   "/send",
@@ -64,6 +65,7 @@ export type NavItem = {
 };
 
 const LABELS: Record<string, string> = {
+  "/overview": "Overview",
   "/swap": "Swap",
   "/shield": "Shield",
   "/send": "Send",
@@ -126,11 +128,13 @@ export function createHazeSite(session: Session) {
       if (session.role === "super-auditor") {
         return "/governance";
       }
-      return "/shield";
+      return "/overview";
     },
     warnings(path: string, acknowledged: boolean) {
       const facts =
-        path === "/shield"
+        path === "/overview" || path === "/history" || path === "/admin" || path === "/audit" || path === "/governance"
+          ? []
+          : path === "/shield"
           ? ["deposit-amount", "wallet-address", "gas"]
           : path === "/swap"
             ? ["source-token-swap", "deposit-amount", "wallet-address", "gas"]
@@ -204,6 +208,7 @@ export function liveOperatorShieldAllowed(input: {
 }
 
 export const TITLES: Record<string, string> = {
+  "/overview": "Overview",
   "/swap": "Public swap and shield",
   "/shield": "Direct shield",
   "/send": "Private send",
@@ -217,6 +222,7 @@ export const TITLES: Record<string, string> = {
 };
 
 export const PATH_KIND: Record<string, string> = {
+  "/overview": "overview",
   "/swap": "swap-and-shield",
   "/shield": "direct-shield",
   "/send": "private-send",

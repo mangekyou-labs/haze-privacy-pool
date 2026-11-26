@@ -12,9 +12,10 @@ import { parseHex, toHex } from "./field.ts";
 import { keccak256 } from "./keccak.ts";
 import { recoverPersonalSign } from "./sig.ts";
 import { resolveSiweDomain } from "../../../dev/production-origin.mjs";
+import { FUJI_V2 } from "./fuji-v2-defaults.ts";
 
 export const FUJI_CHAIN_ID = 43113;
-export const LIVE_POSEIDON_POOL = "0x00BEB0A5D709d0F093952fD374Dbbf3d0d21d550";
+export const LIVE_POSEIDON_POOL: string = FUJI_V2.pool;
 export const LIVE_APP_ID = `0x${(0xa11n).toString(16).padStart(64, "0")}`;
 export const LIVE_POOL_VERSION = `0x${(0xb001n).toString(16).padStart(64, "0")}`;
 export const REQUIRED_CONFIRMATIONS = 12;

@@ -13,7 +13,8 @@ export type CircuitArtifactManifest = {
 };
 
 export type FujiProvingArtifact = {
-  url: string;
+  url?: string;
+  urls?: string[];
   byteSize: number;
   sha256: string;
 };
@@ -75,6 +76,8 @@ export type BrowserSecrets = {
   auditSalt: Uint8Array;
   recipientHpkeSeed: Uint8Array;
   auditHpkeSeed: Uint8Array;
+  recipientNoteSecret: Uint8Array;
+  recipientBlinding: Uint8Array;
 };
 
 /** Generate independent secret material using the browser CSPRNG. */
@@ -92,6 +95,8 @@ export function generateBrowserSecrets(
     auditSalt: random32(),
     recipientHpkeSeed: random32(),
     auditHpkeSeed: random32(),
+    recipientNoteSecret: random32(),
+    recipientBlinding: random32(),
   };
 }
 async function verifiedArtifact(
@@ -101,11 +106,31 @@ async function verifiedArtifact(
 ) {
   let bytes = supplied;
   if (bytes === undefined) {
-    const response = await fetchArtifact(descriptor.url);
-    if (!response.ok) {
+    if (Array.isArray(descriptor.urls) && descriptor.urls.length > 0) {
+      const parts = await Promise.all(
+        descriptor.urls.map(async (url) => {
+          const response = await fetchArtifact(url);
+          if (!response.ok) throw new ProverError("ARTIFACT_INVALID");
+          return new Uint8Array(await response.arrayBuffer());
+        }),
+      );
+      const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+      const full = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const part of parts) {
+        full.set(part, offset);
+        offset += part.length;
+      }
+      bytes = full;
+    } else if (descriptor.url) {
+      const response = await fetchArtifact(descriptor.url);
+      if (!response.ok) {
+        throw new ProverError("ARTIFACT_INVALID");
+      }
+      bytes = new Uint8Array(await response.arrayBuffer());
+    } else {
       throw new ProverError("ARTIFACT_INVALID");
     }
-    bytes = new Uint8Array(await response.arrayBuffer());
   }
   if (bytes.byteLength !== descriptor.byteSize) {
     throw new ProverError("ARTIFACT_INVALID");

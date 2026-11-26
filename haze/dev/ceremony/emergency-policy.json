@@ -1,0 +1,25 @@
+{
+  "ceremony_id": "haze-emergency-v1-production",
+  "version": 1,
+  "enabled": false,
+  "not_for_production": true,
+  "description": "Emergency production ceremony policy for haze-emergency-v1. Disabled until real auditor, contributor, verifier, multisig, and anchor addresses are approved.",
+  "auditor": "0x0000000000000000000000000000000000000000",
+  "contributors": [
+    "0x0000000000000000000000000000000000000001",
+    "0x0000000000000000000000000000000000000002",
+    "0x0000000000000000000000000000000000000003"
+  ],
+  "verifier": "0x0000000000000000000000000000000000000000",
+  "multisig": "0x0000000000000000000000000000000000000000",
+  "anchorAddress": "0x0000000000000000000000000000000000000000",
+  "rpcProviders": [
+    "https://placeholder-rpc-1.example.com",
+    "https://placeholder-rpc-2.example.com",
+    "https://placeholder-rpc-3.example.com"
+  ],
+  "circuit_id": "haze-emergency-v1",
+  "ptau_power": 20,
+  "public_inputs": 20,
+  "contribution_count": 3
+}

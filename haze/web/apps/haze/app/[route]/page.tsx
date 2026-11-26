@@ -1,13 +1,12 @@
-import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
-import { createHazeSite } from "../../../../packages/ui/src/site.ts";
+import { createHazeSite, grantForAddress } from "../../../../packages/ui/src/site.ts";
 import { renderHazeFragment } from "../../../../packages/ui/src/html.ts";
-import { LIVE_APP_ID } from "../../../../../sdk/typescript/src/compliance-service.ts";
-import { getComplianceStore } from "../../lib/compliance-store.ts";
 import type { Role } from "../../../../../apps/_shared/ux.ts";
-import { FujiBrowserClient } from "./fuji-browser-client";
+import { FujiBrowserClient } from "./fuji-browser-client.tsx";
+import { AuditBrowserClient } from "./audit-browser-client.tsx";
 
 const ROUTES = new Set([
+  "overview",
   "swap",
   "shield",
   "send",
@@ -25,54 +24,27 @@ export default async function RoutePage({
   searchParams,
 }: {
   params: Promise<{ route: string }>;
-  searchParams: Promise<{ live?: string; caseId?: string; reviewed?: string }>;
+  searchParams: Promise<{ role?: string }>;
 }) {
   const { route } = await params;
   const query = await searchParams;
   if (!ROUTES.has(route)) {
-    notFound();
+    return <p>not found</p>;
   }
-
   const jar = await cookies();
-  const complianceToken = jar.get("haze_compliance_session")?.value;
-  const store = getComplianceStore();
-  const session = await store.getSession(complianceToken);
-
-  let role: Role = "pool-user";
-  let boundWallet: string | undefined = undefined;
-  let auditOptions: any = undefined;
-
-  if (route === "audit" && session && session.role === "application-auditor") {
-    role = "application-auditor";
-    boundWallet = session.address;
-    const cases = await store.listAssignedCases(session.address, session.applicationId);
-    const accessLog = await store.getAccessLog();
-    auditOptions = {
-      boundWallet,
-      cases,
-      selectedCaseId: query.caseId ?? cases[0]?.caseId,
-      access: accessLog.entries,
-      chainVerified: accessLog.verified,
-      headHash: accessLog.headHash,
-    };
-  }
-
-  // Fail-closed: /admin and /governance cannot be authorized via ?role or haze-role in production.
+  const address = jar.get("haze-address")?.value;
+  const grant = address ? grantForAddress(address) : null;
+  const role = (query.role ?? jar.get("haze-role")?.value ?? grant?.role ?? "pool-user") as Role;
   const site = createHazeSite({
     role,
-    applicationId: LIVE_APP_ID,
+    applicationId: "0x0000000000000000000000000000000000000000000000000000000000000a11",
   });
-
   const html = renderHazeFragment(site, `/${route}`, {
-    live: query.live === "1",
-    reviewed: query.reviewed === "1",
-    audit: auditOptions,
+    mode: "fuji-browser",
+    address,
   });
-
-  return (
-    <>
-      <div dangerouslySetInnerHTML={{ __html: html }} />
-      <FujiBrowserClient route={route} />
-    </>
-  );
+  return <>
+    <div dangerouslySetInnerHTML={{ __html: html }} />
+    {route === "audit" ? <AuditBrowserClient /> : <FujiBrowserClient route={route} />}
+  </>;
 }

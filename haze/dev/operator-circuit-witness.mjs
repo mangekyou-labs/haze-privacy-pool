@@ -1,4 +1,5 @@
 import { domainField, protocolVersionTag } from "../sdk/typescript/src/domain.ts";
+import { canonicalUint256 } from "../sdk/typescript/src/abi.ts";
 import { intentDigest } from "../sdk/typescript/src/eip712.ts";
 import { encodeEnvelope, envelopeHash } from "../sdk/typescript/src/envelope.ts";
 import {
@@ -70,6 +71,29 @@ function fieldHex(value) {
 
 function dec(value) {
   return value.toString();
+}
+
+function positiveSafeInteger(value) {
+  let parsed;
+  try {
+    if (typeof value === "number") {
+      if (!Number.isSafeInteger(value)) throw new Error("ENCODING_INVALID");
+      parsed = value;
+    } else if (typeof value === "bigint") {
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("ENCODING_INVALID");
+      parsed = Number(value);
+    } else if (typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value)) {
+      const bigint = BigInt(value);
+      if (bigint > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("ENCODING_INVALID");
+      parsed = Number(bigint);
+    } else {
+      throw new Error("ENCODING_INVALID");
+    }
+  } catch {
+    throw new Error("ENCODING_INVALID");
+  }
+  if (parsed <= 0) throw new Error("ENCODING_INVALID");
+  return parsed;
 }
 
 function limbsHex(value) {
@@ -250,14 +274,13 @@ function fillPolicyPaths(slots, applicationId, appTree, blockTree) {
   const lowerSibs = blockTree.path(0);
   const upperSibs = blockTree.path(1);
   const upper = blocklistUpperSentinel();
-  const maxIndex = Math.max(32, appTree.leaves.size);
   for (const slot of slots) {
     if (!slot.enabled) {
       continue;
     }
     const member = applicationMember(applicationId, slot.npk, slot.enc);
     let found;
-    for (let index = 0; index < maxIndex; index += 1) {
+    for (let index = 0; index < 8; index += 1) {
       const path = appTree.path(index);
       const reconstructed = rootFromAppPath(member, index, path);
       if (reconstructed === appTree.root()) {
@@ -459,13 +482,20 @@ function buildCase(input) {
   const recipient1 = outSlots[1].enabled
     ? input.recipientEnvelope1 ?? dummyRecipientEnvelope(0x21)
     : { hash: ZERO, bytes: "0x" };
+  const rc0 = recipient0.hash;
+  const rc1 = recipient1.hash;
+  const [rc0Hi, rc0Lo] = limbsHex(rc0);
+  const [rc1Hi, rc1Lo] = limbsHex(rc1);
+  const [appHi, appLo] = limbsHex(bindings.applicationId);
+  const [poolHi, poolLo] = limbsHex(bindings.poolVersion);
+  const [refHi, refLo] = limbsHex(bindings.actionReference);
+
   const noteTreeRoot = action === DEPOSIT || action === SWAP_AND_SHIELD ? ZERO : noteTree.root();
   const nf0 = inSlots[0].enabled ? inSlots[0].nullifier : ZERO;
   const nf1 = inSlots[1].enabled ? inSlots[1].nullifier : ZERO;
   const cm0 = outSlots[0].enabled ? outSlots[0].commitment : ZERO;
   const cm1 = outSlots[1].enabled ? outSlots[1].commitment : ZERO;
-  const rc0 = recipient0.hash;
-  const rc1 = recipient1.hash;
+
   const auditSalt = input.auditSalt ?? fieldHex(AUDIT_SALT);
   const auditFacts = {
     chainId: FUJI_CHAIN_ID,
@@ -503,13 +533,7 @@ function buildCase(input) {
     auditKeyVersion: DEVELOPMENT_AUDIT_KEY_VERSION,
   });
   const auditCt = auditEnvelope.hash;
-  const [rc0Hi, rc0Lo] = limbsHex(rc0);
-  const [rc1Hi, rc1Lo] = limbsHex(rc1);
   const [auditCtHi, auditCtLo] = limbsHex(auditCt);
-  const [appHi, appLo] = limbsHex(bindings.applicationId);
-  const [poolHi, poolLo] = limbsHex(bindings.poolVersion);
-  const [refHi, refLo] = limbsHex(bindings.actionReference);
-
   const auditCommitment = auditDataCommitment(auditFacts);
 
   const intentHash = intentDigest(
@@ -535,7 +559,7 @@ function buildCase(input) {
       auditDataCommitment: auditCommitment,
       auditCiphertextHash: auditCt,
       tokenIn: input.tokenIn ?? ZERO_ADDRESS,
-      amountIn: input.amountIn !== undefined ? fieldHex(input.amountIn) : ZERO,
+      amountIn: input.amountIn !== undefined ? canonicalUint256(input.amountIn) : ZERO,
       minUsdcOut: input.minUsdcOut ?? 0,
       routeHash: input.routeHash ?? ZERO,
       deadline: input.deadline ?? 0,
@@ -675,7 +699,6 @@ function buildCase(input) {
     },
     auditRecordBytes: auditEnvelope.plaintext,
     auditKeyVersion: (auditEnvelope.envelope?.keyVersion ?? DEVELOPMENT_AUDIT_KEY_VERSION).toString(),
-    auditDevelopmentFixture: true,
     actionReference: bindings.actionReference,
     note: noteResult,
     recipientNote,
@@ -724,7 +747,7 @@ export function buildLiveDepositWitness(input) {
     auditEnvelope: input.auditEnvelope,
     outputs: [
       {
-        value: input.value ?? input.publicAmount ?? 1_000_000,
+        value: input.value ?? 1_000_000,
         secret: input.secret ?? 1,
         blinding: input.blinding ?? 2,
         leafIndex: input.leafIndex ?? 0,
@@ -820,13 +843,14 @@ export function buildLiveTransferWitness(input) {
 }
 
 export function buildLiveSwapWitness(input) {
+  const outputValue = positiveSafeInteger(input.value ?? input.amountIn ?? 1_000_000);
   return buildCase({
     action: SWAP_AND_SHIELD,
     pool: input.pool,
     user: input.user,
     applicationId: input.applicationId,
     poolVersion: input.poolVersion,
-    publicAmount: input.amountIn ?? input.value ?? 1_000_000,
+    publicAmount: outputValue,
     publicRecipient: ZERO_ADDRESS,
     applicationPolicyVersion: input.applicationPolicyVersion,
     hazePolicyVersion: input.hazePolicyVersion,
@@ -842,7 +866,7 @@ export function buildLiveSwapWitness(input) {
     deadline: input.deadline,
     outputs: [
       {
-        value: input.value ?? input.amountIn ?? 1_000_000,
+        value: outputValue,
         secret: input.secret ?? 1,
         blinding: input.blinding ?? 2,
         leafIndex: input.leafIndex ?? 0,
@@ -853,4 +877,3 @@ export function buildLiveSwapWitness(input) {
     membershipLeaves: input.membershipLeaves,
   });
 }
-

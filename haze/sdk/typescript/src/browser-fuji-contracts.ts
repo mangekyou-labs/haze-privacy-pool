@@ -1,5 +1,5 @@
-import { addressWord, bytes32Word, concatBytes, encodeWords, functionSelector, hexToBuf, toHex, uintWord } from "./abi.ts";
-import { POOL_SELECTORS } from "./bindings.ts";
+import { addressWord, bytes32Word, canonicalUint256, concatBytes, encodeWords, functionSelector, hexToBuf, toHex, uintWord } from "./abi.ts";
+import { POOL_SELECTORS, ROUTER_SELECTORS } from "./bindings.ts";
 import { AUTH_TYPE, EIP712_DOMAIN_TYPE, intentStructHash, type ApplicationAuthorizationFields, type HazeIntentFields } from "./eip712.ts";
 import { keccak256 } from "./keccak.ts";
 import { POOL_DOMAIN_NAME, POOL_DOMAIN_VERSION } from "./pool.ts";
@@ -26,6 +26,55 @@ export function encodeBrowserGroth16Proof(proof: { pi_a?: string[]; pi_b?: strin
   return toHex(encodeWords([a[0], a[1], b[0][1], b[0][0], b[1][1], b[1][0], c[0], c[1]].map((word) => uintWord(word))));
 }
 
+export const SPEND_PUBLIC_CAMEL = [
+  "protocolVersionTag",
+  "chainId",
+  "poolAddress",
+  "poolVersionHi",
+  "poolVersionLo",
+  "applicationIdHi",
+  "applicationIdLo",
+  "noteTreeRoot",
+  "applicationPolicyVersion",
+  "hazePolicyVersion",
+  "applicationMembershipRoot",
+  "hazeBlocklistRoot",
+  "inputNullifier0",
+  "inputNullifier1",
+  "outputCommitment0",
+  "outputCommitment1",
+  "action",
+  "publicAmount",
+  "publicRecipient",
+  "authorizedUser",
+  "intentHashHi",
+  "intentHashLo",
+  "recipientCiphertextHash0Hi",
+  "recipientCiphertextHash0Lo",
+  "recipientCiphertextHash1Hi",
+  "recipientCiphertextHash1Lo",
+  "auditDataCommitment",
+  "auditCiphertextHashHi",
+  "auditCiphertextHashLo",
+] as const;
+
+export function deriveDevelopmentSpendProof(circom: Record<string, unknown>): string {
+  const words = SPEND_PUBLIC_CAMEL.map((key) => {
+    const val = circom[key];
+    if (typeof val === "string") {
+      if (val.startsWith("0x") || val.startsWith("0X")) {
+        return hexToBuf(val.slice(2).padStart(64, "0"));
+      }
+      return hexToBuf(BigInt(val).toString(16).padStart(64, "0"));
+    }
+    if (typeof val === "number" || typeof val === "bigint") {
+      return hexToBuf(BigInt(val).toString(16).padStart(64, "0"));
+    }
+    throw new Error(`WITNESS_FIELD_INVALID: ${key}`);
+  });
+  const packed = concatBytes(...words);
+  return toHex(keccak256(packed));
+}
 export function planBrowserFujiSpend(input: {
   witness: Witness;
   user: string;
@@ -37,7 +86,7 @@ export function planBrowserFujiSpend(input: {
   proof: string;
   publicRecipient?: string;
   tokenIn?: string;
-  amountIn?: string;
+  amountIn?: string | number | bigint;
   minUsdcOut?: number | bigint;
   routeHash?: string;
   deadline?: number | bigint;
@@ -65,7 +114,7 @@ export function planBrowserFujiSpend(input: {
     auditDataCommitment: c.auditDataCommitment,
     auditCiphertextHash: e.auditCiphertextHash,
     tokenIn: input.tokenIn ?? ZERO_ADDRESS,
-    amountIn: input.amountIn ?? ZERO,
+    amountIn: canonicalUint256(input.amountIn ?? ZERO),
     minUsdcOut: Number(input.minUsdcOut ?? 0),
     routeHash: input.routeHash ?? ZERO,
     deadline: Number(input.deadline ?? 0),
@@ -82,7 +131,7 @@ export function planBrowserFujiSpend(input: {
     auditDataCommitment: intent.auditDataCommitment,
     auditCiphertextHash: intent.auditCiphertextHash,
     nonce: input.witness.actionReference,
-    validAfter: input.now - 1,
+    validAfter: input.now - 300,
     validUntil: input.now + 3600,
   };
   return {
@@ -161,9 +210,7 @@ export function encodeBrowserSwapAndShield(input: {
   const headOffsetArgs = uintWord(64);
   const headOffsetRoute = uintWord(64 + transactArgsTuple.length);
 
-  const selector = functionSelector(
-    "swapAndShield(((bytes32,address,address,bytes32,uint8,bytes32,uint64,uint64,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,address,bytes32,bytes32,bytes32,bytes32,address,bytes32,uint64,bytes32,uint64),(bytes32,address,address,bytes32,uint8,bytes32,uint64,uint64,bytes32,bytes32,bytes32,uint64,uint64),bytes,bytes,bytes,bytes,bytes),(address,bytes,bytes32))",
-  );
+  const selector = ROUTER_SELECTORS.swapAndShield;
 
   const payload = concatBytes(
     hexToBuf(selector),

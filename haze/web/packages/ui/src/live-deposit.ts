@@ -45,7 +45,6 @@ export type LiveSnapshot = {
 export type LiveShieldPlan = {
   allowed: boolean;
   reason?: string;
-  noteTreeRoot?: string;
   chainId?: number;
   usdc?: string;
   pool?: string;
@@ -67,6 +66,7 @@ export type LiveShieldPlan = {
 };
 
 export type LiveCircuitWitness = {
+  actionReference: string;
   circom: {
     noteTreeRoot: string;
     applicationPolicyVersion: string;
@@ -100,7 +100,7 @@ function asBytes32(value: string) {
 function encodeBytes(hex: string) {
   const raw = hexToBuf(hex === "0x" ? "0x" : hex);
   const padded = Buffer.alloc(Math.ceil(raw.length / 32) * 32);
-  raw.copy(padded);
+  padded.set(raw);
   return Buffer.concat([uintWord(raw.length), padded]);
 }
 
@@ -146,6 +146,85 @@ export async function fetchLiveSnapshot(sidecar: LiveOverlay): Promise<LiveSnaps
     ethCall(policyRegistry, functionSelector("activeRoot()")),
   ]);
   return snapshotFromChainReturns(appReturn, versionReturn, rootReturn);
+}
+
+export function encodeErc20BalanceOf(holder: string): string {
+  return `${functionSelector("balanceOf(address)")}${toHex(addressWord(holder)).slice(2)}`;
+}
+
+import {
+  decodeErc20Balance,
+  formatUsdc,
+  formatOverviewPublicBalance,
+  formatOverviewPrivateBalance,
+  sumSpendableNotes,
+  recentOperationsFromVault,
+} from "./wallet-session.ts";
+export {
+  decodeErc20Balance,
+  formatUsdc,
+  formatOverviewPublicBalance,
+  formatOverviewPrivateBalance,
+  sumSpendableNotes,
+  recentOperationsFromVault,
+};
+
+export async function fetchLiveErc20Balance(sidecar: LiveOverlay, holder: string) {
+  const rpc = sidecar.live_rpc;
+  if (!rpc || !sidecar.usdc) {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  const response = await fetch(rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_call",
+      params: [{ to: sidecar.usdc, data: encodeErc20BalanceOf(holder) }, "latest"],
+    }),
+  });
+  const json = (await response.json()) as { result?: string };
+  const raw = decodeErc20Balance(json.result ?? "0x0");
+  return { raw, formatted: formatUsdc(raw) };
+}
+
+async function fetchLivePoolCall(sidecar: LiveOverlay, data: string) {
+  const rpc = sidecar.live_rpc;
+  const pool = sidecar.addresses.HazePool;
+  if (!rpc || !pool) {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  const response = await fetch(rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_call",
+      params: [{ to: pool, data }, "latest"],
+    }),
+  });
+  const json = (await response.json()) as { result?: string };
+  if (!json.result || json.result === "0x") {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  return json.result;
+}
+
+export async function fetchLivePoolNextIndex(sidecar: LiveOverlay): Promise<number> {
+  const result = await fetchLivePoolCall(sidecar, functionSelector("nextIndex()"));
+  const nextIndex = BigInt(result);
+  if (nextIndex > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("SNAPSHOT_MISSING");
+  }
+  return Number(nextIndex);
+}
+
+export async function fetchLivePoolCommitmentExists(sidecar: LiveOverlay, commitment: string): Promise<boolean> {
+  const data = `${functionSelector("commitmentExists(uint256)")}${toHex(uintWord(BigInt(commitment))).slice(2)}`;
+  const result = await fetchLivePoolCall(sidecar, data);
+  return BigInt(result) !== 0n;
 }
 
 function splitLimbs(value: string) {
@@ -446,13 +525,7 @@ export function planLiveOperatorShield(input: {
     hazePolicyVersion: intent.hazePolicyVersion,
     auditDataCommitment: intent.auditDataCommitment,
     auditCiphertextHash: intent.auditCiphertextHash,
-    nonce: keccakHex(
-      Buffer.concat([
-        Buffer.from("haze-fuji-poseidon-deposit"),
-        hexToBuf(input.user),
-        uintWord(input.now),
-      ]),
-    ),
+    nonce: input.witness.actionReference,
     validAfter: input.now - 1,
     validUntil: input.now + 3600,
   };

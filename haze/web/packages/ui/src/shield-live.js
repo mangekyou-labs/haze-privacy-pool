@@ -39,6 +39,7 @@
             user,
             amount,
             leafIndex: plan.circuitPlan?.note?.leafIndex,
+            blinding: plan.circuitPlan?.note?.blinding,
           }),
         });
         const proof = await proved.json();
@@ -48,10 +49,21 @@
         }
         plan.proof = proof.proofBytes;
       }
-      await provider.request({
+      const approvalHash = await provider.request({
         method: "eth_sendTransaction",
         params: [{ from: user, to: plan.approve.to, data: plan.approve.data }],
       });
+      let approvalReceipt = null;
+      const approvalDeadline = Date.now() + 180_000;
+      while (Date.now() < approvalDeadline) {
+        approvalReceipt = await provider.request({ method: "eth_getTransactionReceipt", params: [approvalHash] });
+        if (approvalReceipt) break;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (approvalReceipt?.status !== "0x1") {
+        status.textContent = "APPROVAL_NOT_SUCCESSFUL";
+        return;
+      }
       const signature = await provider.request({
         method: "eth_signTypedData_v4",
         params: [user, JSON.stringify(plan.typedData)],
@@ -62,9 +74,11 @@
         body: JSON.stringify({ plan, signature }),
       });
       const deposit = await encoded.json();
+      const transaction = { from: user, to: deposit.to, data: deposit.data };
+      await provider.request({ method: "eth_call", params: [transaction, "latest"] });
       const hash = await provider.request({
         method: "eth_sendTransaction",
-        params: [{ from: user, to: deposit.to, data: deposit.data }],
+        params: [transaction],
       });
       let receipt = null;
       const minedDeadline = Date.now() + 180_000;
@@ -86,15 +100,16 @@
         const persisted = await fetch("/api/live-deposit/persist", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ plan: plan.circuitPlan, receipt }),
+          body: JSON.stringify({ plan: plan.circuitPlan }),
         });
-        const persistedBody = await persisted.json();
-        if (!persistedBody.allowed) {
-          status.textContent = persistedBody.reason || "TREE_SNAPSHOT_INVALID";
+        const settled = await persisted.json();
+        if (!settled.allowed) {
+          status.textContent = settled.reason || "WITNESS_INVALID";
           return;
         }
       }
       status.textContent = hash;
+      await globalThis.hazeRefreshBalances?.();
     } catch (error) {
       status.textContent = error?.message || "LIVE_DEPOSIT_FAILED";
     }

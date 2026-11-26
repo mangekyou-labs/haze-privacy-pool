@@ -1,15 +1,18 @@
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
-import { getComplianceStore } from "../../../../lib/compliance-store.ts";
+import { type NextRequest, NextResponse } from "next/server.js";
+import { forwardToDisclosure } from "../_lib.ts";
 
-export async function GET() {
-  const jar = await cookies();
-  const token = jar.get("haze_compliance_session")?.value;
-  const store = getComplianceStore();
-  const session = await store.getSession(token);
-  if (!session || session.role !== "application-auditor") {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  }
-  const logData = await store.getAccessLog();
-  return NextResponse.json(logData);
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const queryString = searchParams.toString();
+  const endpoint = queryString ? `/v1/access-log?${queryString}` : "/v1/access-log";
+
+  const resp = await forwardToDisclosure(endpoint, req, {
+    method: "GET",
+  });
+
+  const data = await resp.text();
+  return new NextResponse(data, {
+    status: resp.status,
+    headers: { "Content-Type": "application/json" },
+  });
 }

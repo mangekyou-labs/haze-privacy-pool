@@ -23,7 +23,7 @@ export function domainField(label: string): bigint {
   if (!(DOMAIN_LABELS as readonly string[]).includes(label)) {
     throw new SdkError("DOMAIN_MISMATCH");
   }
-  return reduceModR(keccak256(Buffer.from(label)));
+  return reduceModR(keccak256(new TextEncoder().encode(label)));
 }
 
 export function protocolVersionTag(): bigint {
