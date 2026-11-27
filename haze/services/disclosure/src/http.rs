@@ -241,11 +241,7 @@ async fn evidence_candidates(
     state: &HttpState,
     hash: [u8; 32],
 ) -> Result<Vec<FujiWithdrawalEvidence>, DisclosureError> {
-    let cached = state
-        .store
-        .get_evidence(&hash)
-        .await
-        .unwrap_or_default();
+    let cached = state.store.get_evidence(&hash).await.unwrap_or_default();
 
     let hash_hex = format!("0x{}", hex::encode(hash));
     let head_num = match rpc(state, "eth_blockNumber", json!([])).await {

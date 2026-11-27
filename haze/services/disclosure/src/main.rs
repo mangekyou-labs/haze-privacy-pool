@@ -91,13 +91,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let replay_window = env::var("HAZE_POLLER_REPLAY_WINDOW")
         .unwrap_or_else(|_| "32".to_owned())
         .parse()?;
-    let poller = Arc::new(FujiLogPoller::with_repository(
+    let mut poller = FujiLogPoller::with_repository(
         config.clone(),
         rpc_url.clone(),
         repo.clone(),
         deployment_block,
         replay_window,
-    ));
+    );
+    if let Ok(max_block_range) = env::var("HAZE_POLLER_MAX_BLOCK_RANGE") {
+        poller.max_block_range = max_block_range.parse()?;
+    }
+    let poller = Arc::new(poller);
     poller.start_background_loop(Duration::from_secs(5));
 
     let signer = if let Ok(key_b64) = env::var("HAZE_EXPORT_SIGNING_KEY_PKCS8_B64") {

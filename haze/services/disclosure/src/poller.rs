@@ -16,6 +16,9 @@ use crate::{
 /// Event signature for HazePool PrivateTransaction.
 pub const PRIVATE_TRANSACTION_SIGNATURE: &str = "PrivateTransaction(bytes32,uint8,address,uint64,uint64,uint256,uint256,uint256,uint256,uint256,uint64,address,bytes32,bytes32,uint256,bytes32,bytes,bytes,bytes)";
 
+/// Default `eth_getLogs` window; Infura caps Fuji requests at 10k blocks.
+pub const DEFAULT_MAX_BLOCK_RANGE: u64 = 2_000;
+
 /// Internal poller that scans Fuji logs, ingests withdrawal cases, and updates confirmations.
 pub struct FujiLogPoller {
     /// Fuji disclosure configuration.
@@ -28,6 +31,8 @@ pub struct FujiLogPoller {
     pub deployment_block: u64,
     /// Canonical blocks replayed on each cycle to detect short reorgs.
     pub replay_window: u64,
+    /// Largest inclusive block span sent in one `eth_getLogs` request.
+    pub max_block_range: u64,
     client: reqwest::Client,
 }
 
@@ -41,6 +46,7 @@ impl FujiLogPoller {
             store: Arc::new(store.into()),
             deployment_block: 0,
             replay_window: 32,
+            max_block_range: DEFAULT_MAX_BLOCK_RANGE,
             client: reqwest::Client::new(),
         }
     }
@@ -60,6 +66,7 @@ impl FujiLogPoller {
             store: Arc::new(store),
             deployment_block,
             replay_window,
+            max_block_range: DEFAULT_MAX_BLOCK_RANGE,
             client: reqwest::Client::new(),
         }
     }
@@ -98,11 +105,44 @@ impl FujiLogPoller {
     }
 
     /// Scan a specific block range on the configured HazePool for withdrawal events.
+    ///
+    /// The range is split into windows of at most `max_block_range` blocks so
+    /// RPC providers with an `eth_getLogs` span cap accept every request.
     pub async fn scan_range(
         &self,
         from_block: u64,
         to_block: u64,
     ) -> Result<usize, DisclosureError> {
+        let span = self.max_block_range.max(1);
+        let mut total = 0;
+        let mut start = from_block;
+        while start <= to_block {
+            let end = start.saturating_add(span - 1).min(to_block);
+            total += self.scan_window(start, end).await?;
+            if end == u64::MAX {
+                break;
+            }
+            start = end + 1;
+        }
+        Ok(total)
+    }
+
+    async fn block_timestamp(&self, block_number: u64) -> Result<u64, DisclosureError> {
+        let block = self
+            .rpc(
+                "eth_getBlockByNumber",
+                json!([format!("0x{block_number:x}"), false]),
+            )
+            .await?;
+        let timestamp = block
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .ok_or(DisclosureError::Unavailable)?;
+        u64::from_str_radix(timestamp.trim_start_matches("0x"), 16)
+            .map_err(|_| DisclosureError::Unavailable)
+    }
+
+    async fn scan_window(&self, from_block: u64, to_block: u64) -> Result<usize, DisclosureError> {
         let event_sig = keccak256(PRIVATE_TRANSACTION_SIGNATURE.as_bytes());
         let pool_hex = format!("0x{}", hex::encode(self.config.pool));
         let app_topic = format!("0x{}", hex::encode(self.config.application_id));
@@ -121,9 +161,19 @@ impl FujiLogPoller {
         let head = self.current_block_number().await?;
         let mut ingested = Vec::new();
 
+        let mut timestamps = std::collections::BTreeMap::new();
         for log in logs {
-            let (evidence, tx_hash) = self.parse_log_evidence(log, head).await?;
+            let (mut evidence, tx_hash) = self.parse_log_evidence(log, head).await?;
             if evidence.action == WITHDRAW {
+                let recorded_at = match timestamps.get(&evidence.block_number) {
+                    Some(timestamp) => *timestamp,
+                    None => {
+                        let timestamp = self.block_timestamp(evidence.block_number).await?;
+                        timestamps.insert(evidence.block_number, timestamp);
+                        timestamp
+                    }
+                };
+                evidence.record.recorded_at = recorded_at;
                 let confirmations = if head >= evidence.block_number {
                     head - evidence.block_number + 1
                 } else {

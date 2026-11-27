@@ -262,9 +262,13 @@ async fn test_real_fuji_tx_decryption() {
 
     let pool_bytes = hex::decode("00beb0a5d709d0f093952fd374dbbf3d0d21d550").expect("hex");
     let pool: [u8; 20] = pool_bytes.try_into().expect("slice");
-    let pool_ver_bytes = hex::decode("000000000000000000000000000000000000000000000000000000000000b001").expect("hex");
+    let pool_ver_bytes =
+        hex::decode("000000000000000000000000000000000000000000000000000000000000b001")
+            .expect("hex");
     let pool_version: [u8; 32] = pool_ver_bytes.try_into().expect("slice");
-    let app_id_bytes = hex::decode("0000000000000000000000000000000000000000000000000000000000000a11").expect("hex");
+    let app_id_bytes =
+        hex::decode("0000000000000000000000000000000000000000000000000000000000000a11")
+            .expect("hex");
     let application_id: [u8; 32] = app_id_bytes.try_into().expect("slice");
 
     let config = FujiDisclosureConfig {
@@ -274,13 +278,20 @@ async fn test_real_fuji_tx_decryption() {
         application_id,
         development_fixture_keys: true,
     };
-    let tx_bytes = hex::decode("8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03").expect("hex");
+    let tx_bytes = hex::decode("8218e5a4f14434e0007d421a8e82ba0914429a0cab43d7dba263d1ed232c8a03")
+        .expect("hex");
     let tx_hash: [u8; 32] = tx_bytes.try_into().expect("slice");
-    let commit_bytes = hex::decode("215d44f00640f78d8699220e1cae5f84686fc37c9463bc52c09cc49ee8d9893e").expect("hex");
+    let commit_bytes =
+        hex::decode("215d44f00640f78d8699220e1cae5f84686fc37c9463bc52c09cc49ee8d9893e")
+            .expect("hex");
     let commitment: [u8; 32] = commit_bytes.try_into().expect("slice");
-    let cipher_bytes = hex::decode("3afde679ba9da14013dffab7aabdd34356aa2935a8ff0c9b66241c2ad59b29dc").expect("hex");
+    let cipher_bytes =
+        hex::decode("3afde679ba9da14013dffab7aabdd34356aa2935a8ff0c9b66241c2ad59b29dc")
+            .expect("hex");
     let ciphertext_hash: [u8; 32] = cipher_bytes.try_into().expect("slice");
-    let action_bytes = hex::decode("a31a6bef7ba4ee3593cbf15fe5ccc221159a0733982d1a5cef3b58b675e399bc").expect("hex");
+    let action_bytes =
+        hex::decode("a31a6bef7ba4ee3593cbf15fe5ccc221159a0733982d1a5cef3b58b675e399bc")
+            .expect("hex");
     let action_ref: [u8; 32] = action_bytes.try_into().expect("slice");
     let user_bytes = hex::decode("ed37fd0d6f0f69236e7472b36796e133d20ecc32").expect("hex");
     let authorized_user: [u8; 20] = user_bytes.try_into().expect("slice");
@@ -322,7 +333,13 @@ async fn test_real_fuji_tx_decryption() {
         record,
     };
 
-    let fields = vec!["tx_hash".into(), "amount".into(), "asset".into(), "timestamp".into(), "policy_version".into()];
+    let fields = vec![
+        "tx_hash".into(),
+        "amount".into(),
+        "asset".into(),
+        "timestamp".into(),
+        "policy_version".into(),
+    ];
     let res = haze_disclosure::fuji::verify_compliance_case_evidence(
         &config,
         tx_hash,
@@ -334,4 +351,10 @@ async fn test_real_fuji_tx_decryption() {
     assert!(res.is_ok());
     let resp = res.expect("response");
     assert_eq!(resp.fields.len(), 5);
+    assert_eq!(
+        resp.fields["tx_hash"],
+        format!("0x{}", hex::encode(tx_hash)),
+        "disclosed tx_hash must be the transaction hash, not the action reference"
+    );
+    assert_eq!(resp.fields["timestamp"], "1700000000");
 }

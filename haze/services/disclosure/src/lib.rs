@@ -734,7 +734,7 @@ fn redact(
     let mut out = BTreeMap::new();
     for field in fields {
         let value = match field.as_str() {
-            "tx_hash" => Some(to_hex(&record.action_reference)),
+            "tx_hash" => Some(to_hex(&record.record_id)),
             "user" => Some(to_hex(&facts.authorized_user)),
             "counterparty" => Some(to_hex(&facts.public_recipient)),
             "amount" => Some(facts.public_amount.to_string()),
