@@ -64,19 +64,19 @@ export async function updateFujiMembershipRoot(input: {
   const receipt = await input.waitReceipt(hash);
   if (receipt?.status !== "0x1") throw new Error("MEMBERSHIP_UPDATE_FAILED");
   const pause = input.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
-  for (let attempt = 0; attempt < 15; attempt += 1) {
+  // RPC backends lag one another, so the pre-update read can be stale-low and
+  // post-receipt reads can trail the receipt. Accept any newer version that
+  // carries the requested root, and give replication up to about two minutes.
+  const landed = (state: { membershipVersion: bigint; membershipRoot: string }) =>
+    state.membershipVersion > before.membershipVersion
+    && state.membershipRoot.toLowerCase() === input.membershipRoot.toLowerCase();
+  for (let attempt = 0; attempt < 60; attempt += 1) {
     const after = await input.readApplication();
-    if (after.membershipVersion === before.membershipVersion + 1n
-      && after.membershipRoot.toLowerCase() === input.membershipRoot.toLowerCase()) {
-      return after;
-    }
-    await pause(1_000);
+    if (landed(after)) return after;
+    await pause(2_000);
   }
   const after = await input.readApplication();
-  if (after.membershipVersion !== before.membershipVersion + 1n
-    || after.membershipRoot.toLowerCase() !== input.membershipRoot.toLowerCase()) {
-    throw new Error("MEMBERSHIP_UPDATE_MISMATCH");
-  }
+  if (!landed(after)) throw new Error("MEMBERSHIP_UPDATE_MISMATCH");
   return after;
 }
 

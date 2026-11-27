@@ -182,6 +182,59 @@ test("membership update polls readApplication through temporary RPC replication 
   assert.ok(reads >= 4);
 });
 
+test("membership update accepts a newer version when the pre-update read was stale", async () => {
+  let reads = 0;
+  const result = await updateFujiMembershipRoot({
+    membershipRoot: `0x${"12".repeat(32)}`,
+    applicationId: `0x${"34".repeat(32)}`,
+    policyAuthority: "0xed37fd0d6f0f69236e7472b36796e133d20ecc32",
+    wallet: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+    readApplication: async () => {
+      reads += 1;
+      // A lagging node reports v2 before the send; the chain was really at v3,
+      // so the confirmed update lands as v4, not before + 1.
+      if (reads === 1) return { membershipVersion: 2n, membershipRoot: "0xold" };
+      return { membershipVersion: 4n, membershipRoot: `0x${"12".repeat(32)}` };
+    },
+    sendUpdate: async () => "0xupdate",
+    waitReceipt: async () => ({ status: "0x1" }),
+    sleep: async () => {},
+  });
+  assert.equal(result.membershipVersion, 4n);
+});
+
+test("membership update keeps polling through replication lag longer than 15 reads", async () => {
+  let reads = 0;
+  const result = await updateFujiMembershipRoot({
+    membershipRoot: `0x${"12".repeat(32)}`,
+    applicationId: `0x${"34".repeat(32)}`,
+    policyAuthority: "0xed37fd0d6f0f69236e7472b36796e133d20ecc32",
+    wallet: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+    readApplication: async () => {
+      reads += 1;
+      if (reads <= 30) return { membershipVersion: 7n, membershipRoot: "0xold" };
+      return { membershipVersion: 8n, membershipRoot: `0x${"12".repeat(32)}` };
+    },
+    sendUpdate: async () => "0xupdate",
+    waitReceipt: async () => ({ status: "0x1" }),
+    sleep: async () => {},
+  });
+  assert.equal(result.membershipVersion, 8n);
+});
+
+test("membership update still rejects when the root never appears", async () => {
+  await assert.rejects(updateFujiMembershipRoot({
+    membershipRoot: `0x${"12".repeat(32)}`,
+    applicationId: `0x${"34".repeat(32)}`,
+    policyAuthority: "0xed37fd0d6f0f69236e7472b36796e133d20ecc32",
+    wallet: "0xeD37FD0d6F0f69236E7472B36796e133D20EcC32",
+    readApplication: async () => ({ membershipVersion: 7n, membershipRoot: "0xold" }),
+    sendUpdate: async () => "0xupdate",
+    waitReceipt: async () => ({ status: "0x1" }),
+    sleep: async () => {},
+  }), /MEMBERSHIP_UPDATE_MISMATCH/);
+});
+
 test("membership update returns existing snapshot without sending transaction when root matches", async () => {
   let sent = false;
   const result = await updateFujiMembershipRoot({

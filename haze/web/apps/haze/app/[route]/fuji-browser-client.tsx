@@ -179,20 +179,51 @@ export function FujiBrowserClient({ route }: { route: string }) {
   const chainRpc = useCallback((method: string, params: unknown[] = []) => (
     method === "eth_getLogs" ? poolLogs((params[0] as { address?: string } | undefined)?.address) : rpc(method, params)
   ), [poolLogs, rpc]);
+  // Registry state and receipts come from the server's public RPC: the wallet's
+  // own Fuji RPC can lag behind a confirmed membership update.
+  const readRpc = useCallback(async (method: string, params: unknown[]) => {
+    try {
+      const res = await fetch("/api/v1/pool/read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method, params }),
+        cache: "no-store",
+      });
+      if (res.ok) return ((await res.json()) as { result: unknown }).result;
+    } catch {}
+    return rpc(method, params);
+  }, [rpc]);
   const receipt = useCallback(async (hash: string) => {
     for (let attempt = 0; attempt < 120; attempt += 1) {
-      const found = await rpc("eth_getTransactionReceipt", [hash]) as FujiReceipt | null;
+      const found = await readRpc("eth_getTransactionReceipt", [hash]) as FujiReceipt | null;
       if (found) return found;
       await new Promise((resolve) => setTimeout(resolve, 2_000));
     }
     return undefined;
-  }, [rpc]);
+  }, [readRpc]);
 
   const readSnapshot = useCallback(async () => snapshot(
-    await rpc("eth_call", [{ to: APPLICATION_REGISTRY, data: `${functionSelector("getApplication(bytes32)")}${APPLICATION_ID.slice(2)}` }, "latest"]) as string,
-    await rpc("eth_call", [{ to: POLICY_REGISTRY, data: functionSelector("activeVersion()") }, "latest"]) as string,
-    await rpc("eth_call", [{ to: POLICY_REGISTRY, data: functionSelector("activeRoot()") }, "latest"]) as string,
-  ), [rpc]);
+    await readRpc("eth_call", [{ to: APPLICATION_REGISTRY, data: `${functionSelector("getApplication(bytes32)")}${APPLICATION_ID.slice(2)}` }, "latest"]) as string,
+    await readRpc("eth_call", [{ to: POLICY_REGISTRY, data: functionSelector("activeVersion()") }, "latest"]) as string,
+    await readRpc("eth_call", [{ to: POLICY_REGISTRY, data: functionSelector("activeRoot()") }, "latest"]) as string,
+  ), [readRpc]);
+
+  // The spend is estimated and sent through the wallet's RPC. Wait (bounded,
+  // non-fatal) until that RPC also reports the new root, so gas estimation
+  // does not run against a node that has not seen the membership update.
+  const walletSeesRoot = useCallback(async (root: string) => {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      try {
+        const state = snapshot(
+          await rpc("eth_call", [{ to: APPLICATION_REGISTRY, data: `${functionSelector("getApplication(bytes32)")}${APPLICATION_ID.slice(2)}` }, "latest"]) as string,
+          await rpc("eth_call", [{ to: POLICY_REGISTRY, data: functionSelector("activeVersion()") }, "latest"]) as string,
+          await rpc("eth_call", [{ to: POLICY_REGISTRY, data: functionSelector("activeRoot()") }, "latest"]) as string,
+        );
+        if (state.membershipRoot.toLowerCase() === root.toLowerCase()) return;
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+  }, [rpc]);
 
   const treeLeaves = useCallback(async (poolAddress = POOL_B002) => {
     const logs = await poolLogs(poolAddress);
@@ -584,6 +615,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
         };
 
         const after = await updateMembership(sealed.witness.membershipRoot);
+        await walletSeesRoot(after.membershipRoot);
         sealed = buildSealedBrowserTransferWitness({
           buildWitness: buildLiveTransferWitness,
           witnessInput: { ...sendWitnessInput, applicationPolicyVersion: Number(after.membershipVersion) },
@@ -667,6 +699,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
         };
 
         const after = await updateMembership(sealed.witness.membershipRoot);
+        await walletSeesRoot(after.membershipRoot);
         sealed = buildSealedBrowserWitness({
           buildWitness: buildLiveSwapWitness,
           witnessInput: { ...swapWitnessInput, applicationPolicyVersion: Number(after.membershipVersion) },
@@ -740,6 +773,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
         };
 
         const after = await updateMembership(sealed.witness.membershipRoot);
+        await walletSeesRoot(after.membershipRoot);
         sealed = buildSealedBrowserWitness({
           buildWitness: factory,
           witnessInput: { ...witnessInput, applicationPolicyVersion: Number(after.membershipVersion) },
@@ -951,7 +985,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
       setErrorMessage(classified.message);
       setMessage(classified.message);
     }
-  }, [connect, loadVaultNotes, prover, readSnapshot, receipt, recipientHazeAddress, route, rpc, treeLeaves, userAmount, wallet]);
+  }, [connect, loadVaultNotes, prover, readSnapshot, receipt, recipientHazeAddress, route, rpc, treeLeaves, userAmount, wallet, walletSeesRoot]);
   const wipeVault = useCallback(async () => {
     if (!vault.current) return;
     const confirmation = window.prompt('Type "WIPE" to permanently erase your local vault data:');
