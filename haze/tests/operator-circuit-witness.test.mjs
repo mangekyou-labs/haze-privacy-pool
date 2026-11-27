@@ -532,3 +532,15 @@ test("live swap rejects invalid exact output values with ENCODING_INVALID", () =
     }), /ENCODING_INVALID/);
   }
 });
+
+test("live deposit output note matches a non-default public amount", () => {
+  const { circom, note } = buildLiveDepositWitness({
+    pool: LIVE_POOL,
+    user: LIVE_OPERATOR,
+    applicationId: LIVE_APP,
+    poolVersion: LIVE_POOL_VERSION,
+    publicAmount: 3_000_000,
+  });
+  assert.equal(circom.publicAmount, "3000000");
+  assert.equal(note.value, 3_000_000);
+});

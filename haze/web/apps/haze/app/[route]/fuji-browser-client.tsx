@@ -717,7 +717,7 @@ export function FujiBrowserClient({ route }: { route: string }) {
         const targetRecipient = publicRecipient.trim() || wallet;
         const witnessInput = isWithdrawal
           ? { ...common, note: deposit!.note, publicRecipient: targetRecipient, treeLeaves: leaves, membershipLeaves: storedMembers }
-          : { ...common, leafIndex: leaves.length, membershipLeaves: storedMembers };
+          : { ...common, value: spendAmount, leafIndex: leaves.length, membershipLeaves: storedMembers };
 
         const factory = isWithdrawal ? buildLiveWithdrawWitness : buildLiveDepositWitness;
         sealed = buildSealedBrowserWitness({

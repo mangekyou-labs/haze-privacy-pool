@@ -730,13 +730,16 @@ export function buildFixtureDepositWitness() {
 }
 
 export function buildLiveDepositWitness(input) {
+  // The circuit requires the deposit output note to equal publicAmount
+  // (spend.circom: isDepositLike * (outSum - publicAmount) === 0).
+  const publicAmount = input.publicAmount ?? input.value ?? 1_000_000;
   return buildCase({
     action: DEPOSIT,
     pool: input.pool,
     user: input.user,
     applicationId: input.applicationId,
     poolVersion: input.poolVersion,
-    publicAmount: input.publicAmount ?? 1_000_000,
+    publicAmount,
     publicRecipient: ZERO_ADDRESS,
     applicationPolicyVersion: input.applicationPolicyVersion,
     hazePolicyVersion: input.hazePolicyVersion,
@@ -747,7 +750,7 @@ export function buildLiveDepositWitness(input) {
     auditEnvelope: input.auditEnvelope,
     outputs: [
       {
-        value: input.value ?? 1_000_000,
+        value: input.value ?? publicAmount,
         secret: input.secret ?? 1,
         blinding: input.blinding ?? 2,
         leafIndex: input.leafIndex ?? 0,
