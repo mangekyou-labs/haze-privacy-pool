@@ -52,7 +52,16 @@ const word = (value: string) => `0x${value.replace(/^0x/, "").padStart(64, "0")}
 function ethereum(): Ethereum { const provider = (globalThis as typeof globalThis & { ethereum?: Ethereum }).ethereum; if (!provider) throw new Error("WALLET_UNAVAILABLE"); return provider; }
 function words(value: string) { return value.replace(/^0x/, "").match(/.{64}/g) ?? []; }
 function snapshot(app: string, version: string, root: string) { const values = words(app); const start = BigInt(`0x${values[0] ?? "0"}`) === 32n ? 1 : 0; return { membershipRoot: `0x${values[start + 4]}`, membershipVersion: BigInt(`0x${values[start + 5]}`), hazePolicyVersion: BigInt(version), hazeBlocklistRoot: word(root) }; }
-function binding(operation: BrowserOperation, wallet: string, poolAddr = POOL_B002, poolVer = POOL_VERSION_B002) {
+// The nullifier a spend publishes on-chain is the spent INPUT note's nullifier. For sends the persisted
+// `note` is the change output, so prefer the explicitly recorded input nullifier, then the caller-resolved
+// input note (legacy ops), and only then the persisted note (correct for withdrawals, whose note is the input).
+function spentNullifier(operation: BrowserOperation, spentInput?: string) {
+  const recorded = operation.transaction?.inputNullifier;
+  if (typeof recorded === "string" && recorded && !/^0x0*$/.test(recorded)) return recorded;
+  if (spentInput) return spentInput;
+  return String(operation.note?.nullifier ?? "");
+}
+function binding(operation: BrowserOperation, wallet: string, poolAddr = POOL_B002, poolVer = POOL_VERSION_B002, spentInput?: string) {
   const explicitAction = typeof operation.transaction?.action === "number" ? (operation.transaction.action as FujiAction) : undefined;
   const inferredAction: FujiAction = operation.kind === "deposit" ? 1 : (operation.kind === "private_send" || operation.kind === "transfer" ? 2 : (operation.kind === "withdrawal" ? 3 : 4));
   const action = explicitAction ?? inferredAction;
@@ -64,7 +73,7 @@ function binding(operation: BrowserOperation, wallet: string, poolAddr = POOL_B0
     user: wallet,
     action,
     commitment: (action === 1 || action === 4 || operation.kind === "deposit" || operation.kind === "swap") ? String(operation.note?.commitment ?? "") : undefined,
-    nullifier: (action === 2 || action === 3 || operation.kind === "withdrawal" || operation.kind === "private_send" || operation.kind === "transfer") ? String(operation.note?.nullifier ?? "") : undefined,
+    nullifier: (action === 2 || action === 3 || operation.kind === "withdrawal" || operation.kind === "private_send" || operation.kind === "transfer") ? spentNullifier(operation, spentInput) : undefined,
     kind: operation.kind,
     destination: operation.transaction?.destination as string | undefined,
     transactionHash: typeof operation.transaction?.hash === "string" && operation.transaction.hash !== "pending" ? operation.transaction.hash : (typeof operation.transaction?.transactionHash === "string" && operation.transaction.transactionHash !== "pending" ? (operation.transaction.transactionHash as string) : undefined),
@@ -250,7 +259,11 @@ export function FujiBrowserClient({ route }: { route: string }) {
     await loadVaultNotes(active);
     const operations = await active.list();
     for (const operation of operations.filter((item) => item.state === "submitted" || item.state === "pending_finality")) {
-      const result = await recoverFujiOperation({ ...binding(operation, address), rpc: chainRpc });
+      const spentFrom = typeof operation.note?.depositOperationId === "string"
+        ? operations.find((item) => item.id === operation.note?.depositOperationId)
+        : undefined;
+      const spentInput = typeof spentFrom?.note?.nullifier === "string" ? spentFrom.note.nullifier : undefined;
+      const result = await recoverFujiOperation({ ...binding(operation, address, POOL_B002, POOL_VERSION_B002, spentInput), rpc: chainRpc });
       if (result.confirmed) {
         const confirmed = await active.transition(operation.id, "confirmed", {
           recovered: true,
@@ -810,6 +823,9 @@ export function FujiBrowserClient({ route }: { route: string }) {
           actionReference: sealed.witness.actionReference,
           commitment: sealed.witness.note?.commitment ?? `0x${"00".repeat(32)}`,
           nullifier: sealed.witness.note?.nullifier ?? `0x${"00".repeat(32)}`,
+          inputNullifier: isWithdrawal || isSend
+            ? String((sealed.witness.circom as { inputNullifier0?: unknown } | undefined)?.inputNullifier0 ?? "")
+            : undefined,
         },
       });
       currentPhase = "proving";
