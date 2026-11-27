@@ -519,3 +519,14 @@ test("SSR pool routes contain single mount point and zero SSR forms", () => {
   }
 });
 
+
+test("connected pool-user is authorized for /overview and sees no FORBIDDEN banner", () => {
+  const site = createHazeSite({ role: "pool-user", applicationId: APP_A });
+  assert.equal(site.decide("/overview").ok, true);
+  const html = renderHazeFragment(site, "/overview", {
+    mode: "fuji-browser",
+    address: "0xab251237210f6c2f7fad53be182e8bfde2f628e0",
+  });
+  assert.doesNotMatch(html, /data-code="FORBIDDEN"/);
+  assert.doesNotMatch(html, /not authorized for the connected wallet/);
+});
