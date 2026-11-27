@@ -23,6 +23,7 @@ import {
   shouldReusePersistedSignatures,
   type PersistedWalletSession,
 } from "../../../packages/ui/src/wallet-session.ts";
+import { injectedProvider } from "../../../packages/ui/src/wallet-provider.ts";
 import { encodeHazeAddress } from "../../../../sdk/typescript/src/address.ts";
 import {
   deriveBrowserShieldedAccountFromSignature,
@@ -59,9 +60,7 @@ export type WalletSessionState = {
 const WalletSessionContext = createContext<WalletSessionState | null>(null);
 
 function ethereum(): Ethereum {
-  const provider = (globalThis as typeof globalThis & { ethereum?: Ethereum }).ethereum;
-  if (!provider) throw new Error("WALLET_UNAVAILABLE");
-  return provider;
+  return injectedProvider();
 }
 
 function syncAddressCookie(address?: string | null) {

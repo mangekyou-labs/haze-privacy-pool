@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import { injectedProvider } from "../../../../packages/ui/src/wallet-provider.ts";
 
 const APPLICATION_ID = "0x0000000000000000000000000000000000000000000000000000000000000a11";
 const CHAIN_HEX = "0xa869"; // 43113
@@ -11,11 +12,11 @@ interface EthereumProvider {
 }
 
 function getEthereum(): EthereumProvider {
-  const win = typeof window !== "undefined" ? (window as unknown as { ethereum?: EthereumProvider }) : undefined;
-  if (!win?.ethereum) {
+  try {
+    return injectedProvider();
+  } catch {
     throw new Error("No web3 wallet detected. Please install Core or MetaMask.");
   }
-  return win.ethereum;
 }
 
 interface ComplianceCaseSummary {

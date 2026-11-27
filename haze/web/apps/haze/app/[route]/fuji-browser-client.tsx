@@ -1,5 +1,6 @@
 "use client";
 
+import { injectedProvider } from "../../../../packages/ui/src/wallet-provider.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useWalletSession } from "../wallet-session-provider";
@@ -49,7 +50,7 @@ type Ethereum = { request(input: { method: string; params?: unknown[] }): Promis
 type Vault = Awaited<ReturnType<typeof createBrowserOperationVault>>;
 const hexBytes = (value: string) => Uint8Array.from(value.replace(/^0x/, "").match(/../g) ?? [], (byte) => Number.parseInt(byte, 16));
 const word = (value: string) => `0x${value.replace(/^0x/, "").padStart(64, "0")}`;
-function ethereum(): Ethereum { const provider = (globalThis as typeof globalThis & { ethereum?: Ethereum }).ethereum; if (!provider) throw new Error("WALLET_UNAVAILABLE"); return provider; }
+function ethereum(): Ethereum { return injectedProvider(); }
 function words(value: string) { return value.replace(/^0x/, "").match(/.{64}/g) ?? []; }
 function snapshot(app: string, version: string, root: string) { const values = words(app); const start = BigInt(`0x${values[0] ?? "0"}`) === 32n ? 1 : 0; return { membershipRoot: `0x${values[start + 4]}`, membershipVersion: BigInt(`0x${values[start + 5]}`), hazePolicyVersion: BigInt(version), hazeBlocklistRoot: word(root) }; }
 // The nullifier a spend publishes on-chain is the spent INPUT note's nullifier. For sends the persisted
