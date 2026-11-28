@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { keccakHex, uintWord } from "../sdk/typescript/src/abi.ts";
 import { createDevelopmentAuditKeyManagement, discloseLiveWithdrawal, PRIVATE_TRANSACTION_TOPIC } from "../dev/live-disclosure.mjs";
 
-const HAZE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const POOL = "0x1111111111111111111111111111111111111111";
 const USER = "0x2222222222222222222222222222222222222222";
 const APP = `0x${"aa".repeat(32)}`;
@@ -19,7 +15,7 @@ function word(value) {
 }
 
 function topic(value) {
-  return `0x${word(value).toString("hex")}`;
+  return `0x${Buffer.from(word(value)).toString("hex")}`;
 }
 
 function eventData(facts, auditHash, commitment) {
@@ -45,8 +41,10 @@ function eventData(facts, auditHash, commitment) {
 }
 
 async function fixturePlan() {
-  const { buildLiveWithdrawWitness } = await import("../dev/operator-circuit-witness.mjs");
-  const stored = JSON.parse(readFileSync(resolve(HAZE_ROOT, "dev/artifacts/ceremony-private/fuji-poseidon-note.json"), "utf8"));
+  const { buildLiveDepositWitness, buildLiveWithdrawWitness } = await import("../dev/operator-circuit-witness.mjs");
+  // A deterministic synthetic note: the receipt and pool here are fakes, so the
+  // test needs no real note from the gitignored ceremony-private folder.
+  const stored = buildLiveDepositWitness({ pool: POOL, user: USER, applicationId: APP, poolVersion: POOL_VERSION });
   const witness = buildLiveWithdrawWitness({
     pool: POOL,
     user: USER,
