@@ -13,6 +13,7 @@ export function assertProductionOrigin(value) {
 export function planD8ProductionJourney(options = {}) {
   const productionUrl = assertProductionOrigin(options.productionUrl ?? PRODUCTION_URL);
   return {
+    ok: true,
     productionUrl,
     chainId: options.chainId ?? 43113,
     runner: options.runner ?? "playwright-audit-walk.mjs",
