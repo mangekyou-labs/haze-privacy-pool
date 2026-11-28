@@ -49,6 +49,9 @@ jobs:
         run: cargo install circom --git https://github.com/iden3/circom --tag v2.2.3 --locked --root haze/.tools
       - name: npm ci --prefix haze
         run: npm ci --prefix haze
+      - name: install Playwright Chromium
+        working-directory: haze
+        run: npx playwright install --with-deps chromium
       - name: compile spend r1cs
         run: |
           mkdir -p haze/circuits/build/spend
