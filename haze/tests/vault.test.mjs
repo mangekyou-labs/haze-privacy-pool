@@ -17,13 +17,19 @@ import {
   recipientAad,
   sealRecipientNote,
 } from "../sdk/typescript/src/hpke.ts";
-import { encryptionKeyHash, noteCommitment, notePublicKey } from "../sdk/typescript/src/note.ts";
-import { deriveShieldedAccount } from "../sdk/typescript/src/prover.ts";
+import {
+  encryptionKeyHash,
+  encodeRecipientPlaintext,
+  noteCommitment,
+  notePublicKey,
+  nullifier,
+} from "../sdk/typescript/src/note.ts";
 import {
   createLocalVault,
   createMemoryStore,
   deriveVaultAccount,
 } from "../sdk/typescript/src/vault.ts";
+import { deriveShieldedAccount } from "../sdk/typescript/src/prover.ts";
 
 const HAZE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOL = join(HAZE_ROOT, "circuits/vectors/v1/haze-protocol-v1.json");
@@ -188,6 +194,33 @@ test("TypeScript opens the committed recipient HPKE envelope and hashes the dumm
   assert.equal(parsedEnvelope.purpose, "recipient");
   assert.equal(parsedEnvelope.keyVersion, 0n);
   assert.equal(envelopeHash(parsedEnvelope), named(file, "recipient_envelope_hash").hash);
+});
+
+test("encodeRecipientPlaintext and parseRecipientPlaintext support 200-byte and 232-byte formats", () => {
+  const base = {
+    value: 500_000n,
+    blinding: `0x${"11".repeat(32)}`,
+    notePublicKey: `0x${"22".repeat(32)}`,
+    encryptionKeyHash: `0x${"33".repeat(32)}`,
+    applicationId: `0x${"44".repeat(32)}`,
+    poolVersion: `0x${"55".repeat(32)}`,
+    commitment: `0x${"66".repeat(32)}`,
+  };
+  const encoded200 = encodeRecipientPlaintext(base);
+  assert.equal(encoded200.length, 200);
+  const parsed200 = parseRecipientPlaintext(encoded200);
+  assert.equal(parsed200.value, 500_000n);
+  assert.equal(parsed200.spendingSecret, undefined);
+
+  const secret = `0x${"77".repeat(32)}`;
+  const encoded232 = encodeRecipientPlaintext({ ...base, spendingSecret: secret });
+  assert.equal(encoded232.length, 232);
+  const parsed232 = parseRecipientPlaintext(encoded232);
+  assert.equal(parsed232.value, 500_000n);
+  assert.equal(parsed232.spendingSecret, secret);
+
+  throwsCode(() => parseRecipientPlaintext(new Uint8Array(201)), "ENCODING_INVALID");
+  throwsCode(() => parseRecipientPlaintext(new Uint8Array(100)), "ENCODING_INVALID");
 });
 
 test("recipient HPKE open rejects a tampered AAD", () => {

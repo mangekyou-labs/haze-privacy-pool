@@ -1,4 +1,8 @@
 import { keccak_256 } from "@noble/hashes/sha3";
+import { concatBytes, hexToBuf } from "./abi.ts";
+import { decodeBrowserEnvelope, deriveBrowserX25519PublicKey, openBrowserHpke, parseBrowserRecipientPlaintext } from "./browser-crypto.ts";
+import { u64be } from "./field.ts";
+import { encryptionKeyHash, noteCommitment, nullifier } from "./note.ts";
 
 const PRIVATE_TRANSACTION_SIGNATURE = "PrivateTransaction(bytes32,uint8,address,uint64,uint64,uint256,uint256,uint256,uint256,uint256,uint64,address,bytes32,bytes32,uint256,bytes32,bytes,bytes,bytes)";
 
@@ -37,16 +41,169 @@ export type FinalityProvenance = {
 
 import type { BrowserOperationKind } from "./browser-operation-vault.ts";
 
-type FujiOperationBinding = {
+export type FujiAction = 1 | 2 | 3 | 4;
+
+export const FUJI_ACTIONS = {
+  SHIELD: 1 as FujiAction,
+  SEND: 2 as FujiAction,
+  WITHDRAW: 3 as FujiAction,
+  SWAP: 4 as FujiAction,
+} as const;
+
+export function fujiActionToKind(action: FujiAction): BrowserOperationKind {
+  switch (action) {
+    case 1:
+      return "deposit";
+    case 2:
+      return "private_send";
+    case 3:
+      return "withdrawal";
+    case 4:
+      return "swap";
+  }
+}
+
+export function kindToFujiAction(kind: BrowserOperationKind): FujiAction {
+  switch (kind) {
+    case "deposit":
+      return 1;
+    case "private_send":
+    case "transfer":
+      return 2;
+    case "withdrawal":
+      return 3;
+    case "swap":
+      return 4;
+    default:
+      return 1;
+  }
+}
+
+export type DecodedPrivateTransaction = {
+  pool: string;
+  applicationId: string;
+  action: number;
+  user: string;
+  applicationPolicyVersion: bigint;
+  hazePolicyVersion: bigint;
+  noteTreeRoot: string;
+  inputNullifier0: string;
+  inputNullifier1: string;
+  outputCommitment0: string;
+  outputCommitment1: string;
+  publicAmount: bigint;
+  publicRecipient: string;
+  auditDataCommitment: string;
+  auditCiphertextHash: string;
+};
+
+export type FujiTransactionEvidence = {
+  action: FujiAction;
+  wallet: string;
+  deploymentId?: string;
+  sourceSha?: string;
+  candidateGitSha?: string;
+  phase: "preflight" | "broadcast" | "mined" | "event_validated" | "finalized" | "failed";
+  transactionHash: string;
+  receipt?: FujiReceipt;
+  decodedEvent?: DecodedPrivateTransaction;
+  assetTransfers?: {
+    token: string;
+    from: string;
+    to: string;
+    amount: string;
+  }[];
+  blockNumber?: number;
+  blockHash?: string;
+  confirmationCount: number;
+  screenshots?: string[];
+  cliSession?: string;
+  failureReason?: string;
+  verifiedAtBlock?: number;
+  canonicalBlockHash?: string;
+};
+
+export type FujiAttemptRecord = {
+  id: string;
+  timestamp: number;
+  action: FujiAction;
+  wallet: string;
+  expectedPool: string;
+  expectedApplicationId: string;
+  phase: "preflight" | "broadcast" | "mined" | "event_validated" | "finalized" | "failed";
+  transactionHash?: string;
+  receiptStatus?: number;
+  blockNumber?: number;
+  confirmations?: number;
+  error?: string;
+  failureStage?: string;
+};
+
+export type FujiMvpAcceptanceManifestV2 = {
+  schema: "haze-fuji-mvp-acceptance-v2";
+  runId: string;
+  timestamp: string;
+  origin: string;
+  chainId: number;
+  pool: string;
+  poolVersion: string;
+  applicationId: string;
+  status: "PASS" | "FAIL";
+  candidateGitSha: string;
+  vercelDeploymentId?: string;
+  deployment?: {
+    sourceSha: string;
+    clean: boolean;
+    ready: boolean;
+    sourceShaVerified: boolean;
+  };
+  namedCliSession: string;
+  tools: {
+    dappwright: boolean;
+    playwrightCli: boolean;
+  };
+  accounts: {
+    accountA: { address: string; hazeAddress?: string };
+    accountB: { address: string; hazeAddress?: string };
+  };
+  operations: {
+    shield?: FujiTransactionEvidence;
+    send?: FujiTransactionEvidence;
+    withdraw?: FujiTransactionEvidence;
+    swap?: FujiTransactionEvidence;
+  };
+  attempts: FujiAttemptRecord[];
+  auditorCase?: {
+    caseId: string;
+    withdrawalHash: string;
+    disclosedActionReference: string;
+    verifiedJws: boolean;
+    exportHash: string;
+  };
+  faucet?: {
+    enabled: boolean;
+    mintHash?: string;
+    venueLiquidityUsdc?: string;
+  };
+  historyReconciliation?: {
+    recoveredOnReload: boolean;
+    spendableNoteCount: number;
+  };
+  screenshots: Record<string, string>;
+};
+
+export type FujiOperationBinding = {
   chainId: number;
   pool: string;
   poolVersion: string;
   applicationId: string;
   user: string;
-  action: number;
+  action: FujiAction | number;
   commitment?: string;
   nullifier?: string;
-  kind: BrowserOperationKind;
+  kind?: BrowserOperationKind;
+  destination?: string;
+  transactionHash?: string;
 };
 
 function normalizedWord(value: string): string {
@@ -60,7 +217,7 @@ function dataWords(data: string): string[] {
   return hex.match(/.{64}/g)?.map((word) => `0x${word.toLowerCase()}`) ?? [];
 }
 
-export function decodePrivateTransaction(log: FujiLog) {
+export function decodePrivateTransaction(log: FujiLog): DecodedPrivateTransaction | undefined {
   if (log.topics.length < 4 || log.topics[0].toLowerCase() !== PRIVATE_TRANSACTION_TOPIC) return undefined;
   const words = dataWords(log.data);
   if (words.length < 13) return undefined;
@@ -83,7 +240,7 @@ export function decodePrivateTransaction(log: FujiLog) {
   };
 }
 
-function matches(event: ReturnType<typeof decodePrivateTransaction>, binding: FujiOperationBinding): boolean {
+function matches(event: DecodedPrivateTransaction | undefined, binding: FujiOperationBinding): boolean {
   if (!event) return false;
   if (event.pool !== binding.pool.toLowerCase()
     || event.applicationId !== normalizedWord(binding.applicationId)
@@ -102,18 +259,19 @@ export function reconcileFujiOperation(input: FujiOperationBinding & {
   canonicalBlockHash?: string;
   refetchedReceipt?: FujiReceipt;
 }) {
+  const action = typeof input.action === "number" ? input.action : (input.kind === "withdrawal" ? 3 : (input.kind === "private_send" || input.kind === "transfer" ? 2 : (input.kind === "swap" ? 4 : 1)));
+  const isSpendSpendableBeforeConfirm = action === 2 || action === 3 || input.kind === "withdrawal" || input.kind === "private_send" || input.kind === "transfer";
   const base = {
-    noteSpendable: input.kind === "withdrawal",
+    noteSpendable: isSpendSpendableBeforeConfirm,
     disclosureState: "not_requested" as const,
-    bindings: { chainId: input.chainId, pool: input.pool, poolVersion: input.poolVersion, applicationId: input.applicationId, action: input.action },
+    bindings: { chainId: input.chainId, pool: input.pool, poolVersion: input.poolVersion, applicationId: input.applicationId, action, destination: input.destination },
   };
   if (!input.receipt) return { ...base, confirmed: false, status: "failed" as const, reason: "RECEIPT_MISSING" as const };
   if (input.receipt.status !== "0x1") return { ...base, confirmed: false, status: "failed" as const, reason: "RECEIPT_REVERTED" as const };
-  const decoded = (input.receipt.logs ?? []).map(decodePrivateTransaction).filter(Boolean);
+  const decoded = (input.receipt.logs ?? []).map(decodePrivateTransaction).filter(Boolean) as DecodedPrivateTransaction[];
   if (decoded.length === 0) return { ...base, confirmed: false, status: "failed" as const, reason: "EVENT_MISSING" as const };
   const event = decoded.find((candidate) => matches(candidate, input));
   if (!event) return { ...base, confirmed: false, status: "failed" as const, reason: "EVENT_MISMATCH" as const };
-
   const inclusionBlock = input.receipt.blockNumber !== undefined ? BigInt(input.receipt.blockNumber) : undefined;
   const headBlock = input.headBlockNumber !== undefined ? BigInt(input.headBlockNumber) : undefined;
 
@@ -164,20 +322,21 @@ export function reconcileFujiOperation(input: FujiOperationBinding & {
       canonicalBlockHash: input.receipt.blockHash,
       verifiedAtBlock: Number(headBlock),
     };
+    const confirmedNoteSpendable = (action === 1 || action === 4 || input.kind === "deposit" || input.kind === "swap");
     return {
       ...base,
       confirmed: true,
       status: "confirmed" as const,
       confirmations,
       finalityProvenance,
-      noteSpendable: input.kind === "withdrawal" ? false : base.noteSpendable,
+      noteSpendable: confirmedNoteSpendable,
       event,
     };
   }
 
-  return { ...base, confirmed: true, status: "confirmed" as const, noteSpendable: input.kind === "withdrawal" ? false : base.noteSpendable, event };
+  const confirmedNoteSpendable = (action === 1 || action === 4 || input.kind === "deposit" || input.kind === "swap");
+  return { ...base, confirmed: true, status: "confirmed" as const, noteSpendable: confirmedNoteSpendable, event };
 }
-
 export async function broadcastFujiTransaction(input: {
   rpc: FujiRpc;
   transaction: Record<string, unknown>;
@@ -227,4 +386,137 @@ export async function recoverFujiOperation(input: FujiOperationBinding & {
     }
   }
   return reconcileFujiOperation({ ...input, receipt });
+}
+
+export type RecoveredSpendableNote = {
+  action: FujiAction;
+  commitment: string;
+  nullifier: string;
+  value: number;
+  secret: string;
+  blinding: string;
+  npk: string;
+  enc: string;
+  x25519: string;
+  leafIndex: number;
+  spendable: boolean;
+  transactionHash?: string;
+};
+
+export function extractLogEnvelope(dataHex: string, wordIndex: number) {
+  try {
+    const raw = dataHex.replace(/^0x/, "");
+    if (raw.length < 16 * 64) return undefined;
+    const offsetHex = raw.slice(wordIndex * 64, (wordIndex + 1) * 64);
+    const byteOffset = Number(BigInt(`0x${offsetHex}`));
+    const charOffset = byteOffset * 2;
+    if (raw.length < charOffset + 64) return undefined;
+    const lenHex = raw.slice(charOffset, charOffset + 64);
+    const byteLength = Number(BigInt(`0x${lenHex}`));
+    const dataSlice = raw.slice(charOffset + 64, charOffset + 64 + byteLength * 2);
+    if (byteLength === 0 || dataSlice.length < byteLength * 2) return undefined;
+    return decodeBrowserEnvelope(hexToBuf(`0x${dataSlice}`));
+  } catch {
+    return undefined;
+  }
+}
+
+export function recoverSpendableNotesFromLogs(input: {
+  chainId: number;
+  pool: string;
+  poolVersion: string;
+  applicationId: string;
+  recipientIkm: Uint8Array;
+  logs: FujiLog[];
+}): RecoveredSpendableNote[] {
+  const notes: RecoveredSpendableNote[] = [];
+  const seen = new Set<string>();
+  const spent = new Set<string>();
+  for (const log of input.logs) {
+    const event = decodePrivateTransaction(log);
+    if (!event) continue;
+    for (const candidate of [event.inputNullifier0, event.inputNullifier1]) {
+      if (candidate && BigInt(candidate) !== 0n) spent.add(normalizedWord(candidate));
+    }
+  }
+  let leafIndex = 0;
+  const info = new TextEncoder().encode("haze/avalanche/v1/recipient-note");
+  for (const log of input.logs) {
+    const event = decodePrivateTransaction(log);
+    if (!event) continue;
+    const action = event.action;
+    if (action !== 1 && action !== 2 && action !== 3 && action !== 4) continue;
+    const outs = [
+      { commitment: event.outputCommitment0, envelope: extractLogEnvelope(log.data, 13), index: 0 },
+      { commitment: event.outputCommitment1, envelope: extractLogEnvelope(log.data, 14), index: 1 },
+    ];
+    for (const out of outs) {
+      if (!out.commitment || BigInt(out.commitment) === 0n) continue;
+      const curLeafIndex = leafIndex;
+      leafIndex += 1;
+      if (!out.envelope || out.envelope.ciphertext.length === 0) continue;
+      try {
+        const aad = concatBytes(
+          u64be(input.chainId),
+          hexToBuf(input.pool),
+          hexToBuf(input.poolVersion),
+          hexToBuf(input.applicationId),
+          Uint8Array.of(out.index),
+          hexToBuf(out.commitment),
+          Uint8Array.of(1),
+        );
+        const opened = openBrowserHpke({
+          recipientIkm: input.recipientIkm,
+          encapsulatedKey: out.envelope.encapsulatedKey,
+          ciphertext: out.envelope.ciphertext,
+          info,
+          aad,
+        });
+        const plaintext = parseBrowserRecipientPlaintext(opened);
+        if (!plaintext.spendingSecret) continue;
+        const cm = noteCommitment({
+          chainId: input.chainId,
+          pool: input.pool,
+          poolVersion: input.poolVersion,
+          applicationId: input.applicationId,
+          value: plaintext.value,
+          ownerNotePublicKey: plaintext.notePublicKey,
+          ownerEncryptionKeyHash: plaintext.encryptionKeyHash,
+          blinding: plaintext.blinding,
+        });
+        if (cm.toLowerCase() !== out.commitment.toLowerCase()) continue;
+        const key = cm.toLowerCase();
+        if (seen.has(key)) continue;
+        const spentNullifier = nullifier({
+          chainId: input.chainId,
+          pool: input.pool,
+          poolVersion: input.poolVersion,
+          applicationId: input.applicationId,
+          commitment: cm,
+          leafIndex: curLeafIndex,
+          spendingSecret: plaintext.spendingSecret,
+        });
+        if (spent.has(normalizedWord(spentNullifier))) continue;
+        seen.add(key);
+        const ownerX25519 = toHex(deriveBrowserX25519PublicKey(input.recipientIkm));
+        notes.push({
+          action,
+          commitment: cm,
+          nullifier: spentNullifier,
+          value: Number(plaintext.value),
+          secret: plaintext.spendingSecret,
+          blinding: plaintext.blinding,
+          npk: plaintext.notePublicKey,
+          enc: plaintext.encryptionKeyHash,
+          x25519: ownerX25519,
+          leafIndex: curLeafIndex,
+          spendable: encryptionKeyHash(ownerX25519).toLowerCase() === plaintext.encryptionKeyHash.toLowerCase(),
+          transactionHash: log.transactionHash,
+        });
+      } catch {
+        // Envelope is not for this wallet.
+      }
+    }
+  }
+  return notes;
 }

@@ -44,13 +44,7 @@
       const proved = await fetch("/api/live-withdraw/prove", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          user,
-          amount,
-          recipient: recipient || user,
-          noteTreeRoot: plan.noteTreeRoot || plan.intent?.noteTreeRoot,
-          actionReference: plan.authorization?.nonce,
-        }),
+        body: JSON.stringify({ user, amount, recipient: recipient || user }),
       });
       const proof = await proved.json();
       if (!proof.allowed || !proof.proofBytes) {
@@ -74,13 +68,12 @@
       if (phase) {
         phase.textContent = "Submitting the withdraw…";
       }
+      const transaction = { from: user, to: transact.to, data: transact.data };
+      await provider.request({ method: "eth_call", params: [transaction, "latest"] });
       const hash = await provider.request({
         method: "eth_sendTransaction",
-        params: [{ from: user, to: transact.to, data: transact.data }],
+        params: [transaction],
       });
-      if (phase) {
-        phase.textContent = "Withdraw submitted — waiting for a successful receipt.";
-      }
       let receipt = null;
       const minedDeadline = Date.now() + 180_000;
       while (Date.now() < minedDeadline) {
@@ -93,33 +86,25 @@
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      if (receipt?.status !== "0x1") {
+      if (!receipt || receipt.status !== "0x1") {
         status.textContent = "RECEIPT_REVERTED";
         return;
       }
-      if (phase) {
-        phase.textContent = "Verifying the scoped audit disclosure…";
-      }
-      const disclosed = await fetch("/api/live-withdraw/disclose", {
+      const persisted = await fetch("/api/live-withdraw/persist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          receipt,
-          txHash: hash,
-          applicationId: plan.applicationId || plan.intent?.applicationId,
-          fields: ["amount", "counterparty", "policy_version"],
-        }),
+        body: JSON.stringify({ plan, receipt }),
       });
-      const disclosure = await disclosed.json();
-      if (!disclosure.allowed || !disclosure.auditAcceptance) {
-        status.textContent = disclosure.reason || "AUDIT_REJECTED";
+      const settled = await persisted.json();
+      if (!settled.allowed) {
+        status.textContent = settled.reason || "WITNESS_INVALID";
         return;
       }
       if (phase) {
-        phase.textContent = "Scoped audit disclosure verified.";
+        phase.textContent = "Withdraw submitted.";
       }
       status.textContent = hash;
+      await globalThis.hazeRefreshBalances?.();
     } catch (error) {
       status.textContent = error?.message || "LIVE_WITHDRAW_FAILED";
     }

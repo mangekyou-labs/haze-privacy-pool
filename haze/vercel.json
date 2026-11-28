@@ -8,25 +8,31 @@
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "haze-mu-flax.vercel.app" }],
-      "destination": "https://haze-avax.vercel.app/:path*",
+      "destination": "https://compliance-haze.vercel.app/:path*",
       "permanent": true
     },
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "haze.vercel.app" }],
-      "destination": "https://haze-avax.vercel.app/:path*",
+      "destination": "https://compliance-haze.vercel.app/:path*",
       "permanent": true
     },
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "haze-finance.vercel.app" }],
-      "destination": "https://haze-avax.vercel.app/:path*",
+      "destination": "https://compliance-haze.vercel.app/:path*",
       "permanent": true
     },
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "haze-pool.vercel.app" }],
-      "destination": "https://haze-avax.vercel.app/:path*",
+      "destination": "https://compliance-haze.vercel.app/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "haze-avax.vercel.app" }],
+      "destination": "https://compliance-haze.vercel.app/:path*",
       "permanent": true
     }
   ]

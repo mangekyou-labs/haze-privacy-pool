@@ -1,30 +1,42 @@
-import { NextResponse } from "next/server";
-import { getComplianceStore } from "../../../../../lib/compliance-store.ts";
+import { type NextRequest, NextResponse } from "next/server.js";
+import { forwardToDisclosure } from "../../_lib.ts";
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { nonce, address, signature } = body;
-    if (!nonce || !address || !signature) {
-      return NextResponse.json({ ok: false, error: "INVALID_PARAMETERS" }, { status: 400 });
-    }
-    const store = getComplianceStore();
-    const result = await store.verifySiweChallenge(nonce, address, signature);
-    const response = NextResponse.json({
-      ok: true,
-      address: result.address,
-      role: result.role,
-      applicationId: result.applicationId,
+export async function POST(req: NextRequest) {
+  const body = await req.text();
+  const resp = await forwardToDisclosure("/v1/auth/verify", req, {
+    method: "POST",
+    body,
+  });
+
+  if (!resp.ok) {
+    const errorData = await resp.text();
+    return new NextResponse(errorData, {
+      status: resp.status,
+      headers: { "Content-Type": "application/json" },
     });
-    response.cookies.set("haze_compliance_session", result.token, {
+  }
+
+  const session = await resp.json();
+  const token = session.token;
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const maxAge = Math.max(0, (session.expiresAt || nowSecs + 3600) - nowSecs);
+
+  const response = NextResponse.json({
+    address: session.address,
+    applicationId: session.applicationId,
+    role: session.role,
+    expiresAt: session.expiresAt,
+  });
+
+  if (token) {
+    response.cookies.set("haze_audit_session", token, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       path: "/",
-      maxAge: 86400,
+      maxAge,
     });
-    return response;
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err?.message || "UNAUTHORIZED" }, { status: 401 });
   }
+
+  return response;
 }

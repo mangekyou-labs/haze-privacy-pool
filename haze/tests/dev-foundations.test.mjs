@@ -31,6 +31,7 @@ test("Haze locks toolchains and stages CI", () => {
       "secret-scan",
       "npm ci --prefix haze",
       "npm test --prefix haze",
+      "cargo fmt --manifest-path haze/Cargo.toml --all --check",
       "cargo test --manifest-path haze/Cargo.toml",
       "circuits/test/spend.circom",
     ]) {

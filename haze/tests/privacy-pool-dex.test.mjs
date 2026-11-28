@@ -552,7 +552,7 @@ test("DEX routes stay isolated from the portal and never treat hidden nav as aut
   assert.ok(screen.nav.every((item) => !item.path.startsWith("/admin")));
   assert.deepEqual(
     screen.nav.map((item) => item.path).sort(),
-    ["/emergency-exit", "/history", "/migrate", "/send", "/shield", "/swap", "/withdraw"].sort(),
+    ["/emergency-exit", "/history", "/migrate", "/overview", "/send", "/shield", "/swap", "/withdraw"].sort(),
   );
 });
 

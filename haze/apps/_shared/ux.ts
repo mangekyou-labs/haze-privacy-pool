@@ -29,6 +29,7 @@ const DENY: Record<DenyCode, Decision> = {
 const ALLOW: Decision = { ok: true };
 
 const DEX_ROUTES = [
+  "/overview",
   "/swap",
   "/shield",
   "/send",

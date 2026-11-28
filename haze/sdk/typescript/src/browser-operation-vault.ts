@@ -32,8 +32,11 @@ export type BrowserTransactionMetadata = {
   transactionHash?: string;
   target?: string;
   action?: number;
+  destination?: string;
+  pool?: string;
+  stage?: "preparing" | "broadcast" | "mined" | "finalized" | "failed";
   finalityProvenance?: {
-    inclusionBlock: number;
+    inclusionBlock?: number;
     confirmationCount: number;
     canonicalBlockHash?: string;
     verifiedAtBlock?: number;
@@ -61,6 +64,27 @@ export type BrowserOperation = {
   state: BrowserOperationState;
   note: Record<string, unknown>;
   transaction: BrowserTransactionMetadata;
+};
+
+export function isConfirmedSpendableInput(item: BrowserOperation): boolean {
+  return (item.kind === "deposit" || item.kind === "transfer")
+    && item.state === "confirmed"
+    && item.note.spendable !== false;
+}
+
+export type RecoveredSpendableNoteInput = {
+  action?: unknown;
+  commitment: string;
+  value?: unknown;
+  secret?: unknown;
+  blinding?: unknown;
+  npk?: unknown;
+  enc?: unknown;
+  x25519?: unknown;
+  nullifier?: unknown;
+  leafIndex?: unknown;
+  spendable?: unknown;
+  transactionHash?: unknown;
 };
 
 export type BrowserOperationStore = {
@@ -246,21 +270,67 @@ export async function createBrowserOperationVault(options: {
       operations = [];
       await options.database.delete(storageKey);
     },
+    async persistRecoveredSpendableNotes(notes: RecoveredSpendableNoteInput[]): Promise<BrowserOperation[]> {
+      const persisted: BrowserOperation[] = [];
+      for (const note of notes) {
+        const commitment = String(note.commitment ?? "");
+        if (!commitment) continue;
+        const commitmentKey = commitment.toLowerCase();
+        const recoveredAction = note.action === 2 || note.action === 3 || note.action === 4 ? note.action : 1;
+        const recoveredKind: BrowserOperationKind = recoveredAction === 2
+          ? "transfer"
+          : recoveredAction === 3
+            ? "withdrawal"
+            : recoveredAction === 4
+              ? "swap"
+              : "deposit";
+        const recoveredNote: Record<string, unknown> = {
+          value: note.value,
+          amount: note.value,
+          secret: note.secret,
+          blinding: note.blinding,
+          npk: note.npk,
+          enc: note.enc,
+          x25519: note.x25519,
+          commitment: note.commitment,
+          nullifier: note.nullifier,
+          leafIndex: note.leafIndex,
+          spendable: note.spendable !== false,
+        };
+        const recoveredTx: BrowserTransactionMetadata = {
+          action: recoveredAction,
+          actionReference: `0x${"00".repeat(32)}`,
+          commitment: note.commitment,
+          nullifier: typeof note.nullifier === "string" ? note.nullifier : undefined,
+          hash: typeof note.transactionHash === "string" ? note.transactionHash : undefined,
+          recovered: true,
+        };
+        const existing = operations.find(
+          (item) => String(item.note?.commitment ?? "").toLowerCase() === commitmentKey,
+        );
+        if (existing) {
+          existing.state = "confirmed";
+          existing.kind = recoveredKind;
+          existing.note = { ...existing.note, ...recoveredNote };
+          existing.transaction = { ...existing.transaction, ...recoveredTx };
+          persisted.push(structuredClone(existing));
+          continue;
+        }
+        const operation: BrowserOperation = {
+          id: `inbound-${commitment.replace(/^0x/i, "").slice(0, 16)}`,
+          kind: recoveredKind,
+          state: "confirmed",
+          note: recoveredNote,
+          transaction: recoveredTx,
+        };
+        operations.push(operation);
+        persisted.push(structuredClone(operation));
+      }
+      await persist();
+      return persisted;
+    },
   };
 }
-
-export type BrowserOperationVault = {
-  storageKey: string;
-  create(input: Omit<BrowserOperation, "state">): Promise<BrowserOperation>;
-  get(id: string): Promise<BrowserOperation | undefined>;
-  list(): Promise<BrowserOperation[]>;
-  transition(id: string, state: BrowserOperationState, transaction?: Record<string, unknown>): Promise<BrowserOperation>;
-  markSubmittedBeforeBroadcast<T>(id: string, transaction: Record<string, unknown>, broadcast: () => Promise<T>): Promise<T>;
-  recordSubmittedHash(id: string, hash: string): Promise<BrowserOperation>;
-  consumeConfirmedNote(id: string): Promise<BrowserOperation>;
-  delete(id: string): Promise<boolean>;
-  wipe(confirmation: string): Promise<void>;
-};
 
 export function createMemoryIndexedDb(): BrowserOperationStore {
   const values = new Map<string, Uint8Array>();

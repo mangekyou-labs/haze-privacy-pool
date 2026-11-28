@@ -3,7 +3,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local("IBM Plex Sans"), url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  src: local("IBM Plex Sans"), url("./IBMPlexSans-Regular.woff2") format("woff2");
 }
 
 @font-face {
@@ -11,7 +11,7 @@
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: local("IBM Plex Sans SemiBold"), url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  src: local("IBM Plex Sans SemiBold"), url("./IBMPlexSans-SemiBold.woff2") format("woff2");
 }
 
 @font-face {
@@ -19,5 +19,5 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local("IBM Plex Mono"), url("/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  src: local("IBM Plex Mono"), url("./IBMPlexMono-Regular.woff2") format("woff2");
 }

@@ -1,7 +1,8 @@
 import { keccakHex } from "./abi.ts";
+import { FUJI_V2 } from "./fuji-v2-defaults.ts";
 
-export const DEFAULT_HAZE_DISCLOSURE_ORIGIN = "https://haze-fuji-disclosure-uegs.onrender.com";
-export const DEFAULT_HAZE_AUDIT_PUBLIC_KEY = "0x2a082bd0a097bda77158deadbecf043d15e5d09845bf8cfcd2d294d0b0a4ed04";
+export const DEFAULT_HAZE_DISCLOSURE_ORIGIN: string = FUJI_V2.disclosureOrigin;
+export const DEFAULT_HAZE_AUDIT_PUBLIC_KEY: string = FUJI_V2.auditPublicKey;
 
 const RETRYABLE = new Set([502, 503, 504]);
 

@@ -49,6 +49,9 @@ jobs:
         run: cargo install circom --git https://github.com/iden3/circom --tag v2.2.3 --locked --root haze/.tools
       - name: npm ci --prefix haze
         run: npm ci --prefix haze
+      - name: install Playwright Chromium
+        working-directory: haze
+        run: npx playwright install --with-deps chromium
       - name: compile spend r1cs
         run: |
           mkdir -p haze/circuits/build/spend
@@ -85,10 +88,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
           toolchain: 1.97.1
-          components: clippy
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
         with:
           workspaces: haze
+      - name: cargo fmt --manifest-path haze/Cargo.toml --all --check
+        run: cargo fmt --manifest-path haze/Cargo.toml --all --check
       - name: install circom 2.2.3
         run: cargo install circom --git https://github.com/iden3/circom --tag v2.2.3 --locked --root haze/.tools
       - name: compile spend r1cs
@@ -107,6 +112,8 @@ jobs:
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
       - name: install forge-std
         run: forge install foundry-rs/forge-std --no-git
         working-directory: haze/contracts

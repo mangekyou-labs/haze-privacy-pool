@@ -53,18 +53,19 @@ function toHex(bytes: Uint8Array): string {
 }
 
 function addressWord(address: string): Buffer {
-  const raw = hexToBuf(address);
-  const out = new Uint8Array(32);
-  out.set(raw, 32 - raw.length);
-  return Buffer.from(out);
+  const out = Buffer.alloc(32);
+  hexToBuf(address).copy(out, 32 - 20);
+  return out;
 }
 
 function word(value: number | bigint | string): Buffer {
+  const out = Buffer.alloc(32);
   const hex =
     typeof value === "string"
       ? value.replace(/^0x/i, "").padStart(64, "0")
       : BigInt(value).toString(16).padStart(64, "0");
-  return Buffer.from(hex, "hex");
+  Buffer.from(hex, "hex").copy(out);
+  return out;
 }
 
 /** `keccak256(abi.encode(typeHash, chainId, pool, poolVersion, applicationId, nullifier, recipient, requestSalt))`. */

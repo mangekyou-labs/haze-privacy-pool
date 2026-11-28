@@ -8,6 +8,7 @@ export {
   checkSpendPublicInputs,
   createProverSession,
   deriveShieldedAccount,
+  deriveShieldedAccountFromSignature,
   developmentProofDigest,
   encodeOperatorGroth16Proof,
   handleProverWorkerMessage,
@@ -24,6 +25,7 @@ export type {
   ProverSession,
   ShieldedAccount,
   ShieldedAccountRequest,
+  ShieldedAccountSignatureRequest,
   WorkerInbound,
   WorkerOutbound,
 } from "./prover-session.ts";

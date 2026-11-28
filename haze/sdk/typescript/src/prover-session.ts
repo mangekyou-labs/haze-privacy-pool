@@ -3,7 +3,8 @@ import { sha256 } from "@noble/hashes/sha2";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { x25519 } from "@noble/curves/ed25519";
 import { keccak256 } from "./keccak.ts";
-import { recoverWallet } from "./sig.ts";
+import { ProverError, type DevelopmentProof, type WorkerOutbound } from "./prover-types.ts";
+export { ProverError, type DevelopmentProof, type ProverErrorCode } from "./prover-types.ts";
 
 const KEY_DOMAIN_NAME = "Haze Shielded Account";
 const KEY_DOMAIN_VERSION = "1";
@@ -49,9 +50,6 @@ export const SPEND_PUBLIC_CAMEL = [
   "auditCiphertextHashLo",
 ] as const;
 
-import { ProverError, type ProverErrorCode } from "./prover-types.ts";
-export { ProverError, type ProverErrorCode };
-
 export type ShieldedAccountRequest = {
   chainId: number;
   pool: string;
@@ -75,13 +73,6 @@ export type ArtifactSet = {
   circuit: string;
   fixture: string;
   manifest: string;
-};
-
-export type DevelopmentProof = {
-  profile: "development";
-  notForProduction: true;
-  publicValue: number;
-  verified: boolean;
 };
 
 export type OperatorGroth16Proof = {
@@ -213,10 +204,9 @@ function toHex(bytes: Uint8Array) {
 }
 
 function pad32(bytes: Uint8Array) {
-  if (bytes.length > 32) throw new Error("ENCODING_INVALID");
-  const out = new Uint8Array(32);
-  out.set(bytes, 32 - bytes.length);
-  return Buffer.from(out);
+  const out = Buffer.alloc(32);
+  Buffer.from(bytes).copy(out, 32 - bytes.length);
+  return out;
 }
 
 function addressWord(address: string) {
@@ -314,8 +304,14 @@ function hpkeX25519Public(ikm: Buffer) {
   return Buffer.from(x25519.getPublicKey(sk));
 }
 
-/** Recover the Ethereum address that produced a 65-byte recoverable secp256k1 signature. */
-export { recoverWallet } from "./sig.ts";
+function recoverWallet(digest: Uint8Array, normalized: Uint8Array) {
+  const recovered = secp256k1.Signature.fromCompact(normalized.subarray(0, 64))
+    .addRecoveryBit(normalized[64])
+    .recoverPublicKey(digest)
+    .toRawBytes(false);
+  const address = keccak256(recovered.subarray(1)).subarray(12);
+  return toHex(address);
+}
 
 function signNormalized(signingKey: Uint8Array, digest: Uint8Array) {
   const signed = secp256k1.sign(digest, signingKey, { prehash: false });
@@ -339,6 +335,64 @@ export function deriveShieldedAccount(request: ShieldedAccountRequest): Shielded
   );
   const normalized = signNormalized(hexToBuf(request.signingKey), digest);
   const wallet = recoverWallet(digest, normalized);
+  if (wallet.toLowerCase() !== request.wallet.toLowerCase()) {
+    throw new ProverError("UNSUPPORTED_RECOVERY");
+  }
+  const ikm = Buffer.from(normalized);
+  const spending = deriveSpendingSecret(ikm);
+  const x25519Secret = deriveLabeled(ikm, X25519_LABEL, 0);
+  return {
+    wallet: request.wallet.toLowerCase(),
+    spendingSecret: spending.spendingSecret,
+    spendingCounter: spending.spendingCounter,
+    x25519PublicKey: toHex(hpkeX25519Public(x25519Secret)),
+    x25519Secret: toHex(x25519Secret),
+    localVaultKey: toHex(deriveLabeled(ikm, LOCAL_VAULT_LABEL, 0)),
+    membershipBlinding: toHex(deriveLabeled(ikm, MEMBERSHIP_BLINDING_LABEL, 0)),
+  };
+}
+
+export type ShieldedAccountSignatureRequest = {
+  signature: string | Uint8Array;
+  wallet: string;
+  chainId: number;
+  pool: string;
+  applicationId: string;
+  poolVersion: string;
+};
+
+/** Derive spending and encryption keys directly from an EIP-712 wallet signature. */
+export function deriveShieldedAccountFromSignature(
+  request: ShieldedAccountSignatureRequest,
+): ShieldedAccount {
+  const digest = typedDigest(
+    domainSeparator(request.chainId, request.pool),
+    keyStructHash(request.wallet, request.applicationId, request.poolVersion),
+  );
+  const rawSig =
+    typeof request.signature === "string"
+      ? hexToBuf(request.signature)
+      : Buffer.from(request.signature);
+  if (rawSig.length !== 65) {
+    throw new ProverError("UNSUPPORTED_RECOVERY");
+  }
+  let v = rawSig[64];
+  if (v >= 27) {
+    v -= 27;
+  }
+  if (v > 1) {
+    throw new ProverError("UNSUPPORTED_RECOVERY");
+  }
+  const normalized = Buffer.alloc(65);
+  rawSig.copy(normalized, 0, 0, 64);
+  normalized[64] = v;
+
+  let wallet = "";
+  try {
+    wallet = recoverWallet(digest, normalized);
+  } catch {
+    throw new ProverError("UNSUPPORTED_RECOVERY");
+  }
   if (wallet.toLowerCase() !== request.wallet.toLowerCase()) {
     throw new ProverError("UNSUPPORTED_RECOVERY");
   }
@@ -511,12 +565,6 @@ export type WorkerInbound = {
   value?: number;
   circom?: Record<string, unknown>;
 };
-
-export type WorkerOutbound =
-  | { type: "cancelled" }
-  | { type: "cleared" }
-  | { type: "proof"; proof: DevelopmentProof; stages: string[] }
-  | { type: "error"; code: string };
 
 /** Worker message handler used by the browser proving worker. */
 export async function handleProverWorkerMessage(session: ProverSession, message: WorkerInbound) {

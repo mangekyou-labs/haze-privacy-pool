@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "circuit_id": "haze-emergency-v1",
+  "profile": "development",
+  "not_for_production": true,
+  "circom_version": "2.2.3",
+  "n_constraints": 192535,
+  "source_hash": "0xb2548e08c7ed2d93f07b31e245c54ef63072ddfc58fc4636dfd087378c7ed20e",
+  "r1cs_hash": "0x9d9559bdf2e8b6dcfe2b74e0c6a25207c8d1fa6e0ce817d7a7267fe724fe4bc5",
+  "build_hash": "0x4aebecd358818749caacebf7cf0487a77b90e9c8ac8dd72e5bad0d509a2eca92",
+  "artifact_hash": "0x541d60e96dd73ae4763be966c6708693664ea0e6793237f154782c76946d0e1a"
+}

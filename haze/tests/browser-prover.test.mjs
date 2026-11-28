@@ -107,10 +107,11 @@ test("browser secrets use browser cryptography for notes, bindings, and distinct
   assert.equal(secrets.auditSalt.length, 32);
   assert.equal(secrets.recipientHpkeSeed.length, 32);
   assert.equal(secrets.auditHpkeSeed.length, 32);
+  assert.equal(secrets.recipientNoteSecret.length, 32);
+  assert.equal(secrets.recipientBlinding.length, 32);
   assert.notDeepEqual([...secrets.noteSecret], [...secrets.blinding]);
-  assert.equal(new Set(Object.values(secrets).map((bytes) => bytes[0])).size, 6);
+  assert.equal(new Set(Object.values(secrets).map((bytes) => bytes[0])).size, 8);
 });
-
 test("the browser prover host proves through a worker and reports progress", async () => {
   const worker = createLoopbackWorker();
   const progress = [];

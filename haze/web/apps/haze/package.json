@@ -2,21 +2,24 @@
   "name": "@haze-avalanche/haze-web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --port 3010",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start --port 3010"
   },
   "dependencies": {
-    "next": "^15.5.0",
-    "pg": "^8.13.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "@noble/curves": "^1.8.0",
+    "@noble/hashes": "^1.7.1",
+    "@swc/helpers": "^0.5.15",
+    "next": "^16.3.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/node": "20.17.6",
-    "@types/pg": "^8.11.10",
-    "@types/react": "19.2.18",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "typescript": "5.8.2"
   }
 }

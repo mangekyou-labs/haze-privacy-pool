@@ -3,6 +3,31 @@ export type MembershipLeaf = {
   enc: string;
 };
 
+export type MembershipLeafLike = {
+  npk?: unknown;
+  enc?: unknown;
+} | null | undefined;
+
+export function unionMembershipLeaves(
+  stored: MembershipLeafLike[] = [],
+  inSlots: MembershipLeafLike[] = [],
+  outSlots: MembershipLeafLike[] = [],
+): MembershipLeaf[] {
+  const union: MembershipLeaf[] = [];
+  const seen = new Set<string>();
+  for (const leaf of [...stored, ...inSlots, ...outSlots]) {
+    if (!leaf || typeof leaf !== "object") continue;
+    const npk = typeof leaf.npk === "string" ? leaf.npk : "";
+    const enc = typeof leaf.enc === "string" ? leaf.enc : "";
+    if (!npk || !enc) continue;
+    const key = `${npk.toLowerCase()}:${enc.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    union.push({ npk, enc });
+  }
+  return union;
+}
+
 export type FujiMembershipStore = {
   list(): Promise<MembershipLeaf[]>;
   add(leaf: MembershipLeaf | MembershipLeaf[]): Promise<void>;

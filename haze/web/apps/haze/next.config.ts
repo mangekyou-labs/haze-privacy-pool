@@ -4,34 +4,18 @@ import { fileURLToPath } from "node:url";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@haze-avalanche/ui"],
-  poweredByHeader: false,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  webpack(config, { isServer }) {
-    config.resolve.alias["web-worker"] = resolve(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../../node_modules/web-worker/cjs/browser.js",
-    );
+  webpack(config, { isServer, webpack }) {
+    config.resolve.alias["web-worker"] = resolve(dirname(fileURLToPath(import.meta.url)), "../../../node_modules/web-worker/cjs/browser.js");
     if (!isServer) {
-      config.resolve.alias["node:crypto"] = false;
-      config.resolve.alias["node:fs"] = false;
-      config.resolve.alias["node:path"] = false;
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        crypto: false,
-        fs: false,
-        path: false,
-      };
+      // The SDK statically imports node:crypto for server-side sealing; the browser path never calls it
+      // (it seals with browser-crypto.ts), so resolve it to an empty module in client bundles.
+      config.plugins.push(new webpack.NormalModuleReplacementPlugin(/^node:crypto$/, (resource: { request: string }) => { resource.request = "crypto"; }));
+      config.resolve.fallback = { ...config.resolve.fallback, crypto: false };
     }
     return config;
   },
   async headers() {
-    const disclosureOrigin =
-      process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN || "https://haze-fuji-disclosure-uegs.onrender.com";
+    const disclosureOrigin = process.env.NEXT_PUBLIC_HAZE_DISCLOSURE_ORIGIN || "https://haze-fuji-disclosure-uegs.onrender.com";
     const disclosureConnect = disclosureOrigin.startsWith("https://") ? ` ${disclosureOrigin}` : "";
     return [
       {

@@ -1,4 +1,4 @@
-import { addressWord, bytes32Word, encodeWords, keccakHex, toHex, uintWord } from "./abi.ts";
+import { addressWord, bytes32Word, concatBytes, encodeWords, hexToBuf, keccakHex, toHex, uintWord } from "./abi.ts";
 import { SdkError } from "./errors.ts";
 import { keccak256 } from "./keccak.ts";
 import { POOL_DOMAIN_NAME, POOL_DOMAIN_VERSION } from "./pool.ts";
@@ -122,10 +122,10 @@ function validateAuthorization(fields: ApplicationAuthorizationFields): void {
 /** Type hashes matching the committed protocol vectors. */
 export function eip712TypeHashes() {
   return {
-    domain: keccakHex(Buffer.from(EIP712_DOMAIN_TYPE)),
-    intent: keccakHex(Buffer.from(INTENT_TYPE)),
-    authorization: keccakHex(Buffer.from(AUTH_TYPE)),
-    keyDerivation: keccakHex(Buffer.from(KEY_TYPE)),
+    domain: keccakHex(new TextEncoder().encode(EIP712_DOMAIN_TYPE)),
+    intent: keccakHex(new TextEncoder().encode(INTENT_TYPE)),
+    authorization: keccakHex(new TextEncoder().encode(AUTH_TYPE)),
+    keyDerivation: keccakHex(new TextEncoder().encode(KEY_TYPE)),
   };
 }
 
@@ -143,9 +143,9 @@ export function poolDomainSeparator(fields: {
   }
   return keccakHex(
     encodeWords([
-      Buffer.from(keccak256(Buffer.from(EIP712_DOMAIN_TYPE))),
-      Buffer.from(keccak256(Buffer.from(name))),
-      Buffer.from(keccak256(Buffer.from(version))),
+      keccak256(new TextEncoder().encode(EIP712_DOMAIN_TYPE)),
+      keccak256(new TextEncoder().encode(name)),
+      keccak256(new TextEncoder().encode(version)),
       uintWord(fields.chainId),
       addressWord(fields.verifyingContract),
     ]),
@@ -154,7 +154,7 @@ export function poolDomainSeparator(fields: {
 
 function typedDataDigest(separator: string, structHash: string): string {
   return keccakHex(
-    Buffer.concat([Buffer.from([0x19, 0x01]), Buffer.from(separator.slice(2), "hex"), Buffer.from(structHash.slice(2), "hex")]),
+    concatBytes(Uint8Array.of(0x19, 0x01), hexToBuf(separator), hexToBuf(structHash)),
   );
 }
 
@@ -164,7 +164,7 @@ export function intentStructHash(fields: HazeIntentFields): string {
   const types = eip712TypeHashes();
   return keccakHex(
     encodeWords([
-      Buffer.from(types.intent.slice(2), "hex"),
+      hexToBuf(types.intent),
       bytes32Word(fields.applicationId),
       addressWord(fields.user),
       addressWord(fields.pool),
@@ -208,7 +208,7 @@ export function authorizationStructHash(fields: ApplicationAuthorizationFields):
   const types = eip712TypeHashes();
   return keccakHex(
     encodeWords([
-      Buffer.from(types.authorization.slice(2), "hex"),
+      hexToBuf(types.authorization),
       bytes32Word(fields.applicationId),
       addressWord(fields.user),
       addressWord(fields.pool),

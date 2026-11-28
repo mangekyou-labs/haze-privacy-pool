@@ -20,7 +20,7 @@ const AUDITOR = DEDICATED_AUDITOR;
 function addressOf(keyHex) {
   const pub = secp256k1.getPublicKey(Buffer.from(keyHex.slice(2), "hex"), false);
   const hash = keccak256(pub.subarray(1));
-  return "0x" + hash.subarray(12).toString("hex");
+  return "0x" + Buffer.from(hash).subarray(12).toString("hex");
 }
 
 function personalSign(message, keyHex) {
