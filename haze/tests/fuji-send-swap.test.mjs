@@ -95,44 +95,58 @@ test("quote route returns valid routeHash when real venue is configured", async 
   }
 });
 
-test("quote route returns 200 with deployed sidecar venue config", async () => {
-  const { POST } = await import("../web/apps/haze/app/api/v1/pool/quote/route.ts");
+const PILOT_TOKEN = "0x4fAB93a23313CC032D8310Cf0f34A9BDF4E19c72";
+const PILOT_VENUE = "0x30d94144722582BCDbcB030dDa274d9CE7ab4baB";
+
+async function withPilotEnv(token, venue, fn) {
   const prevToken = process.env.HAZE_FUJI_PILOT_TOKEN;
   const prevVenue = process.env.HAZE_FUJI_PILOT_VENUE;
   try {
-    delete process.env.HAZE_FUJI_PILOT_TOKEN;
-    delete process.env.HAZE_FUJI_PILOT_VENUE;
-
-    const req = {
-      json: async () => ({ tokenIn: "0x4fAB93a23313CC032D8310Cf0f34A9BDF4E19c72", amountIn: "1000000" }),
-    };
-    const res = await POST(req);
-    assert.equal(res.status, 200);
-    const body = await res.json();
-    assert.equal(body.adapter, "0x30d94144722582BCDbcB030dDa274d9CE7ab4baB");
-    assert.equal(body.amountIn, "1000000");
-    assert.equal(body.usdcOut, "1000000");
+    if (token) process.env.HAZE_FUJI_PILOT_TOKEN = token; else delete process.env.HAZE_FUJI_PILOT_TOKEN;
+    if (venue) process.env.HAZE_FUJI_PILOT_VENUE = venue; else delete process.env.HAZE_FUJI_PILOT_VENUE;
+    return await fn();
   } finally {
     if (prevToken) process.env.HAZE_FUJI_PILOT_TOKEN = prevToken; else delete process.env.HAZE_FUJI_PILOT_TOKEN;
     if (prevVenue) process.env.HAZE_FUJI_PILOT_VENUE = prevVenue; else delete process.env.HAZE_FUJI_PILOT_VENUE;
   }
+}
+
+test("quote route fails closed when the v2 manifest has no allowlisted venue", async () => {
+  // The v2 router on Fuji allowlists no swap venue, so with no pilot env the
+  // route must refuse to quote rather than fall back to a stale address.
+  const { POST } = await import("../web/apps/haze/app/api/v1/pool/quote/route.ts");
+  await withPilotEnv(undefined, undefined, async () => {
+    const res = await POST({ json: async () => ({ tokenIn: PILOT_TOKEN, amountIn: "1000000" }) });
+    assert.equal(res.status, 503);
+    const body = await res.json();
+    assert.equal(body.code, "SWAP_VENUE_UNAVAILABLE");
+  });
+});
+
+test("quote route returns 200 with an injected pilot venue", async () => {
+  const { POST } = await import("../web/apps/haze/app/api/v1/pool/quote/route.ts");
+  await withPilotEnv(PILOT_TOKEN, PILOT_VENUE, async () => {
+    const res = await POST({ json: async () => ({ tokenIn: PILOT_TOKEN, amountIn: "1000000" }) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.adapter, PILOT_VENUE);
+    assert.equal(body.amountIn, "1000000");
+    assert.equal(body.usdcOut, "1000000");
+  });
 });
 
 test("quote route calculates minUsdcOut based on slippageBps", async () => {
   const { POST } = await import("../web/apps/haze/app/api/v1/pool/quote/route.ts");
-  const req = {
-    json: async () => ({
-      tokenIn: "0x4fAB93a23313CC032D8310Cf0f34A9BDF4E19c72",
-      amountIn: "1000000",
-      slippageBps: 100, // 1%
-    }),
-  };
-  const res = await POST(req);
-  assert.equal(res.status, 200);
-  const body = await res.json();
-  assert.equal(body.amountIn, "1000000");
-  assert.equal(body.usdcOut, "1000000");
-  assert.equal(body.minUsdcOut, "990000"); // 1% off 1_000_000
+  await withPilotEnv(PILOT_TOKEN, PILOT_VENUE, async () => {
+    const res = await POST({
+      json: async () => ({ tokenIn: PILOT_TOKEN, amountIn: "1000000", slippageBps: 100 }),
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.amountIn, "1000000");
+    assert.equal(body.usdcOut, "1000000");
+    assert.equal(body.minUsdcOut, "990000"); // 1% off 1_000_000
+  });
 });
 
 test("FujiBrowserClient source defines labeled action rows: Asset, Amount, Shielded Balance, Network", async () => {
