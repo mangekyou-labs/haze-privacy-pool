@@ -137,7 +137,12 @@ test("GET /api/compliance/session with cookie aborts hung disclosure fetch as 50
   globalThis.fetch = (_url, init) =>
     new Promise((_resolve, reject) => {
       assert.ok(init?.signal, "disclosure fetch must pass AbortSignal.timeout");
+      // AbortSignal.timeout uses an unref'd timer. A real hung fetch holds an open
+      // socket that keeps the event loop alive; this mock must do the same, or
+      // Node exits with the test promise still pending.
+      const socket = setInterval(() => {}, 1_000);
       init.signal.addEventListener("abort", () => {
+        clearInterval(socket);
         const err = new Error("The operation was aborted");
         err.name = "AbortError";
         reject(err);
