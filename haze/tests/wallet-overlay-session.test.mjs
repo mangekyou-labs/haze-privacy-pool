@@ -90,7 +90,11 @@ test("D10.3: EIP-6963 wallet overlay supports Core, Rabby, MetaMask and fail-clo
     join(HAZE_ROOT, "web/apps/haze/app/wallet-session-provider.tsx"),
     "utf8",
   );
-  assert.match(providerCode, /eip6963:announceProvider/, "Must listen for eip6963 announceProvider");
+  // EIP-6963 discovery lives in the shared UI package; the session provider calls it.
+  const discoveryCode = readFileSync(join(HAZE_ROOT, "web/packages/ui/src/wallet-provider.ts"), "utf8");
+  assert.match(discoveryCode, /eip6963:announceProvider/, "Must listen for eip6963 announceProvider");
+  assert.match(discoveryCode, /eip6963:requestProvider/, "Must request eip6963 providers");
+  assert.match(providerCode, /injectedProvider\(/, "Session provider must use EIP-6963 discovery");
   assert.match(providerCode, /Core/i, "Core wallet option must be present");
   assert.match(providerCode, /Rabby/i, "Rabby wallet option must be present");
   assert.match(providerCode, /MetaMask/i, "MetaMask wallet option must be present");

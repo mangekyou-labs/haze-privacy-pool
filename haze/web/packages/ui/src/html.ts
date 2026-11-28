@@ -353,12 +353,15 @@ export function renderHazeFragment(site: Site, path: string, options: RenderOpti
       : `<span class="haze-chip" data-role="${escapeHtml(site.session.role ?? "")}">${escapeHtml(site.session.role ?? "")}</span>`
     : "";
 
-  const walletChip = fujiBrowser
-    ? `<span id="haze-session-root"></span>`
+  // The client wallet provider portals its session control into #haze-session-root,
+  // so the SSR wallet controls must sit inside it on every page.
+  const ssrWalletControls = fujiBrowser
+    ? ""
     : walletStatus === "connected" && options.address
       ? `<span class="haze-chip haze-chip-wallet" data-address="${escapeHtml(options.address)}">${escapeHtml(truncateAddress(options.address))}</span>
          <button class="haze-button haze-button-secondary" type="button" data-action="disconnect">Disconnect</button>`
       : `<button class="haze-button" type="button" data-action="connect">Connect wallet</button>`;
+  const walletChip = `<span id="haze-session-root">${ssrWalletControls}</span>`;
 
   const deniedCopy =
     walletStatus === "connected"
