@@ -85,7 +85,7 @@ test("D10.3: WalletSessionProvider and FujiBrowserClient exist and are integrate
   );
 });
 
-test("D10.3: EIP-6963 wallet overlay supports Core, Rabby, MetaMask and fail-closed WalletConnect", () => {
+test("D10.3: EIP-6963 wallet discovery is fail-closed on missing wallet and wrong chain", () => {
   const providerCode = readFileSync(
     join(HAZE_ROOT, "web/apps/haze/app/wallet-session-provider.tsx"),
     "utf8",
@@ -94,16 +94,11 @@ test("D10.3: EIP-6963 wallet overlay supports Core, Rabby, MetaMask and fail-clo
   const discoveryCode = readFileSync(join(HAZE_ROOT, "web/packages/ui/src/wallet-provider.ts"), "utf8");
   assert.match(discoveryCode, /eip6963:announceProvider/, "Must listen for eip6963 announceProvider");
   assert.match(discoveryCode, /eip6963:requestProvider/, "Must request eip6963 providers");
+  assert.match(discoveryCode, /throw new Error\("WALLET_UNAVAILABLE"\)/, "Must fail closed when no wallet is injected");
   assert.match(providerCode, /injectedProvider\(/, "Session provider must use EIP-6963 discovery");
-  assert.match(providerCode, /Core/i, "Core wallet option must be present");
-  assert.match(providerCode, /Rabby/i, "Rabby wallet option must be present");
-  assert.match(providerCode, /MetaMask/i, "MetaMask wallet option must be present");
-  assert.match(providerCode, /WalletConnect/i, "WalletConnect option must be present");
-  assert.match(
-    providerCode,
-    /WalletConnect is not configured/i,
-    "Must fail-closed when WalletConnect project id is not configured",
-  );
+  assert.match(providerCode, /eth_requestAccounts/, "Connect must request accounts from the wallet");
+  assert.match(providerCode, /CHAIN_HEX = "0xa869"/, "Connect must pin the Fuji chain id");
+  assert.match(providerCode, /throw new Error\(`FUJI_REQUIRED/, "Connect must fail closed off Fuji");
 });
 
 test("D8.4: Consumer fragment wraps SSR wallet controls in #haze-session-root", async () => {
